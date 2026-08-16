@@ -1,0 +1,35 @@
+{
+  "name": "@automate-plus/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@automate-plus/contracts": "*",
+    "@automate-plus/generators": "*",
+    "@automate-plus/ir-schema": "*",
+    "@automate-plus/persistence": "*",
+    "@automate-plus/recorder-android": "*",
+    "@automate-plus/recorder-web": "*",
+    "@automate-plus/runner-core": "*",
+    "@automate-plus/selector-engine": "*",
+    "@automate-plus/stress-engine": "*",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.3.3",
+    "vite": "^6.0.3"
+  }
+}

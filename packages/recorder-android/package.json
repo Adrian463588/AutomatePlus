@@ -1,0 +1,23 @@
+{
+  "name": "@automate-plus/recorder-android",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@automate-plus/contracts": "*",
+    "@automate-plus/ir-schema": "*",
+    "@automate-plus/selector-engine": "*"
+  }
+}

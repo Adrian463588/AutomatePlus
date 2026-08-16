@@ -1,0 +1,24 @@
+{
+  "name": "@automate-plus/stress-engine",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@automate-plus/contracts": "*",
+    "@automate-plus/generators": "*",
+    "@automate-plus/ir-schema": "*",
+    "@automate-plus/runner-core": "*"
+  }
+}

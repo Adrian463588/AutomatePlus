@@ -1,0 +1,1 @@
+{"version":3,"file":"locators.d.ts","sourceRoot":"","sources":["locators.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,CAAC,EAAE,MAAM,KAAK,CAAC;AAExB,eAAO,MAAM,qBAAqB,yHAYhC,CAAC;AAEH,MAAM,MAAM,eAAe,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,qBAAqB,CAAC,CAAC;AAEpE,eAAO,MAAM,sBAAsB;;;;;;;;;;;;;;;;;;EAMjC,CAAC;AAEH,MAAM,MAAM,gBAAgB,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,sBAAsB,CAAC,CAAC"}

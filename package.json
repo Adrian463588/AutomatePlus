@@ -1,0 +1,26 @@
+{
+  "name": "automate-plus",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Offline-First Multiplatform Test Automation & Code Generation Platform",
+  "author": "AutomatePlus Core Team",
+  "license": "MIT",
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "dev": "npm run dev --workspace=@automate-plus/desktop",
+    "dev:desktop": "npm run dev --workspace=@automate-plus/desktop",
+    "build:packages": "npm run build --workspace=@automate-plus/ir-schema && npm run build --workspace=@automate-plus/contracts && npm run build --workspace=@automate-plus/selector-engine && npm run build --workspace=@automate-plus/generators && npm run build --workspace=@automate-plus/persistence && npm run build --workspace=@automate-plus/recorder-web && npm run build --workspace=@automate-plus/recorder-android && npm run build --workspace=@automate-plus/runner-core && npm run build --workspace=@automate-plus/stress-engine",
+    "build:desktop": "npm run build --workspace=@automate-plus/desktop",
+    "build": "npm run build:packages && npm run build:desktop",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "typescript": "^5.7.2",
+    "vitest": "^2.1.8"
+  }
+}
