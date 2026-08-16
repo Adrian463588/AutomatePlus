@@ -16,16 +16,17 @@ export const ApiBuilderView: React.FC = () => {
   const [url, setUrl] = useState(
     activeSession?.ir.targetConfig.baseUrl
       ? `${activeSession.ir.targetConfig.baseUrl}/v1/auth/login`
-      : 'https://api.example.com/v1/auth/login'
+      : 'http://127.0.0.1:4173/api/health'
   );
   const [headers, setHeaders] = useState<Array<{ key: string; value: string }>>([
     { key: 'Content-Type', value: 'application/json' },
   ]);
   const [bodyContent, setBodyContent] = useState(
-    JSON.stringify({ email: 'user@example.com', password: 'secretpassword' }, null, 2)
+    JSON.stringify({ email: 'user@example.test', password: '{{API_PASSWORD}}' }, null, 2)
   );
   const [activeTab, setActiveTab] = useState<'body' | 'headers' | 'assertions' | 'extract'>('body');
   const [lastResponse, setLastResponse] = useState<any>(null);
+  const [requestError, setRequestError] = useState<string | undefined>();
   const [isSending, setIsSending] = useState(false);
 
   const handleAddHeader = () => {
@@ -38,46 +39,60 @@ export const ApiBuilderView: React.FC = () => {
 
   const handleSendAndRecord = async () => {
     setIsSending(true);
-    // Simulate HTTP execution
-    await new Promise((resolve) => setTimeout(resolve, 150));
-
-    const simulatedResponse = {
-      status: 200,
-      statusText: 'OK',
-      durationMs: 45,
-      data: {
-        token: 'eyJhGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-        user: { id: 101, email: 'user@example.com', role: 'admin' },
-      },
-    };
-    setLastResponse(simulatedResponse);
-    setIsSending(false);
-
-    // Append to test session steps
-    const headersMap: Record<string, string> = {};
-    headers.forEach((h) => {
-      if (h.key) headersMap[h.key] = h.value;
-    });
-
-    addStep({
-      id: crypto.randomUUID(),
-      schemaVersion: 1,
-      stepNumber: (activeSession?.ir.steps.length ?? 0) + 1,
-      platform: 'api',
-      action: 'httpRequest',
-      apiPayload: {
+    setRequestError(undefined);
+    const startedAt = performance.now();
+    try {
+      const headersMap: Record<string, string> = {};
+      headers.forEach((h) => {
+        if (h.key.trim()) headersMap[h.key.trim()] = h.value;
+      });
+      const hasBody = !['GET', 'HEAD'].includes(method) && bodyContent.trim().length > 0;
+      const response = await fetch(url, {
         method,
-        url,
         headers: headersMap,
-        queryParams: {},
-        bodyType: 'json',
-        bodyContent,
-        extractedVariables: [{ variableName: 'AUTH_TOKEN', jsonPath: '$.token' }],
-      },
-      timeoutMs: 5000,
-      timestamp: Date.now(),
-      optional: false,
-    });
+        body: hasBody ? bodyContent : undefined,
+      });
+      const responseText = await response.text();
+      let data: unknown = responseText;
+      try {
+        data = responseText ? JSON.parse(responseText) : null;
+      } catch {
+        // Non-JSON responses remain visible as text.
+      }
+      const durationMs = Math.round(performance.now() - startedAt);
+      setLastResponse({
+        status: response.status,
+        statusText: response.statusText,
+        durationMs,
+        headers: Object.fromEntries(response.headers.entries()),
+        data,
+      });
+
+      addStep({
+        id: crypto.randomUUID(),
+        schemaVersion: 2,
+        stepNumber: (activeSession?.ir.steps.length ?? 0) + 1,
+        platform: 'api',
+        action: 'httpRequest',
+        apiPayload: {
+          method,
+          url,
+          headers: headersMap,
+          queryParams: {},
+          bodyType: hasBody ? 'json' : 'none',
+          ...(hasBody ? { bodyContent } : {}),
+          extractedVariables: [],
+        },
+        timeoutMs: 5000,
+        timestamp: Date.now(),
+        optional: false,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setRequestError(`Request failed: ${message}`);
+    } finally {
+      setIsSending(false);
+    }
   };
 
   return (
@@ -103,7 +118,7 @@ export const ApiBuilderView: React.FC = () => {
           value={url}
           onChange={(e) => setUrl(e.target.value)}
           className="flex-1 bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
-          placeholder="https://api.example.com/..."
+          placeholder="http://127.0.0.1:4173/api/..."
         />
 
         <button
@@ -239,6 +254,9 @@ export const ApiBuilderView: React.FC = () => {
               </div>
             )}
           </div>
+          {requestError && (
+            <div className="border-b border-rose-900/60 bg-rose-950/40 px-4 py-2 text-rose-300">{requestError}</div>
+          )}
 
           <div className="flex-1 p-3 overflow-auto font-mono text-[11px] text-slate-200">
             {lastResponse ? (

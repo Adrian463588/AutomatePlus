@@ -1,4 +1,4 @@
-import { ICodeGenerator } from '@automate-plus/contracts';
+import { CapabilityError, ICodeGenerator } from '@automate-plus/contracts';
 
 // Web
 import { PlaywrightTsGenerator } from './web/playwright-ts.generator.js';
@@ -80,8 +80,9 @@ export class GeneratorFactory {
     const key = `${framework.toLowerCase()}:${language.toLowerCase()}`;
     const gen = this.generators.get(key);
     if (!gen) {
-      throw new Error(
-        `CapabilityError: No code generator registered for framework '${framework}' with language '${language}'. Please check the capability matrix.`
+      throw new CapabilityError(
+        `CapabilityError: no code generator registered for framework '${framework}' with language '${language}'. Please check the capability matrix.`,
+        { framework, language },
       );
     }
     return gen;

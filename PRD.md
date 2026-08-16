@@ -279,7 +279,7 @@ The UI must filter the language selector from this matrix. A disabled combinatio
 | NFR-10 | UI remains usable with long logs and large sessions | 500-step timeline and streamed-log test |
 | NFR-11 | Reports remain diagnosable offline | Artifact-link and report parser tests |
 | NFR-12 | Runtime packs are checksum and license auditable | Manifest verification tests |
-| NFR-13 | Generated and host implementation respects SOLID/DRY | Architecture review and duplicate-logic scan |
+| NFR-13 | Host, sidecar, and generated projects respect SOLID and DRY boundaries | Architecture review, dependency-direction check, and duplicate-logic scan |
 
 ## 7. Operational semantics
 
@@ -315,13 +315,37 @@ The product is accepted only when all applicable criteria have fresh evidence:
 - Click, fill, scroll, tap, swipe, drag, assertions, and request chaining survive round-trip IR persistence.
 - Invalid framework/language/action combinations are disabled or rejected before execution.
 - Generated code passes formatter, lint, typecheck/compile, and smoke validation.
-- Recorder-to-generator-to-run flow is implemented without duplicated business logic across recorder, selector, generator, and runner layers (SOLID + DRY).
+- Recorder, selector, generator, runner, and UI responsibilities remain isolated without duplicated business logic (SOLID + DRY).
 - Passwords/tokens are secret references, not plaintext values.
 - Cancellation removes owned processes and releases Android device locks.
 - Functional loop and API RPS are visibly separate modes.
 - All runtime packs are locally verified, license-recorded, and usable without network access.
 
-Current repository evidence is a baseline, not product acceptance: `npm test` currently reports 23 passing tests, package and Vite builds succeed, while the root typecheck includes reference sources and fails; the existing native and k6 runners still simulate execution.
+Current repository evidence is a baseline, not product acceptance: the TypeScript suite now reports 80 passing tests, package/sidecar/Vite builds and scoped typechecks pass, and lint/format checks are available. The WinUI/.NET 8 solution and host contracts now exist, but the installed SDK is 5.0.406, so .NET 8 build/test gates are `Blocked`; physical Android acceptance is also `Blocked` when `adb devices -l` has no device. The browser migration shell uses host-only facades, while native runtime/device acceptance still requires local verified packs.
+
+### 8.1 BMAD/spec-driven traceability
+
+Every requirement uses the following traceability chain before it can be marked `Verified`:
+
+```text
+REQ/Persona → FR/NFR → DESIGN ADR/interface → implementation module
+→ fixture/test → fresh evidence → Planned|Implemented|Verified|Blocked
+```
+
+Acceptance scenarios use Given/When/Then wording. A simulator, mock device, generated code string check, or package-only unit test may be `Prototype` or `ComponentTest`, but never `Verified` runtime evidence.
+
+### 8.2 Current traceability ledger
+
+| Requirement | FR/NFR | DESIGN contract / ADR | Implementation module | Fixture/test | Fresh evidence | Status |
+|---|---|---|---|---|---|---|
+| REQ-GUI low-code workspace | FR-01, NFR-03 | ADR-01, UX-01 | `apps/desktop`, `src/AutomatePlus.App` | desktop typecheck; WinUI smoke | Vite build; .NET SDK blocker | Implemented/Blocked |
+| REQ-Web click-and-record | FR-02 | `IRecorder`, Web recorder design | `packages/recorder-web` | browser transport/normalizer tests | 10 Web tests; real browser pack pending | Implemented/Blocked |
+| REQ-Android ADB recorder | FR-03 | device lock, ADB boundary | `packages/recorder-android` | fake executor + ADB parser tests | 12 Android tests; no physical device | Implemented/Blocked |
+| REQ-API functional flow | FR-04 | API builder, `RunEvent` | `packages/runner-core/src/api-runner.ts` | local HTTP fixture + chaining test | 3 API runner tests, including loopback fetch | Implemented |
+| REQ-27 generated targets | FR-05, NFR-04/05 | capability manifest, generator registry | `packages/generators`, sidecar | 27-entry golden matrix pending | 27 registrations; compile matrix pending | Implemented/Blocked |
+| REQ-functional/UI soak/API RPS split | FR-06/07/08 | run modes, k6 boundary | `runner-core`, `stress-engine` | k6 summary parser fixture + loopback k6 smoke | 80 component tests; real k6 loopback smoke passed at 5.99 RPS with 0% errors | Implemented/Blocked |
+| REQ-offline desktop/runtime packs | FR-12, NFR-02/12 | ADR-01/04, runtime manifest | `.NET Infrastructure`, `apps/sidecar` | offline/network-blocked fixture pending | .NET SDK/runtime pack blocker | Implemented/Blocked |
+| REQ-secret/process/path security | FR-13, NFR-05/06/07/08 | security design, IPC errors | `.NET Infrastructure`, contracts | negative security tests pending | TypeScript IPC redaction tests; .NET gate blocked | Implemented/Blocked |
 
 ## 9. Delivery roadmap
 

@@ -1,3 +1,7 @@
 export * from './hierarchy-parser.js';
 export * from './adb-bridge.js';
+export * from './adb-command-builder.js';
+export * from './android-errors.js';
 export * from './android-recorder.js';
+export * from './device-lock.js';
+export * from './process-executor.js';

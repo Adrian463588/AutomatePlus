@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { SessionLooper, K6StressRunner } from '../src/index.js';
+import { writeFileSync } from 'node:fs';
+import { SessionLooper, K6StressRunner, K6ProcessFactory } from '../src/index.js';
 import { SessionIR } from '@automate-plus/ir-schema';
+import { InteractivePlayer } from '@automate-plus/runner-core';
 
 describe('Stress Engine (Looper & k6 RPS Runner)', () => {
   const sampleApiSession: SessionIR = {
@@ -33,7 +35,8 @@ describe('Stress Engine (Looper & k6 RPS Runner)', () => {
   };
 
   it('should run functional looping for N iterations', async () => {
-    const looper = new SessionLooper();
+    const runner = new InteractivePlayer({ execute: async () => undefined });
+    const looper = new SessionLooper(runner);
     const logs: string[] = [];
     let progressCount = 0;
 
@@ -55,7 +58,22 @@ describe('Stress Engine (Looper & k6 RPS Runner)', () => {
   });
 
   it('should run k6 stress runner and stream metrics', async () => {
-    const k6Runner = new K6StressRunner();
+    const processFactory: K6ProcessFactory = (request) => {
+      const summaryPath = request.args[2];
+      writeFileSync(
+        summaryPath,
+        JSON.stringify({
+          metrics: {
+            http_reqs: { count: 96, rate: 48 },
+            http_req_duration: { med: 42, 'p(90)': 58, 'p(95)': 65, 'p(99)': 89 },
+            http_req_failed: { rate: 0.001 },
+          },
+        }),
+      );
+      request.onStdout('k6 fixture completed\n');
+      return { completion: Promise.resolve({ exitCode: 0 }), terminate: () => undefined };
+    };
+    const k6Runner = new K6StressRunner(processFactory, 'k6-fixture');
     const logs: string[] = [];
     const metrics: any[] = [];
 

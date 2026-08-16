@@ -37,6 +37,10 @@ Recorders produce raw events, the normalizer produces IR, and generators consume
 
 Browser and Android sessions can be functionally looped or soaked with bounded workers. Only API/HTTP traffic is called RPS and is executed through k6's arrival-rate model.
 
+### ADR-05 — WinUI/.NET is the production shell
+
+The React/Vite scaffold and Electron/Tauri recommendations found in local reference notes are migration material only. The production desktop boundary is WinUI 3 + .NET 8 with a TypeScript sidecar. No browser renderer may own persistence, process execution, ADB, secrets, or target-page privileges.
+
 ## 2. Process and module topology
 
 ```mermaid
@@ -305,6 +309,15 @@ interface RunEvent {
   data?: Record<string, unknown>;
 }
 ```
+
+### 4.5 Protocol and error invariants
+
+- Every request, response, event, and cancellation envelope has `protocolVersion` and `correlationId`.
+- Cancellation is represented by `kind: "cancel"` and a correlated request; the host enforces a grace timeout before tree termination.
+- Structured error codes are stable: `CAPABILITY_ERROR`, `RUNTIME_MISSING`, `DEVICE_UNAVAILABLE`, `PROJECT_PREREQUISITE_MISSING`, `PATH_DENIED`, `PROCESS_TIMEOUT`, `CANCELLED`, and `PROTOCOL_ERROR`.
+- stdout is reserved for NDJSON protocol frames; diagnostics are written to stderr with redaction.
+- Event sequence numbers are monotonic per run and duplicate events are ignored by correlation ID.
+- Unknown schema versions and unsupported actions are blocked; no silent fallback or generated `TODO` is permitted.
 
 ## 5. NDJSON sidecar protocol
 
@@ -753,9 +766,10 @@ The installer must support a core shell pack and optional offline runtime packs.
 
 ### 11.3 Offline scope of truth
 
-- AutomatePlus host/sidecar installation, session/project persistence, generation, and reporting are fully offline by design.
-- Target Web/API systems can still be remote when explicitly selected by the user.
-- Any test command requiring a dependency not present in local packs is a blocked run, not an auto-fetch event.
+- AutomatePlus installation, project/session persistence, generation, reporting, and runtime resolution are offline by design.
+- A user may intentionally test a remote Web/API target; that target network dependency is outside the host offline guarantee.
+- Missing or unverified local dependencies produce `RUNTIME_MISSING` and block the run; the application never auto-fetches packages or tools.
+- Fonts, UI assets, fixtures, and diagnostics required by the desktop shell must be local or bundled.
 
 ## 12. Security design
 
@@ -863,11 +877,14 @@ Negative tests cover invalid language pairs, unsupported actions, missing runtim
 
 The current repository baseline is useful only for migration comparison:
 
-- `npm test` currently passes 23 tests.
+- `npm test` currently passes 80 tests across IR, IPC, generator, persistence, recorder, API runner, runner, cancellation, and stress component suites.
 - `npm run build:packages` currently passes.
-- `npm run build:desktop` currently builds the Vite SPA but warns about Node modules externalized for browser compatibility.
-- Root `npm run typecheck` currently includes reference sources and fails; production configuration must scope projects explicitly.
-- Existing `ProcessRunner` and `K6StressRunner` contain simulation behavior and cannot provide runtime acceptance evidence.
+- `npm run build:sidecar` and `npm run build:desktop` currently pass; the browser-safe Vite shell no longer imports Node-only APIs.
+- Root `npm run typecheck`, `npm run lint`, and `npm run format:check` currently pass with `reference/`, `docs/`, and generated output excluded from the production projects.
+- A package-level test or generated-code check remains component evidence; it is not native runtime acceptance.
+- `AutomatePlus.sln` and the six .NET 8 host projects now exist, but the current machine only has SDK 5.0.406; `dotnet build/test --no-restore` therefore remain `Blocked` with `NETSDK1045`.
+- The browser migration shell uses blocked facades for host-only process/ADB/k6 execution. The native `ProcessRunner` and k6 runner now use real child-process boundaries, but they are not runtime acceptance evidence until local runtimes and fixtures are verified.
+- `npm run verify:k6` passed against a loopback HTTP fixture using the installed k6 1.3.0 binary; this validates the local k6 process and summary path, not production capacity planning.
 
 ## 15. Migration from the current scaffold
 

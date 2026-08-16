@@ -12,11 +12,44 @@ export const LocatorStrategySchema = z.enum([
     'xpath',
     'bounds',
 ]);
-export const LocatorCandidateSchema = z.object({
+export const LocatorCandidateSchema = z
+    .object({
     strategy: LocatorStrategySchema,
-    value: z.string().min(1),
-    role: z.string().optional(),
-    name: z.string().optional(),
-    score: z.number().min(0).max(100).default(50),
+    value: z.string().min(1).max(4096),
+    role: z.string().min(1).max(256).optional(),
+    name: z.string().min(1).max(1024).optional(),
+    score: z.number().finite().min(0).max(100).default(50),
+})
+    .strict()
+    .superRefine((locator, context) => {
+    if (locator.strategy === 'bounds' && !/^\[\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\]\[\s*-?\d+(?:\.\d+)?\s*,\s*-?\d+(?:\.\d+)?\s*\]$/u.test(locator.value)) {
+        context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ['value'],
+            message: 'bounds locator value must be [left,top][right,bottom]',
+        });
+    }
 });
+export function validateLocatorRanking(locators) {
+    const errors = [];
+    const identities = new Set();
+    for (let index = 0; index < locators.length; index += 1) {
+        const current = locators[index];
+        const identity = `${current.strategy}\u0000${current.value}`;
+        if (identities.has(identity))
+            errors.push(`locators.${index}: duplicate locator strategy/value pair`);
+        identities.add(identity);
+        const previous = locators[index - 1];
+        if (previous && current.score > previous.score) {
+            errors.push(`locators.${index}.score: locator candidates must be ordered by descending score`);
+        }
+    }
+    return errors;
+}
+export function normalizeLocatorRanking(locators) {
+    return locators
+        .map((locator, originalIndex) => ({ locator, originalIndex }))
+        .sort((left, right) => right.locator.score - left.locator.score || left.originalIndex - right.originalIndex)
+        .map(({ locator }) => locator);
+}
 //# sourceMappingURL=locators.js.map

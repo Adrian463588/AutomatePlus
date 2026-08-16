@@ -1,4 +1,4 @@
-import { IStorageEngine } from '../storage-engine.js';
+import type { IStorageEngine } from '../memory-storage.js';
 import { RunMetricRecord, TestRunRecord } from '../types.js';
 
 export class RunRepository {

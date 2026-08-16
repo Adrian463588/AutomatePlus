@@ -1,4 +1,4 @@
-import { IStorageEngine } from '../storage-engine.js';
+import type { IStorageEngine } from '../memory-storage.js';
 import { ProjectRecord } from '../types.js';
 
 export class ProjectRepository {

@@ -1,7 +1,6 @@
-import { ITestRunner, RunLogCallback, RunSummary, RunnerStatus } from '@automate-plus/contracts';
+import { createRuntimeId, ITestRunner, RunLogCallback, RunSummary, RunnerStatus } from '@automate-plus/contracts';
 import { SessionIR } from '@automate-plus/ir-schema';
-import { InteractivePlayer } from '@automate-plus/runner-core';
-import crypto from 'node:crypto';
+import { InteractivePlayer } from '@automate-plus/runner-core/browser';
 
 export interface LoopingOptions {
   iterations: number;
@@ -32,10 +31,14 @@ export class SessionLooper {
     onLog: RunLogCallback,
     onIterationProgress?: (current: number, total: number, summary: RunSummary) => void
   ): Promise<LoopingSummary> {
+    if (!Number.isInteger(options.iterations) || options.iterations <= 0) {
+      throw new Error('Loop iterations must be a positive integer');
+    }
     this.shouldStop = false;
-    const runId = crypto.randomUUID();
+    const runId = createRuntimeId();
     let successful = 0;
     let failed = 0;
+    let blocked = false;
     const iterationDurations: number[] = [];
 
     onLog({
@@ -67,6 +70,7 @@ export class SessionLooper {
         successful++;
       } else {
         failed++;
+        blocked ||= summary.status === 'blocked';
       }
 
       if (onIterationProgress) {
@@ -91,7 +95,7 @@ export class SessionLooper {
       successfulIterations: successful,
       failedIterations: failed,
       averageIterationMs: avgDuration,
-      status: failed === 0 ? 'passed' : 'failed',
+      status: blocked ? 'blocked' : failed === 0 ? 'passed' : 'failed',
     };
   }
 

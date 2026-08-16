@@ -1,4 +1,7 @@
 export * from './generator.interface.js';
 export * from './recorder.interface.js';
 export * from './runner.interface.js';
+export * from './errors.js';
+export * from './protocol.js';
+export * from './runtime-id.js';
 export * from './device.interface.js';

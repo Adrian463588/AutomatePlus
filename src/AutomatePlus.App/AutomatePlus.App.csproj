@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
+    <TargetPlatformMinVersion>10.0.19041.0</TargetPlatformMinVersion>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+    <UseWinUI>true</UseWinUI>
+    <EnableDefaultApplicationDefinition>true</EnableDefaultApplicationDefinition>
+    <EnableDefaultPageItems>true</EnableDefaultPageItems>
+    <Platforms>x64</Platforms>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\AutomatePlus.Domain\AutomatePlus.Domain.csproj" />
+    <ProjectReference Include="..\AutomatePlus.Application\AutomatePlus.Application.csproj" />
+    <ProjectReference Include="..\AutomatePlus.Infrastructure\AutomatePlus.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="1.6.250205002" />
+  </ItemGroup>
+</Project>

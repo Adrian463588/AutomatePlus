@@ -35,7 +35,7 @@ describe('Runner Core (Interactive Player & Process Runner)', () => {
   };
 
   it('should run interactive test player and report step passes', async () => {
-    const player = new InteractivePlayer();
+    const player = new InteractivePlayer({ execute: async () => undefined });
     const logs: string[] = [];
 
     const summary = await player.run(
@@ -57,12 +57,48 @@ describe('Runner Core (Interactive Player & Process Runner)', () => {
 
     const summary = await runner.run(
       sampleSession,
-      { executionMode: 'native' },
+      {
+        executionMode: 'native',
+        command: {
+          executablePath: process.execPath,
+          args: ['-e', "process.stdout.write('fixture runner\\n')"],
+        },
+      },
       (event) => logs.push(event.message)
     );
 
     expect(summary.status).toBe('passed');
     expect(summary.passedSteps).toBe(2);
     expect(logs.length).toBeGreaterThan(2);
+  });
+
+  it('cancels an active process and reports a cancelled run', async () => {
+    let resolveCompletion: ((result: { exitCode: number; signal?: NodeJS.Signals | null }) => void) | undefined;
+    let terminateCalled = false;
+    const runner = new ProcessRunner({
+      processFactory: () => ({
+        completion: new Promise((resolve) => { resolveCompletion = resolve; }),
+        terminate: async () => {
+          terminateCalled = true;
+          resolveCompletion?.({ exitCode: -1, signal: 'SIGTERM' });
+        },
+      }),
+    });
+
+    const runPromise = runner.run(
+      sampleSession,
+      {
+        executionMode: 'native',
+        command: { executablePath: 'node', args: ['-e', 'setTimeout(() => undefined, 10000)'] },
+        timeoutMs: 10_000,
+      },
+      () => undefined,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await runner.stop();
+
+    const summary = await runPromise;
+    expect(terminateCalled).toBe(true);
+    expect(summary.status).toBe('cancelled');
   });
 });

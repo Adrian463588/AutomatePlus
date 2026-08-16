@@ -14,9 +14,19 @@
     "dev:desktop": "npm run dev --workspace=@automate-plus/desktop",
     "build:packages": "npm run build --workspace=@automate-plus/ir-schema && npm run build --workspace=@automate-plus/contracts && npm run build --workspace=@automate-plus/selector-engine && npm run build --workspace=@automate-plus/generators && npm run build --workspace=@automate-plus/persistence && npm run build --workspace=@automate-plus/recorder-web && npm run build --workspace=@automate-plus/recorder-android && npm run build --workspace=@automate-plus/runner-core && npm run build --workspace=@automate-plus/stress-engine",
     "build:desktop": "npm run build --workspace=@automate-plus/desktop",
-    "build": "npm run build:packages && npm run build:desktop",
+    "build:sidecar": "npm run build --workspace=@automate-plus/sidecar",
+    "verify:k6": "npm run build:packages && node scripts/verify-k6-fixture.mjs",
+    "verify:sidecar": "npm run build:packages && npm run build:sidecar && node scripts/verify-sidecar.mjs",
+    "verify:docs": "node scripts/verify-markdown.mjs",
+    "build": "npm run build:packages && npm run build:sidecar && npm run build:desktop",
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "npm run typecheck:packages && npm run typecheck:sidecar && npm run typecheck:desktop",
+    "typecheck:packages": "tsc -p tsconfig.packages.json --noEmit",
+    "typecheck:desktop": "tsc -p apps/desktop/tsconfig.json --noEmit",
+    "typecheck:sidecar": "tsc -p apps/sidecar/tsconfig.json --noEmit",
+    "lint": "node scripts/quality-check.mjs lint",
+    "format:check": "node scripts/quality-check.mjs format:check",
+    "format": "node scripts/quality-check.mjs format:check"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

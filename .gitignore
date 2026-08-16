@@ -8,6 +8,8 @@ dist/
 dist-ssr/
 *.local
 out/
+**/bin/
+**/obj/
 
 # Reference Research Material
 reference/
@@ -47,3 +49,9 @@ coverage/
 .nyc_output
 .vite/
 .gemini/
+
+# Imported runtime packs are verified locally and are never committed as binaries
+runtime-packs/**/*.exe
+runtime-packs/**/*.dll
+runtime-packs/**/*.zip
+runtime-packs/**/*.7z

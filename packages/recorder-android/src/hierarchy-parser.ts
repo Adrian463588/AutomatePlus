@@ -10,6 +10,28 @@ export interface AndroidUiNode {
   bounds: { left: number; top: number; right: number; bottom: number };
 }
 
+export function parseUiHierarchy(xml: string): AndroidUiNode[] {
+  const nodes: AndroidUiNode[] = [];
+  const nodePattern = /<node\b([^>]*?)(?:\/>|>)/g;
+
+  for (const nodeMatch of xml.matchAll(nodePattern)) {
+    const attributes = parseXmlAttributes(nodeMatch[1]);
+    const bounds = attributes.bounds ? parseBounds(attributes.bounds) : undefined;
+    if (!bounds) continue;
+
+    nodes.push({
+      resourceId: attributes['resource-id'],
+      contentDesc: attributes['content-desc'],
+      text: attributes.text,
+      className: attributes.class,
+      packageName: attributes.package,
+      bounds,
+    });
+  }
+
+  return nodes;
+}
+
 export function parseBounds(boundsStr: string): { left: number; top: number; right: number; bottom: number } | undefined {
   const match = boundsStr.match(/\[(\d+),(\d+)\]\[(\d+),(\d+)\]/);
   if (!match) return undefined;
@@ -77,4 +99,22 @@ export function extractAndroidLocators(node?: AndroidUiNode): LocatorCandidate[]
   });
 
   return rankLocators(candidates, 'android');
+}
+
+function parseXmlAttributes(source: string): Record<string, string> {
+  const attributes: Record<string, string> = {};
+  const attributePattern = /([A-Za-z_:][A-Za-z0-9_.:-]*)="([^"]*)"/g;
+  for (const match of source.matchAll(attributePattern)) {
+    attributes[match[1]] = decodeXmlAttribute(match[2]);
+  }
+  return attributes;
+}
+
+function decodeXmlAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&apos;', "'")
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&amp;', '&');
 }

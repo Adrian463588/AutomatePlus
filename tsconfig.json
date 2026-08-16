@@ -15,5 +15,7 @@
     "skipLibCheck": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true
-  }
+  },
+  "include": [],
+  "exclude": ["node_modules", "reference", "docs", "dist", "coverage"]
 }

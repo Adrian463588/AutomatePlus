@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
+import { bridge } from '../../services/desktopBridge.js';
 import { SessionRecord } from '@automate-plus/persistence';
 import {
   Plus,
@@ -22,7 +23,6 @@ export const Sidebar: React.FC = () => {
     selectProject,
     selectSession,
     devices,
-    activeDevice,
     lastRunSummary,
   } = useAppStore();
 
@@ -30,7 +30,7 @@ export const Sidebar: React.FC = () => {
   const [newSessionName, setNewSessionName] = useState('');
   const [newSessionPlatform, setNewSessionPlatform] = useState<'web' | 'android' | 'api'>('web');
 
-  const handleCreateSession = () => {
+  const handleCreateSession = async () => {
     if (!newSessionName.trim() || !activeProject) return;
     const newSessionId = crypto.randomUUID();
     const newSession: SessionRecord = {
@@ -40,16 +40,16 @@ export const Sidebar: React.FC = () => {
       platform: newSessionPlatform,
       ir: {
         id: newSessionId,
-        schemaVersion: 1,
+        schemaVersion: 2,
         projectId: activeProject.id,
         name: newSessionName.trim(),
         platform: newSessionPlatform,
         targetConfig:
           newSessionPlatform === 'web'
-            ? { startUrl: 'https://demo.automateplus.io' }
+            ? { startUrl: 'http://127.0.0.1:4173' }
             : newSessionPlatform === 'android'
-            ? { appPackage: 'com.example.app', deviceId: 'emulator-5554' }
-            : { baseUrl: 'https://api.example.com' },
+            ? { appPackage: 'com.example.app' }
+            : { baseUrl: 'http://127.0.0.1:4173' },
         environmentVariables: {},
         steps: [],
         createdAt: Date.now(),
@@ -59,6 +59,7 @@ export const Sidebar: React.FC = () => {
       updatedAt: Date.now(),
     };
 
+    await bridge.sessionRepo.save(newSession);
     useAppStore.setState((state) => ({
       sessions: [...state.sessions, newSession],
       activeSession: newSession,
@@ -261,7 +262,7 @@ export const Sidebar: React.FC = () => {
                 Cancel
               </button>
               <button
-                onClick={handleCreateSession}
+                onClick={() => void handleCreateSession()}
                 className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-md shadow-sm"
               >
                 Create

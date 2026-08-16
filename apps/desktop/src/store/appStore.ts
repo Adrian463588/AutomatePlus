@@ -36,7 +36,7 @@ interface AppState {
   updateStep: (stepIndex: number, step: ActionIR) => Promise<void>;
   deleteStep: (stepIndex: number) => Promise<void>;
   reorderSteps: (fromIndex: number, toIndex: number) => Promise<void>;
-  startRecording: (platform: 'web' | 'android') => Promise<void>;
+  startRecording: (platform: 'web' | 'android', targetUrl?: string) => Promise<void>;
   stopRecording: () => Promise<void>;
   runTest: (mode: 'interactive' | 'native') => Promise<void>;
   runLooping: (iterations: number) => Promise<void>;
@@ -57,8 +57,8 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   isRecording: false,
   activeRecorderPlatform: 'web',
-  devices: [{ id: 'emulator-5554', model: 'Pixel 7 Pro (API 34)', status: 'device' }],
-  activeDevice: 'emulator-5554',
+  devices: [],
+  activeDevice: undefined,
 
   logs: [],
   isRunning: false,
@@ -223,24 +223,44 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().regenerateCode();
   },
 
-  startRecording: async (platform: 'web' | 'android') => {
+  startRecording: async (platform: 'web' | 'android', targetUrl?: string) => {
     const { activeSession } = get();
-    set({ isRecording: true, activeRecorderPlatform: platform });
+    if (!activeSession) {
+      set((state) => ({
+        logs: [...state.logs, { timestamp: Date.now(), type: 'stderr', message: 'Select a session before recording.' }],
+      }));
+      return;
+    }
 
-    if (platform === 'web') {
-      await bridge.webRecorder.start(
-        { targetUrl: activeSession?.ir.targetConfig.startUrl || 'https://demo.automateplus.io' },
-        (action) => {
-          get().addStep(action);
-        }
-      );
-    } else {
-      await bridge.androidRecorder.start(
-        { deviceId: get().activeDevice || 'emulator-5554' },
-        (action) => {
-          get().addStep(action);
-        }
-      );
+    set({ activeRecorderPlatform: platform, isRecording: false });
+    try {
+      if (platform === 'web') {
+        const resolvedTargetUrl = targetUrl?.trim() || activeSession.ir.targetConfig.startUrl;
+        if (!resolvedTargetUrl) throw new Error('A web target URL is required before recording.');
+        await bridge.webRecorder.start(
+          { targetUrl: resolvedTargetUrl },
+          (action) => {
+            void get().addStep(action);
+          },
+        );
+      } else {
+        await bridge.androidRecorder.start(
+          { deviceId: get().activeDevice || '' },
+          (action) => {
+            void get().addStep(action);
+          },
+        );
+      }
+      set({ isRecording: true });
+    } catch (error) {
+      set((state) => ({
+        isRecording: false,
+        logs: [...state.logs, {
+          timestamp: Date.now(),
+          type: 'stderr',
+          message: `Recording blocked: ${error instanceof Error ? error.message : String(error)}`,
+        }],
+      }));
     }
   },
 

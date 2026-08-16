@@ -1,5 +1,6 @@
 export * from './base.generator.js';
 export * from './factory.js';
+export * from './capabilities.js';
 
 // Web Generators
 export * from './web/playwright-ts.generator.js';

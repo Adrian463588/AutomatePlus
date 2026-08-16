@@ -1,5 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MemoryStorageEngine } from '../src/storage-engine.js';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { MemoryStorageEngine, SQLiteStorageEngine } from '../src/storage-engine.js';
 import { ProjectRepository } from '../src/repositories/project.repository.js';
 import { SessionRepository } from '../src/repositories/session.repository.js';
 import { RunRepository } from '../src/repositories/run.repository.js';
@@ -98,5 +101,20 @@ describe('Persistence Layer Repositories', () => {
     const metrics = await runRepo.getMetricsByRunId('run-1');
     expect(metrics.length).toBe(1);
     expect(metrics[0].value).toBe(120.5);
+  });
+
+  it('should persist collections across SQLite engine instances', async () => {
+    const directory = mkdtempSync(join(tmpdir(), 'automate-plus-persistence-'));
+    const databasePath = join(directory, 'workspace.db');
+    const first = new SQLiteStorageEngine(databasePath);
+    await first.write('projects', [{ id: 'p-sqlite', name: 'Durable workspace' }]);
+    first.close();
+
+    const second = new SQLiteStorageEngine(databasePath);
+    await expect(second.read<{ id: string; name: string }>('projects')).resolves.toEqual([
+      { id: 'p-sqlite', name: 'Durable workspace' },
+    ]);
+    second.close();
+    rmSync(directory, { recursive: true, force: true });
   });
 });

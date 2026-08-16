@@ -29,6 +29,8 @@ export class K6StressGenerator extends BaseCodeGenerator {
       `  },`,
       `};`,
       ``,
+      `let lastResponse;`,
+      ``,
       `export default function () {`,
     ].join('\n');
   }
@@ -41,8 +43,8 @@ export class K6StressGenerator extends BaseCodeGenerator {
 
       return [
         `  {`,
-        `    const res = http.request('${method}', '${url}', ${bodyStr}, { headers: ${headersStr} });`,
-        `    check(res, {`,
+        `    lastResponse = http.request(${JSON.stringify(method)}, ${JSON.stringify(url)}, ${bodyStr}, { headers: ${headersStr} });`,
+        `    check(lastResponse, {`,
         `      'status is 2xx': (r) => r.status >= 200 && r.status < 300,`,
         `    });`,
         `  }`,
@@ -50,7 +52,7 @@ export class K6StressGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertStatusCode') {
-      return `  check(res, { 'status code matches': (r) => r.status === ${Number(action.expectedValue) || 200} });`;
+      return `  check(lastResponse, { 'status code matches': (r) => r.status === ${Number(action.expectedValue) || 200} });`;
     }
 
     if (action.action === 'sleep') {

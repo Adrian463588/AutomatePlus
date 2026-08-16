@@ -1,9 +1,10 @@
 import { GeneratorFactory } from '@automate-plus/generators';
-import { MemoryStorageEngine, ProjectRepository, RunRepository, SessionRecord, SessionRepository } from '@automate-plus/persistence';
+import { MemoryStorageEngine, ProjectRepository, RunRepository, SessionRecord, SessionRepository } from '@automate-plus/persistence/browser';
 import { WebRecorder } from '@automate-plus/recorder-web';
-import { AndroidRecorder } from '@automate-plus/recorder-android';
-import { InteractivePlayer, ProcessRunner } from '@automate-plus/runner-core';
-import { K6StressMetrics, K6StressRunner, LoopingSummary, SessionLooper } from '@automate-plus/stress-engine';
+import { AndroidRecorder } from '@automate-plus/recorder-android/browser';
+import { ApiFunctionalRunner, InteractivePlayer, ProcessRunner } from '@automate-plus/runner-core/browser';
+import type { ProcessCommand } from '@automate-plus/runner-core/browser';
+import { K6StressMetrics, K6StressRunner, LoopingSummary, SessionLooper } from '@automate-plus/stress-engine/browser';
 import { GeneratedProject, RunLogCallback, RunSummary } from '@automate-plus/contracts';
 import { SessionIR } from '@automate-plus/ir-schema';
 
@@ -16,6 +17,7 @@ export class DesktopBridgeService {
   public androidRecorder: AndroidRecorder;
 
   public interactivePlayer: InteractivePlayer;
+  public apiRunner: ApiFunctionalRunner;
   public processRunner: ProcessRunner;
   public sessionLooper: SessionLooper;
   public k6StressRunner: K6StressRunner;
@@ -30,6 +32,7 @@ export class DesktopBridgeService {
     this.androidRecorder = new AndroidRecorder();
 
     this.interactivePlayer = new InteractivePlayer();
+    this.apiRunner = new ApiFunctionalRunner();
     this.processRunner = new ProcessRunner();
     this.sessionLooper = new SessionLooper(this.interactivePlayer);
     this.k6StressRunner = new K6StressRunner();
@@ -42,7 +45,7 @@ export class DesktopBridgeService {
     if (existing.length > 0) return;
 
     const defaultProj = {
-      id: 'proj-offline-default',
+      id: '00000000-0000-4000-8000-000000000001',
       name: 'Default Workspace Project',
       description: 'Pre-configured low-code multiplatform testing workspace',
       workspacePath: './workspace',
@@ -54,62 +57,63 @@ export class DesktopBridgeService {
     await this.projectRepo.save(defaultProj);
 
     const defaultWebSession: SessionRecord = {
-      id: 'session-web-1',
+      id: '00000000-0000-4000-8000-000000000002',
       projectId: defaultProj.id,
       name: 'Web E-Commerce Login Flow',
       platform: 'web',
       ir: {
-        id: 'session-web-1',
+      id: '00000000-0000-4000-8000-000000000002',
         schemaVersion: 1,
         projectId: defaultProj.id,
         name: 'Web E-Commerce Login Flow',
         platform: 'web',
         targetConfig: {
-          startUrl: 'https://demo.automateplus.io/login',
+          startUrl: 'http://127.0.0.1:4173/login',
           viewport: { width: 1440, height: 900 },
         },
         environmentVariables: {
-          USER_EMAIL: 'qa.lead@automateplus.io',
-          BASE_URL: 'https://demo.automateplus.io',
+          USER_EMAIL: 'qa@example.test',
+          E2E_PASSWORD: { kind: 'secret', key: 'E2E_PASSWORD' },
+          BASE_URL: 'http://127.0.0.1:4173',
         },
         steps: [
           {
-            id: 'step-w-1',
+            id: '00000000-0000-4000-8000-000000000011',
             schemaVersion: 1,
             stepNumber: 1,
             platform: 'web',
             action: 'navigate',
-            value: 'https://demo.automateplus.io/login',
+            value: 'http://127.0.0.1:4173/login',
             timeoutMs: 5000,
             timestamp: Date.now(),
             optional: false,
           },
           {
-            id: 'step-w-2',
+            id: '00000000-0000-4000-8000-000000000012',
             schemaVersion: 1,
             stepNumber: 2,
             platform: 'web',
             action: 'fill',
             locators: [{ strategy: 'testId', value: 'input-email', score: 100 }],
-            value: 'qa.lead@automateplus.io',
+            value: 'qa@example.test',
             timeoutMs: 5000,
             timestamp: Date.now(),
             optional: false,
           },
           {
-            id: 'step-w-3',
+            id: '00000000-0000-4000-8000-000000000013',
             schemaVersion: 1,
             stepNumber: 3,
             platform: 'web',
             action: 'fill',
             locators: [{ strategy: 'testId', value: 'input-password', score: 100 }],
-            value: 'SecurePass123!',
+            value: { kind: 'secret', key: 'E2E_PASSWORD' },
             timeoutMs: 5000,
             timestamp: Date.now(),
             optional: false,
           },
           {
-            id: 'step-w-4',
+            id: '00000000-0000-4000-8000-000000000014',
             schemaVersion: 1,
             stepNumber: 4,
             platform: 'web',
@@ -120,7 +124,7 @@ export class DesktopBridgeService {
             optional: false,
           },
           {
-            id: 'step-w-5',
+            id: '00000000-0000-4000-8000-000000000015',
             schemaVersion: 1,
             stepNumber: 5,
             platform: 'web',
@@ -140,12 +144,12 @@ export class DesktopBridgeService {
     await this.sessionRepo.save(defaultWebSession);
 
     const defaultAndroidSession: SessionRecord = {
-      id: 'session-android-1',
+      id: '00000000-0000-4000-8000-000000000003',
       projectId: defaultProj.id,
       name: 'Android Native Checkout Flow',
       platform: 'android',
       ir: {
-        id: 'session-android-1',
+        id: '00000000-0000-4000-8000-000000000003',
         schemaVersion: 1,
         projectId: defaultProj.id,
         name: 'Android Native Checkout Flow',
@@ -153,12 +157,11 @@ export class DesktopBridgeService {
         targetConfig: {
           appPackage: 'com.automateplus.shop',
           appActivity: '.MainActivity',
-          deviceId: 'emulator-5554',
         },
         environmentVariables: {},
         steps: [
           {
-            id: 'step-a-1',
+            id: '00000000-0000-4000-8000-000000000021',
             schemaVersion: 1,
             stepNumber: 1,
             platform: 'android',
@@ -169,7 +172,7 @@ export class DesktopBridgeService {
             optional: false,
           },
           {
-            id: 'step-a-2',
+            id: '00000000-0000-4000-8000-000000000022',
             schemaVersion: 1,
             stepNumber: 2,
             platform: 'android',
@@ -180,7 +183,7 @@ export class DesktopBridgeService {
             optional: false,
           },
           {
-            id: 'step-a-3',
+            id: '00000000-0000-4000-8000-000000000023',
             schemaVersion: 1,
             stepNumber: 3,
             platform: 'android',
@@ -200,34 +203,34 @@ export class DesktopBridgeService {
     await this.sessionRepo.save(defaultAndroidSession);
 
     const defaultApiSession: SessionRecord = {
-      id: 'session-api-1',
+      id: '00000000-0000-4000-8000-000000000004',
       projectId: defaultProj.id,
       name: 'Auth & Profile API Benchmark',
       platform: 'api',
       ir: {
-        id: 'session-api-1',
+        id: '00000000-0000-4000-8000-000000000004',
         schemaVersion: 1,
         projectId: defaultProj.id,
         name: 'Auth & Profile API Benchmark',
         platform: 'api',
         targetConfig: {
-          baseUrl: 'https://api.automateplus.io',
+          baseUrl: 'http://127.0.0.1:4173',
         },
         environmentVariables: {},
         steps: [
           {
-            id: 'step-api-1',
+            id: '00000000-0000-4000-8000-000000000031',
             schemaVersion: 1,
             stepNumber: 1,
             platform: 'api',
             action: 'httpRequest',
             apiPayload: {
               method: 'POST',
-              url: 'https://api.automateplus.io/v1/auth/login',
+              url: 'http://127.0.0.1:4173/api/login',
               headers: { 'Content-Type': 'application/json' },
               queryParams: {},
               bodyType: 'json',
-              bodyContent: JSON.stringify({ email: 'qa@automateplus.io', password: 'secretpassword' }),
+              bodyContent: JSON.stringify({ email: 'qa@example.test', password: '{{API_PASSWORD}}' }),
               extractedVariables: [{ variableName: 'AUTH_TOKEN', jsonPath: '$.token' }],
             },
             timeoutMs: 5000,
@@ -250,7 +253,9 @@ export class DesktopBridgeService {
   }
 
   public async runInteractiveTest(session: SessionIR, onLog: RunLogCallback): Promise<RunSummary> {
-    const summary = await this.interactivePlayer.run(session, { executionMode: 'interactive' }, onLog);
+    const summary = session.platform === 'api'
+      ? await this.apiRunner.run(session, { executionMode: 'functional' }, onLog)
+      : await this.interactivePlayer.run(session, { executionMode: 'interactive' }, onLog);
     await this.runRepo.saveRun({
       id: summary.runId,
       sessionId: session.id,
@@ -269,7 +274,9 @@ export class DesktopBridgeService {
   }
 
   public async runNativeTest(session: SessionIR, framework: string, language: string, onLog: RunLogCallback): Promise<RunSummary> {
-    const summary = await this.processRunner.run(session, { executionMode: 'native' }, onLog);
+    const project = await this.generateCode(session, framework, language);
+    const command = this.resolveRunnerCommand(framework, project.entrypoint);
+    const summary = await this.processRunner.run(session, { executionMode: 'native', project, command }, onLog);
     await this.runRepo.saveRun({
       id: summary.runId,
       sessionId: session.id,
@@ -285,6 +292,21 @@ export class DesktopBridgeService {
       errorSummary: summary.error,
     });
     return summary;
+  }
+
+  private resolveRunnerCommand(framework: string, entrypoint: string): ProcessCommand | undefined {
+    switch (framework.toLowerCase()) {
+      case 'playwright':
+        return { executablePath: 'playwright', args: ['test', entrypoint] };
+      case 'cypress':
+        return { executablePath: 'cypress', args: ['run', '--spec', entrypoint] };
+      case 'robot':
+        return { executablePath: 'robot', args: [entrypoint] };
+      case 'selenium':
+        return { executablePath: 'python', args: [entrypoint] };
+      default:
+        return undefined;
+    }
   }
 
   public runLooping(

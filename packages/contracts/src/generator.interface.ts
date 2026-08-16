@@ -17,6 +17,8 @@ export interface GeneratedProject {
   framework: string;
   language: string;
   files: GeneratedFile[];
+  manifest: CapabilityManifest;
+  entrypoint: string;
   runtimeRequirements?: string[];
   checksums?: Record<string, string>;
 }
@@ -52,7 +54,7 @@ export interface ICodeGenerator {
   readonly framework: string;
   readonly language: string;
   readonly supportedPlatforms: readonly ('web' | 'android' | 'api')[];
-  readonly manifest?: CapabilityManifest;
+  readonly manifest: CapabilityManifest;
 
   supports(action: ActionIR): boolean;
   supportsSession?(session: SessionIR): CapabilityResult;

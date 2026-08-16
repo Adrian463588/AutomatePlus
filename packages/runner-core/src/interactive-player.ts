@@ -1,4 +1,6 @@
 import {
+  AutomationError,
+  createRuntimeId,
   ITestRunner,
   RunLogCallback,
   RunOptions,
@@ -7,11 +9,12 @@ import {
 } from '@automate-plus/contracts';
 import { ActionIR, SessionIR } from '@automate-plus/ir-schema';
 import { findNextResilientLocator } from '@automate-plus/selector-engine';
-import crypto from 'node:crypto';
 
 export class InteractivePlayer implements ITestRunner {
   private _status: RunnerStatus = 'queued';
   private shouldStop = false;
+
+  public constructor(private readonly executor?: InteractiveStepExecutor) {}
 
   public get status(): RunnerStatus {
     return this._status;
@@ -25,7 +28,7 @@ export class InteractivePlayer implements ITestRunner {
     this._status = 'running';
     this.shouldStop = false;
     const startTime = Date.now();
-    const runId = crypto.randomUUID();
+    const runId = createRuntimeId();
 
     let passedSteps = 0;
     let failedSteps = 0;
@@ -123,11 +126,17 @@ export class InteractivePlayer implements ITestRunner {
   }
 
   private async executeStep(step: ActionIR, _onLog: RunLogCallback): Promise<void> {
-    // Simulated step execution delay (e.g. 10ms for in-app engine)
-    await new Promise((resolve) => setTimeout(resolve, 10));
-
-    if (step.action === 'httpRequest' && step.apiPayload?.url.includes('invalid-url-force-error')) {
-      throw new Error('Network error: invalid target URL');
+    if (!this.executor) {
+      throw new AutomationError(
+        'RUNTIME_MISSING',
+        'Interactive execution requires an injected browser, Android, or API action executor.',
+        { platform: step.platform, action: step.action },
+      );
     }
+    await this.executor.execute(step);
   }
+}
+
+export interface InteractiveStepExecutor {
+  execute(step: ActionIR): Promise<void>;
 }
