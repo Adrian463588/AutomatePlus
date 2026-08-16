@@ -1,9 +1,9 @@
 # AutomatePlus (v2) 🚀
 
-[![CI/CD Status](https://img.shields.io/badge/Build-Passing-emerald.svg)](https://github.com/)
-[![Tests](https://img.shields.io/badge/Tests-43%20Passing-emerald.svg)](https://github.com/)
-[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/)
-[![License](https://img.shields.io/badge/License-MIT-purple.svg)](LICENSE)
+[![CI/CD Status](https://img.shields.io/badge/Build-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-43%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
 
