@@ -43,6 +43,8 @@
 - Never emit fake imports, silent fallbacks, plaintext secrets, or `TODO` stubs for supported actions.
 - Prefer semantic locators; coordinates/XPath are explicit fallbacks and must remain visible in the IR.
 - Do not introduce static sleeps unless the user explicitly records a sleep action.
+- Enforce SOLID/DRY by isolating recorder, selector, generator, and runner responsibilities.
+- Do not claim runtime acceptance for simulator/stubbed paths (`ProcessRunner`, `K6StressRunner`, or placeholder runs).
 
 ## Runtime and security
 
@@ -51,6 +53,7 @@
 - Lock an Android serial to one active interaction/run at a time.
 - Functional looping and UI soak are not API RPS. RPS uses the local k6 protocol runner only.
 - Maximum three remediation attempts; halt after the same error repeats twice consecutively.
+- Click-and-record must remain the primary path for action capture and IR creation for Web and Android.
 
 ## Change discipline
 

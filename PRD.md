@@ -279,6 +279,7 @@ The UI must filter the language selector from this matrix. A disabled combinatio
 | NFR-10 | UI remains usable with long logs and large sessions | 500-step timeline and streamed-log test |
 | NFR-11 | Reports remain diagnosable offline | Artifact-link and report parser tests |
 | NFR-12 | Runtime packs are checksum and license auditable | Manifest verification tests |
+| NFR-13 | Generated and host implementation respects SOLID/DRY | Architecture review and duplicate-logic scan |
 
 ## 7. Operational semantics
 
@@ -314,6 +315,7 @@ The product is accepted only when all applicable criteria have fresh evidence:
 - Click, fill, scroll, tap, swipe, drag, assertions, and request chaining survive round-trip IR persistence.
 - Invalid framework/language/action combinations are disabled or rejected before execution.
 - Generated code passes formatter, lint, typecheck/compile, and smoke validation.
+- Recorder-to-generator-to-run flow is implemented without duplicated business logic across recorder, selector, generator, and runner layers (SOLID + DRY).
 - Passwords/tokens are secret references, not plaintext values.
 - Cancellation removes owned processes and releases Android device locks.
 - Functional loop and API RPS are visibly separate modes.

@@ -751,6 +751,12 @@ The installer must support a core shell pack and optional offline runtime packs.
 - A target Web/API request occurs only after an explicit recording, response inspection, or run command.
 - Offline tests use local fixtures and preinstalled packs.
 
+### 11.3 Offline scope of truth
+
+- AutomatePlus host/sidecar installation, session/project persistence, generation, and reporting are fully offline by design.
+- Target Web/API systems can still be remote when explicitly selected by the user.
+- Any test command requiring a dependency not present in local packs is a blocked run, not an auto-fetch event.
+
 ## 12. Security design
 
 ### 12.1 Process security
