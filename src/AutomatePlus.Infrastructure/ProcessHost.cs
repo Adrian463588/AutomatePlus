@@ -11,7 +11,7 @@ public sealed class ProcessHost
 {
     private static readonly HashSet<string> DefaultAllowlist = new(StringComparer.OrdinalIgnoreCase)
     {
-        "adb", "adb.exe", "cypress", "cypress.cmd", "dotnet", "dotnet.exe", "java", "java.exe",
+        "adb", "adb.exe", "appium", "appium.cmd", "scrcpy", "scrcpy.exe", "cypress", "cypress.cmd", "dotnet", "dotnet.exe", "java", "java.exe",
         "k6", "k6.exe", "node", "node.exe", "playwright", "playwright.cmd", "python", "python.exe", "robot", "robot.exe"
     };
 

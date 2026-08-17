@@ -8,9 +8,20 @@ namespace AutomatePlus.App;
 /// behind the host boundary.
 public sealed class AppShell
 {
-    public AppShell(ShellViewModel? viewModel = null)
+    public AppShell(
+        ShellViewModel? viewModel = null,
+        IDeviceRegistry? deviceRegistry = null,
+        IFarmRunScheduler? farmRunScheduler = null,
+        IDeviceFarmRecordingCoordinator? farmRecordingCoordinator = null,
+        IFarmWorkspaceStore? farmWorkspaceStore = null,
+        IEnumerable<DeviceGroup>? deviceGroups = null)
     {
-        ViewModel = viewModel ?? new ShellViewModel();
+        ViewModel = viewModel ?? new ShellViewModel(
+            deviceRegistry: deviceRegistry,
+            farmRunScheduler: farmRunScheduler,
+            farmRecordingCoordinator: farmRecordingCoordinator,
+            farmWorkspaceStore: farmWorkspaceStore,
+            deviceGroups: deviceGroups);
     }
 
     public ShellViewModel ViewModel { get; }

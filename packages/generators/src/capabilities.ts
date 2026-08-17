@@ -1,4 +1,9 @@
-import { CapabilityManifest } from '@automate-plus/contracts';
+import {
+  APPIUM_RUNTIME_CONTEXT,
+  CapabilityManifest,
+  DeviceExecutionStrategy,
+  ParallelSessionModel,
+} from '@automate-plus/contracts';
 
 const WEB_ACTIONS = [
   'navigate', 'click', 'doubleClick', 'rightClick', 'hover', 'fill', 'clear', 'pressKey',
@@ -56,6 +61,33 @@ const runtimeFor = (framework: string, language: string): string[] => {
   return ['node', framework];
 };
 
+const deviceStrategiesFor = (
+  framework: string,
+  platform: CapabilityManifest['platform'],
+): readonly DeviceExecutionStrategy[] => {
+  if (platform !== 'android') return [];
+  if (framework === 'appium') return ['single', 'all-devices', 'split-iterations'];
+  if (framework === 'robolectric') return [];
+  return ['single'];
+};
+
+const parallelSessionModelFor = (
+  framework: string,
+  platform: CapabilityManifest['platform'],
+): ParallelSessionModel => {
+  if (platform !== 'android') return 'none';
+  if (framework === 'appium') return 'multi-session';
+  if (framework === 'robolectric') return 'none';
+  return 'single-session';
+};
+
+const requiredRuntimePacksFor = (framework: string, platform: CapabilityManifest['platform']): readonly string[] => {
+  if (platform !== 'android') return [];
+  if (framework === 'appium') return ['adb', 'appium', 'appium-uiautomator2'];
+  if (framework === 'maestro') return ['adb', 'maestro'];
+  return ['android-sdk', 'gradle', 'jdk'];
+};
+
 function actionsFor(framework: string, platform: CapabilityManifest['platform']): string[] {
   if (platform === 'web') return [...(WEB_ACTIONS_BY_FRAMEWORK[framework] ?? [])];
   if (platform === 'android') return [...(ANDROID_ACTIONS_BY_FRAMEWORK[framework] ?? [])];
@@ -77,8 +109,13 @@ export function createCapabilityManifest(
     supportedActions: actions,
     supportedAssertions: ASSERTIONS.filter((assertion) => actions.includes(assertion)),
     requiredRuntimes: runtimeFor(framework, language),
+    supportedDeviceStrategies: deviceStrategiesFor(framework, platform),
+    parallelSessionModel: parallelSessionModelFor(framework, platform),
+    requiredRuntimePacks: requiredRuntimePacksFor(framework, platform),
+    requiresPhysicalDevice: platform === 'android' && framework !== 'robolectric',
+    ...(framework === 'appium' && platform === 'android' ? { runtimeContext: APPIUM_RUNTIME_CONTEXT } : {}),
     runnerCommandId: `${framework}.${language}.run`,
-    version: '2.0.0',
+    version: '2.1.0',
   };
 
   if (['espresso', 'robolectric'].includes(framework)) manifest.requiresProject = 'android-gradle';

@@ -5,3 +5,5 @@ export * from './errors.js';
 export * from './protocol.js';
 export * from './runtime-id.js';
 export * from './device.interface.js';
+export * from './device-farm.interface.js';
+export * from './device-farm.validation.js';

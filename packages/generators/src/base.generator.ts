@@ -12,6 +12,7 @@ import {
   GeneratedProject,
   GeneratorOptions,
   ICodeGenerator,
+  RuntimeContextSpec,
   ValidationResult,
   CapabilityError,
 } from '@automate-plus/contracts';
@@ -365,6 +366,17 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   protected getPrimaryLocator(action: ActionIR): LocatorCandidate | undefined {
     if (!action.locators || action.locators.length === 0) return undefined;
     return action.locators[0];
+  }
+
+  protected getRuntimeContext(options?: GeneratorOptions): RuntimeContextSpec {
+    const context = options?.runtimeContext ?? this.manifest.runtimeContext;
+    if (!context) {
+      throw new CapabilityError(`Generation requires a runtime context for ${this.framework}/${this.language}.`, {
+        framework: this.framework,
+        language: this.language,
+      });
+    }
+    return context;
   }
 
   protected getRawValue(val?: string | SecretRef): string {

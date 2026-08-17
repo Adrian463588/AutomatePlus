@@ -877,7 +877,7 @@ Negative tests cover invalid language pairs, unsupported actions, missing runtim
 
 The current repository baseline is useful only for migration comparison:
 
-- `npm test` currently passes 85 tests across IR, IPC, generator, persistence, recorder, API runner, runner, cancellation, stress, and desktop migration-shell component suites.
+- `npm test` currently passes 94 tests across IR, IPC, generator, persistence, recorder, API runner, runner, cancellation, stress, and desktop migration-shell component suites.
 - `npm run build:packages` currently passes.
 - `npm run build:sidecar` and `npm run build:desktop` currently pass; the browser-safe Vite shell no longer imports Node-only APIs.
 - Root `npm run typecheck`, `npm run lint`, and `npm run format:check` currently pass with `reference/`, `docs/`, and generated output excluded from the production projects.
@@ -909,4 +909,92 @@ scrcpy ≠ Recorder semantics
 IR ≠ Generated source
 Functional loop ≠ API RPS
 Prototype test pass ≠ runtime acceptance
+
+## 17. Sprint 2 offline Android device farm
+
+### 17.1 Ownership and boundaries
+
+The farm is a local, single-host capability. WinUI calls application ports; the application owns device selection, scheduling, leases, preflight, cancellation, aggregation, and persistence. Infrastructure owns ADB/Appium/scrcpy process boundaries, runtime-pack resolution, port allocation, artifact files, and SQLite. The TypeScript sidecar continues to own IR validation, selector ranking, and code generation. No cloud coordinator, farm sidecar, or second mutable IR is introduced.
+
+The WinUI composition root wires the real local ADB registry and SQLite workspace when they are available. Farm scheduling and recording coordinators are injected only when a verified runner/sidecar runtime is present; otherwise the UI exposes a blocked state and never creates a simulated device, run, or evidence result.
+
+The canonical `AutomationSession` and `ActionIR` do not contain live ADB serials or farm scheduling state. Existing single-device `targetConfig.deviceId` is resolved through a compatibility path. New farm runs use stable local device profile IDs and retain the current serial only in run evidence.
+
+### 17.2 Public contracts
+
+The shared contracts use these values:
+
+```text
+DeviceExecutionStrategy = single | all-devices | split-iterations
+FarmFailurePolicy = continue-other-devices | fail-fast
+FarmRunStatus = queued | running | passed | failed | blocked | cancelled
+CompletionState = complete | partial
+ObservationStatus = MATCHED | FALLBACK_USED | SEMANTIC_SELECTOR_MISSING
+                    | DEVICE_VARIANT_MISMATCH | NEEDS_REVIEW | BLOCKED | FAILED
+```
+
+`FarmRunSpec` contains `sessionId`, `deviceGroupId` or explicit stable `deviceIds`, strategy, `iterationsPerDevice` for `all-devices` or `totalIterations` for `split-iterations`, `maxParallelDevices`, delay, failure policy, framework, and language. Validation rejects both missing and conflicting iteration fields.
+
+`DeviceProfile` contains stable ID, current `adbSerial`, manufacturer, model, Android version/API level, emulator flag, resolution, density, orientation, transport, authorization, health, and `lastSeen`. `DeviceLease` contains lease ID/token, owner, run/recording ID, stable device ID, serial snapshot, state, and timestamps. `DeviceRunContext` contains the leased serial and runtime ports; it cannot be constructed without a lease.
+
+`FarmRunReport` contains aggregate status/completion plus `DeviceRunReport` records. Each device report contains preflight checks, iterations, observations, evidence references, and cleanup state. A report is `Passed` only when all planned work passes. An execution error produces `Failed`; no started work due to missing prerequisites produces `Blocked`; user cancellation produces `Cancelled`; mixed terminal results set `completion=partial`.
+
+### 17.3 Scheduler and lease lifecycle
+
+```text
+discover
+  → snapshot selected group
+  → reserve profile
+  → acquire serial lease
+  → preflight device/app/runtime
+  → acquire required ports
+  → create local Appium session
+  → execute iterations
+  → persist step/artifact evidence
+  → terminate session/processes
+  → release ports
+  → release serial lease
+```
+
+One worker owns one lease and one Appium session. The worker never calls unbound ADB. Lease release and port release are idempotent and execute on success, failure, cancellation, timeout, disconnect, and host shutdown. Persisted stale leases are recovered on startup. `continue-other-devices` allows independent workers to proceed; `fail-fast` stops unclaimed work but does not skip cleanup.
+
+The port manager uses a configured offline range and an atomic in-process reservation plus bind probe. The single loopback Appium server has one server port; each device session receives a unique `systemPort` and `mjpegServerPort`, with `chromedriverPort` only when a webview capability requires it. Generated source receives values through `DeviceRunContext`, never a fixed port.
+
+### 17.4 Recording
+
+Sprint 2 implements `RecordingPlan(mode=primary-followers, primaryDeviceId, followerDeviceIds)`. The primary recorder owns the canonical action stream and full mirror/input path. For each primary action, followers capture a hierarchy observation and resolve the semantic locator independently. Follower observations are written outside `ActionIR` and cannot silently promote a coordinate to a semantic match. Independent synchronized timelines are a later scope.
+
+### 17.5 Persistence and artifacts
+
+SQLite migrations add:
+
+```text
+device_profiles
+device_groups (with versioned member ID JSON)
+device_leases
+farm_runs
+device_runs
+device_iterations
+device_observations
+port_leases
+artifact_index
+```
+
+Large evidence is stored below the canonical workspace path:
+
+```text
+runs/<farmRunId>/devices/<deviceId>/iterations/<iterationId>/
+```
+
+The artifact index stores relative path, kind, and SHA-256. Session JSON never embeds screenshots, videos, or unbounded logs.
+
+### 17.6 Generation and capability metadata
+
+`CapabilityManifest` adds supported device strategies, parallel-session model, runtime inputs, and physical-device/project prerequisites. Appium generators create one project per framework/language and read a required runtime context. Missing context is a capability/runtime error. Appium, Espresso, and Maestro adapters must declare their actual farm strategy support; Robolectric remains JVM-only. Existing Web/API capabilities are unchanged.
+
+### 17.7 UX and acceptance
+
+The WinUI farm page exposes discovery, group selection, primary/follower recording, replay strategy, iteration settings, per-device progress, artifacts, failure reasons, and cancellation state. Full mirror is limited to the active device; the farm grid uses bounded thumbnails/status. Every unavailable prerequisite has a visible `Blocked` explanation. Interactive targets are at least 48×48, keyboard reachable, screen-reader labeled, high-contrast compatible, and reduced-motion safe. Long timelines and logs use bounded/virtualized presentation.
+
+The browser renderer remains a truthful migration shell. Empty device lists and host-only errors are blocked/empty states, never simulated device data. Component/fake tests are not native evidence. Sprint 2 runtime acceptance requires two authorized physical devices, a real target package/activity, non-empty checksum-verified local packs, generated-project gates, and fresh per-device artifacts.
 ```

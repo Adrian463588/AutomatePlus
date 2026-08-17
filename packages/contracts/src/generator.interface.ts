@@ -1,10 +1,16 @@
 import { ActionIR, SessionIR } from '@automate-plus/ir-schema';
+import {
+  DeviceExecutionStrategy,
+  ParallelSessionModel,
+  RuntimeContextSpec,
+} from './device-farm.interface.js';
 
 export interface GeneratorOptions {
   indentation?: string;
   pomMode?: boolean;
   timeoutMs?: number;
   headless?: boolean;
+  runtimeContext?: RuntimeContextSpec;
 }
 
 export interface GeneratedFile {
@@ -32,6 +38,11 @@ export interface CapabilityManifest {
   supportedActions: string[];
   supportedAssertions: string[];
   requiredRuntimes: string[];
+  supportedDeviceStrategies: readonly DeviceExecutionStrategy[];
+  parallelSessionModel: ParallelSessionModel;
+  requiredRuntimePacks: readonly string[];
+  requiresPhysicalDevice: boolean;
+  runtimeContext?: RuntimeContextSpec;
   requiresProject?: 'android-gradle' | 'none';
   runnerCommandId: string;
   version: string;

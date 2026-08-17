@@ -3,5 +3,7 @@ export * from './adb-bridge.js';
 export * from './adb-command-builder.js';
 export * from './android-errors.js';
 export * from './android-recorder.js';
+export * from './follower-observer.js';
+export * from './primary-follower-recorder.js';
 export * from './device-lock.js';
 export * from './process-executor.js';

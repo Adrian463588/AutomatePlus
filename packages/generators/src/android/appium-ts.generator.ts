@@ -1,27 +1,35 @@
 import { ActionIR, LocatorCandidate, SessionIR } from '@automate-plus/ir-schema';
 import { GeneratorOptions } from '@automate-plus/contracts';
 import { BaseCodeGenerator } from '../base.generator.js';
+import { renderAppiumRuntimeContext } from './appium-runtime-context.js';
 
 export class AppiumTsGenerator extends BaseCodeGenerator {
   public readonly framework = 'appium';
   public readonly language = 'typescript';
   public readonly supportedPlatforms = ['android'] as const;
 
-  public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
+  public generateHeader(session: SessionIR, options?: GeneratorOptions): string {
     return [
       `import { remote } from 'webdriverio';`,
+      ``,
+      renderAppiumRuntimeContext(this.getRuntimeContext(options), 'typescript'),
       ``,
       `describe('${session.name}', () => {`,
       `  let driver: WebdriverIO.Browser;`,
       ``,
       `  beforeAll(async () => {`,
       `    driver = await remote({`,
-      `      hostname: '127.0.0.1',`,
-      `      port: 4723,`,
-      `      path: '/',`,
+      `      hostname: runtimeContext.appiumUrl.hostname,`,
+      `      port: Number(runtimeContext.appiumUrl.port),`,
+      `      path: runtimeContext.appiumUrl.pathname || '/',`,
+      `      protocol: runtimeContext.appiumUrl.protocol.replace(':', ''),`,
       `      capabilities: {`,
       `        platformName: 'Android',`,
       `        'appium:automationName': 'UiAutomator2',`,
+      `        'appium:udid': runtimeContext.udid,`,
+      `        'appium:systemPort': runtimeContext.systemPort,`,
+      `        'appium:mjpegServerPort': runtimeContext.mjpegServerPort,`,
+      `        ...(runtimeContext.chromedriverPort === undefined ? {} : { 'appium:chromedriverPort': runtimeContext.chromedriverPort }),`,
       session.targetConfig.appPackage
         ? `        'appium:appPackage': '${session.targetConfig.appPackage}',`
         : '',

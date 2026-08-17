@@ -8,6 +8,28 @@
     mc:Ignorable="d"
     Title="AutomatePlus">
     <Grid x:Name="ContentRoot" Padding="20" RowSpacing="12">
+        <Grid.Resources>
+        <Style TargetType="Button">
+            <Setter Property="MinHeight" Value="48" />
+            <Setter Property="MinWidth" Value="48" />
+            <Setter Property="Padding" Value="16,8" />
+        </Style>
+        <Style TargetType="CheckBox">
+            <Setter Property="MinHeight" Value="48" />
+        </Style>
+        <Style TargetType="RadioButton">
+            <Setter Property="MinHeight" Value="48" />
+        </Style>
+        <Style TargetType="ComboBox">
+            <Setter Property="MinHeight" Value="48" />
+        </Style>
+        <Style TargetType="NumberBox">
+            <Setter Property="MinHeight" Value="48" />
+        </Style>
+        <Style TargetType="TextBox">
+            <Setter Property="MinHeight" Value="48" />
+        </Style>
+        </Grid.Resources>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -48,7 +70,10 @@
                 <ScrollViewer VerticalScrollBarVisibility="Auto"
                               HorizontalScrollBarVisibility="Disabled"
                               AutomationProperties.Name="Workspace content">
-                    <StackPanel Spacing="12" Padding="4">
+                    <StackPanel x:Name="WorkspaceStack" Spacing="12" Padding="4">
+                        <StackPanel x:Name="GeneralWorkspace"
+                                    Spacing="12"
+                                    Visibility="{Binding GeneralWorkspaceVisibility}">
                         <StackPanel Spacing="8">
                             <TextBlock Text="Session workspace" FontSize="20" FontWeight="SemiBold" />
                             <ComboBox Header="Platform"
@@ -211,6 +236,305 @@
                                        Opacity="0.7"
                                        AutomationProperties.Name="Run command state" />
                         </StackPanel>
+                        </StackPanel>
+
+                        <StackPanel x:Name="DeviceFarmWorkspace"
+                                    Spacing="12"
+                                    Visibility="{Binding AndroidFarmWorkspaceVisibility}">
+                            <Grid ColumnSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Android Device Farm" FontSize="24" FontWeight="SemiBold" />
+                                    <TextBlock Text="Offline, host-owned replay and primary/follower recording"
+                                               TextWrapping="Wrap"
+                                               Opacity="0.7" />
+                                </StackPanel>
+                                <ProgressRing Grid.Column="1"
+                                              IsActive="{Binding FarmIsBusy}"
+                                              Width="32"
+                                              Height="32"
+                                              AutomationProperties.Name="Device Farm operation in progress" />
+                            </Grid>
+
+                            <InfoBar IsOpen="True"
+                                     Severity="Warning"
+                                     Title="{Binding FarmStatus}"
+                                     Message="{Binding FarmActivityMessage}"
+                                     AutomationProperties.Name="Device Farm live status"
+                                     AutomationProperties.LiveSetting="Polite" />
+
+                            <Grid x:Name="FarmPanelsGrid" ColumnSpacing="12" RowSpacing="12">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
+
+                                <Border x:Name="DevicePoolPanel"
+                                        Grid.Row="0"
+                                        Grid.Column="0"
+                                        BorderBrush="Gray"
+                                        BorderThickness="1"
+                                        Padding="16">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="Device pool" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="{Binding FarmDiscoveryMessage}"
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.7"
+                                                   AutomationProperties.Name="Device discovery status" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="Refresh devices"
+                                                    Command="{Binding DiscoverDevicesCommand}"
+                                                    ToolTipService.ToolTip="Discover devices through the native host; an empty response remains blocked."
+                                                    AutomationProperties.Name="Refresh Android devices" />
+                                            <Button Content="Clear selection"
+                                                    Command="{Binding ClearFarmSelectionCommand}"
+                                                    ToolTipService.ToolTip="Clear transient device selection without changing persisted device data."
+                                                    AutomationProperties.Name="Clear selected Android devices" />
+                                        </StackPanel>
+                                        <ComboBox Header="Persisted device group"
+                                                  ItemsSource="{Binding FarmGroups}"
+                                                  SelectedItem="{Binding SelectedFarmGroup, Mode=TwoWay}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  HorizontalAlignment="Stretch"
+                                                  AutomationProperties.Name="Select persisted Android device group" />
+                                        <TextBox Header="Device group name"
+                                                 Text="{Binding FarmGroupName, Mode=TwoWay}"
+                                                 PlaceholderText="Enter a name for the selected devices"
+                                                 HorizontalAlignment="Stretch"
+                                                 AutomationProperties.Name="Android device group name" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="Save group"
+                                                    Command="{Binding SaveFarmGroupCommand}"
+                                                    ToolTipService.ToolTip="{Binding FarmGroupCommandReason}"
+                                                    AutomationProperties.Name="Save Android device group" />
+                                            <TextBlock Text="{Binding FarmGroupCommandReason}"
+                                                       VerticalAlignment="Center"
+                                                       TextWrapping="Wrap"
+                                                       Opacity="0.7"
+                                                       AutomationProperties.Name="Device group command state" />
+                                        </StackPanel>
+                                        <TextBlock Text="Groups are supplied by the host. No group is invented when storage is unavailable."
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.7" />
+                                        <ListView ItemsSource="{Binding FarmDevices}"
+                                                  SelectionMode="None"
+                                                  MaxHeight="360"
+                                                  AutomationProperties.Name="Discovered Android device pool">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate x:DataType="local:FarmDeviceItem">
+                                                    <Grid Padding="8" ColumnSpacing="8" RowSpacing="2">
+                                                        <Grid.RowDefinitions>
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                            <RowDefinition Height="Auto" />
+                                                        </Grid.RowDefinitions>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <CheckBox Grid.Row="0"
+                                                                  Grid.Column="0"
+                                                                  Content="{x:Bind DisplayName}"
+                                                                  IsChecked="{x:Bind IsSelected, Mode=TwoWay}"
+                                                                  AutomationProperties.Name="Select Android device" />
+                                                        <RadioButton Grid.Row="0"
+                                                                     Grid.Column="1"
+                                                                     Content="Primary"
+                                                                     GroupName="FarmPrimaryDevice"
+                                                                     IsChecked="{x:Bind IsPrimary, Mode=TwoWay}"
+                                                                     IsEnabled="{x:Bind IsSelected, Mode=OneWay}"
+                                                                     AutomationProperties.Name="Use device as primary recorder" />
+                                                        <CheckBox Grid.Row="0"
+                                                                  Grid.Column="2"
+                                                                  Content="Follower"
+                                                                  IsChecked="{x:Bind IsFollower, Mode=TwoWay}"
+                                                                  IsEnabled="{x:Bind IsSelected, Mode=OneWay}"
+                                                                  AutomationProperties.Name="Use device as follower validator" />
+                                                        <TextBlock Grid.Row="1"
+                                                                   Grid.Column="0"
+                                                                   Grid.ColumnSpan="3"
+                                                                   Text="{x:Bind SerialSummary}"
+                                                                   TextWrapping="Wrap"
+                                                                   Opacity="0.8" />
+                                                        <TextBlock Grid.Row="2"
+                                                                   Grid.Column="0"
+                                                                   Grid.ColumnSpan="3"
+                                                                   Text="{x:Bind DeviceDetails}"
+                                                                   TextWrapping="Wrap"
+                                                                   Opacity="0.7" />
+                                                        <TextBlock Grid.Row="3"
+                                                                   Grid.Column="0"
+                                                                   Text="{x:Bind StatusSummary}"
+                                                                   TextWrapping="Wrap"
+                                                                   Opacity="0.7" />
+                                                        <TextBlock Grid.Row="3"
+                                                                   Grid.Column="1"
+                                                                   Grid.ColumnSpan="2"
+                                                                   Text="{x:Bind EvidenceSummary, Mode=OneWay}"
+                                                                   TextWrapping="Wrap"
+                                                                   Opacity="0.7" />
+                                                    </Grid>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                        <TextBlock Text="{Binding FarmSelectionSummary}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Device selection summary" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border x:Name="FarmRunPanel"
+                                        Grid.Row="0"
+                                        Grid.Column="1"
+                                        BorderBrush="Gray"
+                                        BorderThickness="1"
+                                        Padding="16">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="Replay strategy" FontSize="20" FontWeight="SemiBold" />
+                                        <ComboBox Header="Execution strategy"
+                                                  ItemsSource="{Binding FarmStrategies}"
+                                                  SelectedItem="{Binding SelectedFarmStrategy, Mode=TwoWay}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  HorizontalAlignment="Stretch"
+                                                  AutomationProperties.Name="Select Device Farm replay strategy" />
+                                        <TextBlock Text="{Binding SelectedFarmStrategy.Description}"
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.7" />
+                                        <NumberBox Header="Iterations"
+                                                   Value="{Binding FarmIterations, Mode=TwoWay}"
+                                                   Minimum="1"
+                                                   Maximum="100000"
+                                                   SmallChange="1"
+                                                   HorizontalAlignment="Stretch"
+                                                   AutomationProperties.Name="Farm iteration count" />
+                                        <NumberBox Header="Maximum parallel devices"
+                                                   Value="{Binding FarmMaxParallelDevices, Mode=TwoWay}"
+                                                   Minimum="1"
+                                                   Maximum="1000"
+                                                   SmallChange="1"
+                                                   HorizontalAlignment="Stretch"
+                                                   AutomationProperties.Name="Maximum parallel device count" />
+                                        <NumberBox Header="Delay between iterations (seconds)"
+                                                   Value="{Binding FarmIterationDelaySeconds, Mode=TwoWay}"
+                                                   Minimum="0"
+                                                   Maximum="86400"
+                                                   SmallChange="1"
+                                                   HorizontalAlignment="Stretch"
+                                                   AutomationProperties.Name="Farm iteration delay" />
+                                        <ComboBox Header="Failure policy"
+                                                  ItemsSource="{Binding FarmFailurePolicies}"
+                                                  SelectedItem="{Binding SelectedFarmFailurePolicy, Mode=TwoWay}"
+                                                  DisplayMemberPath="DisplayName"
+                                                  HorizontalAlignment="Stretch"
+                                                  AutomationProperties.Name="Select Device Farm failure policy" />
+                                        <TextBlock Text="{Binding SelectedFarmFailurePolicy.Description}"
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.7" />
+                                        <StackPanel Orientation="Horizontal" Spacing="8">
+                                            <Button Content="Run farm"
+                                                    Command="{Binding StartFarmRunCommand}"
+                                                    ToolTipService.ToolTip="{Binding FarmRunCommandReason}"
+                                                    AutomationProperties.Name="Run Android Device Farm" />
+                                            <Button Content="Cancel"
+                                                    Command="{Binding StopCommand}"
+                                                    ToolTipService.ToolTip="Request cancellation and let the host release processes, ports, and leases."
+                                                    AutomationProperties.Name="Cancel Device Farm operation" />
+                                        </StackPanel>
+                                        <TextBlock Text="{Binding FarmRunCommandReason}"
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.7"
+                                                   AutomationProperties.Name="Device Farm replay command state" />
+                                        <TextBlock Text="{Binding FarmCancellationMessage}"
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.7"
+                                                   AutomationProperties.Name="Device Farm cancellation state" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border x:Name="FarmRecordingPanel"
+                                        Grid.Row="1"
+                                        Grid.Column="0"
+                                        BorderBrush="Gray"
+                                        BorderThickness="1"
+                                        Padding="16">
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="Primary/follower recording" FontSize="20" FontWeight="SemiBold" />
+                                        <TextBlock Text="Only primary actions become canonical ActionIR. Followers produce independent locator observations."
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.7" />
+                                        <TextBlock Text="{Binding PrimaryFollowerSummary}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Primary and follower selection summary" />
+                                        <Button Content="Start primary + follower recording"
+                                                Command="{Binding StartPrimaryFollowerRecordingCommand}"
+                                                ToolTipService.ToolTip="{Binding FarmRecordingCommandReason}"
+                                                HorizontalAlignment="Left"
+                                                AutomationProperties.Name="Start primary and follower recording" />
+                                        <TextBlock Text="{Binding FarmRecordingCommandReason}"
+                                                   TextWrapping="Wrap"
+                                                   Opacity="0.7"
+                                                   AutomationProperties.Name="Primary and follower recording command state" />
+                                    </StackPanel>
+                                </Border>
+
+                                <Border x:Name="FarmEvidencePanel"
+                                        Grid.Row="1"
+                                        Grid.Column="1"
+                                        BorderBrush="Gray"
+                                        BorderThickness="1"
+                                        Padding="16">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="Run evidence" FontSize="20" FontWeight="SemiBold" />
+                                        <Grid ColumnSpacing="12" RowSpacing="4">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="Auto" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="Auto" />
+                                                <RowDefinition Height="Auto" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock Text="Status" FontWeight="SemiBold" />
+                                            <TextBlock Grid.Column="1" Text="{Binding FarmStatus}" />
+                                            <TextBlock Grid.Row="1" Text="Completion" FontWeight="SemiBold" />
+                                            <TextBlock Grid.Row="1" Grid.Column="1" Text="{Binding FarmCompletion}" />
+                                        </Grid>
+                                        <TextBlock Text="{Binding FarmEvidenceSummary}"
+                                                   TextWrapping="Wrap"
+                                                   AutomationProperties.Name="Farm evidence summary" />
+                                        <ListView ItemsSource="{Binding FarmObservations}"
+                                                  MaxHeight="260"
+                                                  AutomationProperties.Name="Follower observation evidence">
+                                            <ListView.ItemTemplate>
+                                                <DataTemplate x:DataType="local:FarmObservationItem">
+                                                    <StackPanel Spacing="2" Padding="6">
+                                                        <TextBlock Text="{x:Bind DeviceSummary}" FontWeight="SemiBold" />
+                                                        <TextBlock Text="{x:Bind StatusSummary}" />
+                                                        <TextBlock Text="{x:Bind LocatorSummary}"
+                                                                   TextWrapping="Wrap"
+                                                                   Opacity="0.8" />
+                                                        <TextBlock Text="{x:Bind Details}"
+                                                                   TextWrapping="Wrap"
+                                                                   Opacity="0.7" />
+                                                    </StackPanel>
+                                                </DataTemplate>
+                                            </ListView.ItemTemplate>
+                                        </ListView>
+                                    </StackPanel>
+                                </Border>
+                            </Grid>
+                        </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
             </NavigationView.Content>
@@ -237,6 +561,12 @@
                         <Setter Target="TimelinePanel.(Grid.Row)" Value="0" />
                         <Setter Target="CodePanel.(Grid.Column)" Value="0" />
                         <Setter Target="CodePanel.(Grid.Row)" Value="1" />
+                        <Setter Target="FarmRunPanel.(Grid.Column)" Value="0" />
+                        <Setter Target="FarmRunPanel.(Grid.Row)" Value="1" />
+                        <Setter Target="FarmRecordingPanel.(Grid.Column)" Value="0" />
+                        <Setter Target="FarmRecordingPanel.(Grid.Row)" Value="2" />
+                        <Setter Target="FarmEvidencePanel.(Grid.Column)" Value="0" />
+                        <Setter Target="FarmEvidencePanel.(Grid.Row)" Value="3" />
                     </VisualState.Setters>
                 </VisualState>
                 <VisualState x:Name="Expanded">
@@ -252,6 +582,12 @@
                         <Setter Target="TimelinePanel.(Grid.Row)" Value="0" />
                         <Setter Target="CodePanel.(Grid.Column)" Value="1" />
                         <Setter Target="CodePanel.(Grid.Row)" Value="0" />
+                        <Setter Target="FarmRunPanel.(Grid.Column)" Value="1" />
+                        <Setter Target="FarmRunPanel.(Grid.Row)" Value="0" />
+                        <Setter Target="FarmRecordingPanel.(Grid.Column)" Value="0" />
+                        <Setter Target="FarmRecordingPanel.(Grid.Row)" Value="1" />
+                        <Setter Target="FarmEvidencePanel.(Grid.Column)" Value="1" />
+                        <Setter Target="FarmEvidencePanel.(Grid.Row)" Value="1" />
                     </VisualState.Setters>
                 </VisualState>
             </VisualStateGroup>

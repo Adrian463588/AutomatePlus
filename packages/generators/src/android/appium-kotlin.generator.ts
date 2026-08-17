@@ -1,13 +1,14 @@
 import { ActionIR, LocatorCandidate, SessionIR } from '@automate-plus/ir-schema';
 import { GeneratorOptions } from '@automate-plus/contracts';
 import { BaseCodeGenerator } from '../base.generator.js';
+import { renderAppiumRuntimeContext } from './appium-runtime-context.js';
 
 export class AppiumKotlinGenerator extends BaseCodeGenerator {
   public readonly framework = 'appium';
   public readonly language = 'kotlin';
   public readonly supportedPlatforms = ['android'] as const;
 
-  public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
+  public generateHeader(session: SessionIR, options?: GeneratorOptions): string {
     const className = this.toPascalCase(session.name) + 'Test';
     return [
       `package com.automateplus.tests`,
@@ -25,6 +26,8 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
       `import java.time.Duration`,
       ``,
       `class ${className} {`,
+      renderAppiumRuntimeContext(this.getRuntimeContext(options), 'kotlin'),
+      ``,
       `    private lateinit var driver: AndroidDriver`,
       `    private lateinit var wait: WebDriverWait`,
       ``,
@@ -39,8 +42,12 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
       session.targetConfig.appActivity
         ? `            setAppActivity("${session.targetConfig.appActivity}")`
         : '',
+      `            setUdid(AutomatePlusRuntime.udid())`,
+      `            setSystemPort(AutomatePlusRuntime.systemPort())`,
+      `            setMjpegServerPort(AutomatePlusRuntime.mjpegServerPort())`,
+      `            AutomatePlusRuntime.chromedriverPort()?.let { setChromedriverPort(it) }`,
       `        }`,
-      `        driver = AndroidDriver(URL("http://127.0.0.1:4723"), options)`,
+      `        driver = AndroidDriver(AutomatePlusRuntime.appiumUrl(), options)`,
       `        wait = WebDriverWait(driver, Duration.ofSeconds(10))`,
       `    }`,
       ``,

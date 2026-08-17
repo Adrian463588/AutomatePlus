@@ -11,6 +11,9 @@ public enum AutomationErrorCode
     CapabilityError,
     RuntimeMissing,
     DeviceUnavailable,
+    DeviceBusy,
+    PortUnavailable,
+    InvalidFarmSpec,
     ProjectPrerequisiteMissing,
     PathDenied,
     ProcessTimeout,
@@ -86,6 +89,9 @@ public sealed record CapabilityManifest
     public string? ProjectPrerequisite { get; init; }
     public required string RunnerCommandId { get; init; }
     public required string Version { get; init; }
+    public IReadOnlyList<DeviceExecutionStrategy> SupportedDeviceStrategies { get; init; } = [DeviceExecutionStrategy.Single];
+    public string ParallelSessionModel { get; init; } = "single";
+    public bool RequiresPhysicalDevice { get; init; }
 }
 
 public sealed record GeneratedFile(string RelativePath, string Content, string Language, string Sha256);
@@ -108,6 +114,9 @@ public sealed record RunOptions
     public TimeSpan Timeout { get; init; } = TimeSpan.FromMinutes(2);
     public bool Headless { get; init; } = true;
     public IReadOnlyDictionary<string, string> EnvironmentVariables { get; init; } = new Dictionary<string, string>();
+    public Guid? DeviceId { get; init; }
+    public string? AdbSerial { get; init; }
+    public IReadOnlyDictionary<string, string> DeviceRuntimeContext { get; init; } = new Dictionary<string, string>();
 }
 
 public sealed record RunEvent

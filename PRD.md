@@ -1,6 +1,6 @@
 # AutomatePlus Product Requirements Document
 
-**Document version:** 2.0.0  
+**Document version:** 2.1.0
 **Status:** Proposed product specification; implementation acceptance is not implied  
 **Target:** Windows 10/11 x64 desktop  
 **Primary shell:** WinUI 3 + .NET 8  
@@ -263,6 +263,51 @@ The UI must filter the language selector from this matrix. A disabled combinatio
 
 **Acceptance:** Secret scans find no plaintext secret in persisted IR, generated source, logs, or artifacts; rejected commands do not execute.
 
+### FR-14 — Offline Android device registry and groups
+
+- Discover Android devices through real `adb devices -l` and persist a stable local profile separate from the current ADB serial.
+- Show model, manufacturer, API level, resolution, density, orientation, transport, authorization, health, and last-seen state.
+- Create, rename, and select local device groups without cloud synchronization.
+- Snapshot selected devices at run start; a missing, unauthorized, offline, or unverified device is `Blocked`.
+
+**Acceptance:** A user can refresh real ADB discovery, create a group, select eligible devices, and see the exact preflight reason for every ineligible device.
+
+### FR-15 — Multi-device functional replay
+
+- Preserve `single` replay behavior.
+- Add `all-devices`, where every selected device executes the configured iterations.
+- Add `split-iterations`, where one global queue is executed exactly once across bounded per-device workers.
+- Enforce one lease/session per serial and release leases, ports, and processes on every terminal path.
+- Persist `FarmRun → DeviceRun → DeviceIteration → StepEvidence` with separate artifacts.
+
+**Acceptance:** With two real devices, both strategies produce device-specific status, logs, screenshots, hashes, iteration IDs, and truthful aggregate status. Functional/UI-soak throughput is never labeled API RPS.
+
+### FR-16 — Primary/follower Android recording
+
+- Record one canonical action stream from a selected primary device.
+- Validate every primary action against selected follower hierarchies using semantic locators.
+- Store follower results as `DeviceObservation`, not additional `ActionIR`.
+- Expose `MATCHED`, `FALLBACK_USED`, `SEMANTIC_SELECTOR_MISSING`, `DEVICE_VARIANT_MISMATCH`, `NEEDS_REVIEW`, `BLOCKED`, and `FAILED` explicitly.
+- Never broadcast primary coordinates silently to followers.
+
+**Acceptance:** A primary recording remains one canonical session; follower mismatches are reviewable and cannot be reported as successful device coverage.
+
+### FR-17 — Multi-device generated project context
+
+- Generate one project per framework/language for all selected devices.
+- Inject `DeviceRunContext` at runtime with Appium URL, UDID, system port, MJPEG port, and optional chromedriver port.
+- Reject missing context and unsupported strategy/framework combinations; never emit fixed serials, fixed device paths, or silent port fallbacks.
+
+**Acceptance:** The generated Appium project passes capability validation, formatter/lint, typecheck/compile, and local smoke checks with external per-device context.
+
+### FR-18 — Farm evidence and reporting
+
+- Persist device preflight, leases, ports, iteration status, locator resolution, errors, and artifact hashes locally.
+- Report `Passed`, `Failed`, `Blocked`, and `Cancelled` with `completion=complete|partial`.
+- Keep large logs, screenshots, traces, and videos outside session JSON and link them by relative artifact path and SHA-256.
+
+**Acceptance:** A mixed multi-device result identifies every device and iteration without converting blocked, disconnected, or cancelled work into a pass.
+
 ## 6. Non-functional requirements
 
 | ID | Requirement | Verification |
@@ -280,6 +325,9 @@ The UI must filter the language selector from this matrix. A disabled combinatio
 | NFR-11 | Reports remain diagnosable offline | Artifact-link and report parser tests |
 | NFR-12 | Runtime packs are checksum and license auditable | Manifest verification tests |
 | NFR-13 | Host, sidecar, and generated projects respect SOLID and DRY boundaries | Architecture review, dependency-direction check, and duplicate-logic scan |
+| NFR-14 | Android farm execution is local-only, serial-bound, and bounded | Offline runtime test, lease/port concurrency tests, and ADB evidence |
+| NFR-15 | Device failures, cancellation, and cleanup remain observable and fail-closed | Disconnect, timeout, cancellation, and stale-lease tests |
+| NFR-16 | Multi-device UI remains responsive and accessible | WinUI UI Automation and renderer viewport/accessibility checks |
 
 ## 7. Operational semantics
 
@@ -320,8 +368,10 @@ The product is accepted only when all applicable criteria have fresh evidence:
 - Cancellation removes owned processes and releases Android device locks.
 - Functional loop and API RPS are visibly separate modes.
 - All runtime packs are locally verified, license-recorded, and usable without network access.
+- Sprint 2 Android farm acceptance requires at least two authorized physical devices, a real target package/activity, and verified local Appium/UiAutomator2/scrcpy packs. One device, a fake device, or an empty runtime manifest is not acceptance evidence.
+- Sprint 2 recording acceptance requires one primary canonical IR plus independent follower observations. Independent synchronized timelines are deferred.
 
-Current repository evidence is a baseline, not product acceptance: the TypeScript suite now reports 80 passing tests, package/sidecar/Vite builds and scoped typechecks pass, and lint/format checks are available. The WinUI/.NET 8 solution and host contracts now exist, but the installed SDK is 5.0.406, so .NET 8 build/test gates are `Blocked`; physical Android acceptance is also `Blocked` when `adb devices -l` has no device. The browser migration shell uses host-only facades, while native runtime/device acceptance still requires local verified packs.
+Current repository evidence is a baseline, not product acceptance: the TypeScript suite now reports 94 passing tests, package/sidecar/Vite builds and scoped typechecks pass, and lint/format checks are available. The WinUI/.NET 8 solution and host contracts now exist, but the installed SDK is 5.0.406, so .NET 8 build/test gates are `Blocked`; physical Android acceptance is also `Blocked` when `adb devices -l` has fewer than two authorized devices. The browser migration shell uses host-only facades, while native runtime/device acceptance still requires local verified packs.
 
 ### 8.1 BMAD/spec-driven traceability
 
@@ -340,12 +390,17 @@ Acceptance scenarios use Given/When/Then wording. A simulator, mock device, gene
 |---|---|---|---|---|---|---|
 | REQ-GUI low-code workspace | FR-01, NFR-03 | ADR-01, UX-01 | `apps/desktop`, `src/AutomatePlus.App` | desktop typecheck; WinUI smoke | Vite build; .NET SDK blocker | Implemented/Blocked |
 | REQ-Web click-and-record | FR-02 | `IRecorder`, Web recorder design | `packages/recorder-web` | browser transport/normalizer tests | 10 Web tests; real browser pack pending | Implemented/Blocked |
-| REQ-Android ADB recorder | FR-03 | device lock, ADB boundary | `packages/recorder-android` | fake executor + ADB parser tests; authorized-device preflight | 12 Android tests; `QSWSEMRKNFZ9LJRC` discovery and lock release passed; target package not selected | Implemented/Blocked |
+| REQ-Android ADB recorder | FR-03 | device lock, ADB boundary | `packages/recorder-android` | fixture executor + ADB parser tests; authorized-device preflight | 16 Android recorder/observation tests; target package not selected | Implemented/Blocked |
 | REQ-API functional flow | FR-04 | API builder, `RunEvent` | `packages/runner-core/src/api-runner.ts` | local HTTP fixture + chaining test | 3 API runner tests, including loopback fetch | Implemented |
 | REQ-27 generated targets | FR-05, NFR-04/05 | capability manifest, generator registry | `packages/generators`, sidecar | 27-entry component generation matrix | 27 registrations/materializations; generated-target formatter/lint/compile and native runtime gates remain pending | Implemented/Blocked |
-| REQ-functional/UI soak/API RPS split | FR-06/07/08 | run modes, k6 boundary | `runner-core`, `stress-engine` | k6 summary parser fixture + loopback k6 smoke | 85 component tests; real k6 loopback smoke passed at 5.95 RPS with 0% errors | Implemented/Blocked |
+| REQ-functional/UI soak/API RPS split | FR-06/07/08 | run modes, k6 boundary | `runner-core`, `stress-engine` | k6 summary parser fixture + loopback k6 smoke | 94 component tests; real local k6 smoke with 0% errors | Implemented/Blocked |
 | REQ-offline desktop/runtime packs | FR-12, NFR-02/12 | ADR-01/04, runtime manifest | `.NET Infrastructure`, `apps/sidecar` | offline/network-blocked fixture pending | .NET SDK/runtime pack blocker | Implemented/Blocked |
 | REQ-secret/process/path security | FR-13, NFR-05/06/07/08 | security design, IPC errors | `.NET Infrastructure`, contracts | negative security tests pending | TypeScript IPC redaction tests; .NET gate blocked | Implemented/Blocked |
+| REQ-Android device registry/groups | FR-14, NFR-14 | ADR-06, device profile/group contract | `.NET Domain/Application/Infrastructure`, WinUI farm page | registry/group/preflight/artifact tests | Component implementation present; native SDK/device evidence pending | Implemented/Blocked |
+| REQ-multi-device replay | FR-15, NFR-14/15 | ADR-06/07, farm scheduler contract | `.NET Application/Infrastructure`, farm report UI | assignment/lease/port/status tests | Two-device physical evidence pending | Implemented/Blocked |
+| REQ-primary/follower recording | FR-16, NFR-05/15 | ADR-08, observation contract | Android recorder/host recording coordinator | locator observation/mismatch tests | Follower physical evidence pending | Implemented/Blocked |
+| REQ-runtime-context generation | FR-17, NFR-04/05 | ADR-07, capability manifest | `packages/contracts`, `packages/generators` | fixed-port/strategy/runtime-context tests | Generated native smoke pending | Implemented/Blocked |
+| REQ-farm evidence/reporting | FR-18, NFR-06/11/12 | ADR-09, artifact contract | SQLite store/report/artifact store/UI | migration/artifact/status tests | Runtime report evidence pending | Implemented/Blocked |
 
 ## 9. Delivery roadmap
 
@@ -356,9 +411,10 @@ All valid adapters in Section 4 remain the release target. The sequence below re
 3. **Web vertical slice:** Playwright/CDP recorder, selector engine, generator/runner contract, local Web fixture, and report pipeline.
 4. **All Web adapters:** Playwright, Cypress, Puppeteer, Selenium, and Robot Framework across the valid matrix with golden and smoke tests.
 5. **Android vertical slice:** ADB discovery, device lock, scrcpy-compatible mirror/control, hierarchy parser, Appium generation and run.
-6. **All Android adapters:** Appium, Espresso, Robolectric, and Maestro with project prerequisite checks.
-7. **API and performance:** request builder, chaining, functional adapters, k6 generator/runner, thresholds, and metrics.
-8. **Hardening and packaging:** offline packs, checksum/license audit, process cleanup, installer, accessibility, security review, and full acceptance matrix.
+6. **Android Sprint 2 farm:** stable device profiles/groups, bounded all-device and split-iteration replay, primary/follower recording validation, port leases, and per-device evidence.
+7. **All Android adapters:** Appium, Espresso, Robolectric, and Maestro with project prerequisite checks and truthful farm capability metadata.
+8. **API and performance:** request builder, chaining, functional adapters, k6 generator/runner, thresholds, and metrics.
+9. **Hardening and packaging:** offline packs, checksum/license audit, process cleanup, installer, accessibility, security review, and full acceptance matrix.
 
 ## 10. Risks and constraints
 

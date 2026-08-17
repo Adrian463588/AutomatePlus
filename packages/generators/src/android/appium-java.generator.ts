@@ -1,13 +1,14 @@
 import { ActionIR, LocatorCandidate, SessionIR } from '@automate-plus/ir-schema';
 import { GeneratorOptions } from '@automate-plus/contracts';
 import { BaseCodeGenerator } from '../base.generator.js';
+import { renderAppiumRuntimeContext } from './appium-runtime-context.js';
 
 export class AppiumJavaGenerator extends BaseCodeGenerator {
   public readonly framework = 'appium';
   public readonly language = 'java';
   public readonly supportedPlatforms = ['android'] as const;
 
-  public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
+  public generateHeader(session: SessionIR, options?: GeneratorOptions): string {
     const className = this.toPascalCase(session.name) + 'Test';
     return [
       `package com.automateplus.tests;`,
@@ -28,6 +29,8 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
       `import static org.junit.jupiter.api.Assertions.*;`,
       ``,
       `public class ${className} {`,
+      renderAppiumRuntimeContext(this.getRuntimeContext(options), 'java'),
+      ``,
       `    private AndroidDriver driver;`,
       `    private WebDriverWait wait;`,
       ``,
@@ -42,7 +45,12 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
       session.targetConfig.appActivity
         ? `        options.setAppActivity("${session.targetConfig.appActivity}");`
         : '',
-      `        driver = new AndroidDriver(new URL("http://127.0.0.1:4723"), options);`,
+      `        options.setUdid(requiredDeviceUdid());`,
+      `        options.setSystemPort(requiredSystemPort());`,
+      `        options.setMjpegServerPort(requiredMjpegServerPort());`,
+      `        Integer chromedriverPort = optionalChromedriverPort();`,
+      `        if (chromedriverPort != null) options.setChromedriverPort(chromedriverPort);`,
+      `        driver = new AndroidDriver(requiredAppiumUrl(), options);`,
       `        wait = new WebDriverWait(driver, Duration.ofSeconds(10));`,
       `    }`,
       ``,

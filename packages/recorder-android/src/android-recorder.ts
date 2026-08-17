@@ -73,7 +73,7 @@ export class AndroidRecorder implements IRecorder {
 
     const action: ActionIR = {
       id: randomUUID(),
-      schemaVersion: 1,
+      schemaVersion: 2,
       stepNumber: this.stepCounter++,
       platform: 'android',
       action: actionType,

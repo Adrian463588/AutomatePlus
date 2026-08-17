@@ -49,6 +49,7 @@ coverage/
 .nyc_output
 .vite/
 .gemini/
+.playwright-mcp/
 
 # Imported runtime packs are verified locally and are never committed as binaries
 runtime-packs/**/*.exe

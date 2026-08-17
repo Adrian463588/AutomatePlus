@@ -1,21 +1,34 @@
 # AutomatePlus (v2) 🚀
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-85%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-94%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
 
-![AutomatePlus Sprint 2 empty-workspace preview](docs/assets/sprint-2-preview-1440x900.png)
+![AutomatePlus Sprint 2 Android farm blocked-state preview](docs/assets/sprint-2-preview-1440x900.png)
 
-The preview shows the truthful empty workspace: no project, session, target, device, secret, generated code, or synthetic run result is created until the user supplies real data.
+Responsive previews: [390×844](docs/assets/sprint-2-preview-390x844.png) · [600×900](docs/assets/sprint-2-preview-600x900.png) · [768×1024](docs/assets/sprint-2-preview-768x1024.png) · [840×1024](docs/assets/sprint-2-preview-840x1024.png) · [1024×768](docs/assets/sprint-2-preview-1024x768.png) · [1280×800](docs/assets/sprint-2-preview-1280x800.png) · [1440×900](docs/assets/sprint-2-preview-1440x900.png)
+
+The preview is captured from the real browser migration shell with an explicitly created Android session and no discovered devices. It shows the truthful blocked state: no target package, device, generated code, or synthetic run result is created until the user supplies real data and the native host provides it.
 
 ## Evidence and acceptance boundaries
 
-The current Sprint 2 component evidence includes 85 passing TypeScript tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, sidecar capability smoke, loopback k6 smoke, an authenticity scan, and responsive smoke at `1440x900`, `1280x800`, `1024x768`, `768x1024`, and `390x844` without horizontal overflow.
+The current Sprint 2 component evidence includes 94 passing TypeScript tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, sidecar capability smoke, loopback k6 smoke, an authenticity scan, and responsive smoke at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900` without horizontal overflow.
 
 Native WinUI/.NET and physical Web/Android recorder acceptance remain explicitly `Blocked` until the installed .NET 8 SDK, verified runtime packs, and a user-selected real target are available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
+
+### Sprint 2 Android device farm
+
+Sprint 2 adds a local Windows device-farm contract without introducing cloud services:
+
+- `single`, `all-devices`, and `split-iterations` replay strategies with bounded workers and one lease per ADB serial.
+- Device profiles/groups with stable local IDs, serial snapshots, preflight, port leases, and per-device evidence.
+- Primary/follower Android recording: one canonical `ActionIR`, independent follower locator observations, and explicit mismatch/review states.
+- One generated project per framework/language with required per-device runtime context; no hard-coded serials or Appium ports.
+
+Farm runtime acceptance requires at least two authorized physical devices, a real target package/activity, and checksum-verified offline Appium/UiAutomator2/scrcpy packs. Unit tests and browser-shell previews remain component/prototype evidence only.
 
 ---
 
