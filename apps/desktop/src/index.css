@@ -61,13 +61,47 @@
 .feedback-cancelled { color: #cbd5e1; }
 .workspace-layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr) minmax(19rem, .85fr); min-height: 0; overflow: hidden; }
 .terminal-panel { height: clamp(8rem, 20dvh, 14rem); }
-.button-execute, .button-small, .button-primary, .button-muted { display: inline-flex; align-items: center; justify-content: center; gap: .375rem; border-radius: .375rem; color: #f8fafc; cursor: pointer; }
-.button-execute { padding: .45rem .7rem; font-size: .72rem; font-weight: 700; white-space: nowrap; }
-.button-small { padding: .35rem .55rem; font-size: .7rem; }
-.button-primary { padding: .45rem .8rem; background: #4f46e5; font-size: .75rem; font-weight: 700; }
-.button-muted { padding: .45rem .8rem; color: #cbd5e1; background: #1e293b; font-size: .75rem; }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid #818cf8; outline-offset: 2px; }
-.field, .field-inline { border: 1px solid #334155; border-radius: .375rem; background: #020617; color: #e2e8f0; }
+.button-execute, .button-small, .button-primary, .button-muted {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: .375rem;
+  border-radius: .375rem;
+  color: #f8fafc;
+  cursor: pointer;
+  transition: background-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              border-color 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              box-shadow 150ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 100ms ease;
+  user-select: none;
+}
+.button-execute:active:not(:disabled),
+.button-small:active:not(:disabled),
+.button-primary:active:not(:disabled),
+.button-muted:active:not(:disabled) {
+  transform: scale(0.98);
+}
+.button-execute { padding: .45rem .75rem; font-size: .72rem; font-weight: 700; white-space: nowrap; }
+.button-small { padding: .35rem .55rem; font-size: .7rem; font-weight: 600; }
+.button-primary { padding: .45rem .85rem; background: #4f46e5; font-size: .75rem; font-weight: 700; }
+.button-primary:hover:not(:disabled) { background: #4338ca; }
+.button-muted { padding: .45rem .85rem; color: #cbd5e1; background: #1e293b; font-size: .75rem; font-weight: 600; }
+.button-muted:hover:not(:disabled) { background: #334155; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+.field, .field-inline {
+  border: 1px solid #334155;
+  border-radius: .375rem;
+  background: #020617;
+  color: #e2e8f0;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.field:focus, .field-inline:focus-within {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 1px #6366f1;
+}
 .field { padding: .45rem .6rem; }
 .field-inline { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .55rem; min-width: 0; }
 .field-inline input, .field-inline select { min-width: 0; background: transparent; border: 0; color: #e2e8f0; outline: none; }

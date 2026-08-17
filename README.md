@@ -1,7 +1,7 @@
 # AutomatePlus (Sprint 2) 🚀
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-100%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-113%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
@@ -15,7 +15,7 @@ The preview is captured from the real browser migration shell with an explicitly
 
 ## Evidence and acceptance boundaries
 
-The current Sprint 2 component evidence includes 100 passing TypeScript tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, sidecar capability smoke, loopback k6 smoke, and an authenticity scan. Responsive review targets `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900` without horizontal overflow.
+The current Sprint 2 component evidence includes 113 passing TypeScript tests across 20 test files (including end-to-end Saucedemo Web and API automation suites), lint, format, typecheck, package/sidecar/React builds, documentation checks, sidecar capability smoke, loopback k6 smoke, and an authenticity scan. Responsive review targets `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900` without horizontal overflow.
 
 Native Tauri/Rust and physical Android acceptance remain explicitly `Blocked` until the offline Cargo/Tauri toolchain, verified runtime packs, WebView2, a real target app, and the required authorized devices are available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 

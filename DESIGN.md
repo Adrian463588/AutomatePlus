@@ -64,7 +64,7 @@ The browser shell may persist user-created projects and sessions in browser stor
 | Sidecar | apps/sidecar and recorder packages | IR/selector/generator and recorder protocol |
 | Native host | apps/desktop/src-tauri/src | Rust discovery, preflight, leases, SQLite, processes, cleanup |
 | Native packaging | scripts/build-native-offline.mjs | Offline verification, staging, format/test/build |
-| Launcher | Run-AutomatePlus.bat | One-click entrypoint with explicit blocked exit codes |
+| Launcher | Run-AutomatePlus.bat, automate-plus.bat | One-click offline desktop and server entrypoints |
 
 reference/ and docs/Sprint2/ are research inputs and remain read-only.
 

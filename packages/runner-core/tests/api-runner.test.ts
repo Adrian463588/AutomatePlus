@@ -1,4 +1,5 @@
-import { createServer, type AddressInfo } from 'node:net';
+import { createServer as createHttpServer } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { ApiFunctionalRunner } from '../src/api-runner.js';
 import { SessionIR } from '@automate-plus/ir-schema';
@@ -147,15 +148,13 @@ describe('API functional runner', () => {
   });
 
   it('runs against a loopback HTTP fixture with the real fetch boundary', async () => {
-    const server = createServer((socket) => {
-      socket.once('data', (buffer) => {
-        const requestLine = buffer.toString('utf8').split('\r\n', 1)[0] ?? '';
-        const path = requestLine.split(' ')[1] ?? '/';
-        const body = JSON.stringify({ path, healthy: true });
-        socket.end(
-          `HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`,
-        );
+    const server = createHttpServer((req, res) => {
+      const body = JSON.stringify({ path: req.url, healthy: true });
+      res.writeHead(200, {
+        'Content-Type': 'application/json',
+        'Content-Length': Buffer.byteLength(body),
       });
+      res.end(body);
     });
 
     await new Promise<void>((resolve, reject) => {
