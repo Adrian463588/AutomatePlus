@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ActionIR } from '@automate-plus/ir-schema';
+import type { SessionIR } from '@automate-plus/ir-schema';
 import { SessionRecord } from '@automate-plus/persistence';
 import { DesktopBridgeService } from '../src/services/desktopBridge.js';
 import { useAppStore } from '../src/store/appStore.js';
@@ -22,6 +23,32 @@ describe('Desktop migration bridge truthfulness', () => {
 
     await expect(service.projectRepo.getAll()).resolves.toEqual([]);
     await expect(service.sessionRepo.getAll()).resolves.toEqual([]);
+    await expect(service.listDeviceProfiles()).resolves.toEqual([]);
+    await expect(service.listAndroidDevices()).resolves.toEqual([]);
+    expect(service.getNativeHostStatus().available).toBe(false);
+  });
+
+  it('blocks Android farm execution without a native capability host', async () => {
+    const service = new DesktopBridgeService();
+    const session = {
+      id: '10000000-0000-4000-8000-000000000011',
+      platform: 'android',
+      steps: [],
+    } as unknown as SessionIR;
+    const summary = await service.runFarmTest(session, {
+      schemaVersion: 1,
+      sessionId: session.id,
+      strategy: 'all-devices',
+      deviceIds: ['device-from-fixture'],
+      iterationsPerDevice: 1,
+      maxParallelDevices: 1,
+      iterationDelayMs: 0,
+      failurePolicy: 'continue-other-devices',
+    }, () => undefined);
+
+    expect(summary.status).toBe('blocked');
+    expect(summary.deviceRuns).toEqual([]);
+    expect(summary.errorSummary).toContain('Native');
   });
 
   it('exposes the registered capability manifest without a duplicated UI matrix', () => {

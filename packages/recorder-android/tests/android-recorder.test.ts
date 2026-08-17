@@ -10,7 +10,7 @@ import {
   parseBounds,
   parseUiHierarchy,
 } from '../src/index.js';
-import { FakeProcessExecutor } from '../src/fake-executor.js';
+import { FakeProcessExecutor } from './fixtures/fake-executor.js';
 import { ActionIR } from '@automate-plus/ir-schema';
 
 const DEVICE_ID = 'emulator-5554';

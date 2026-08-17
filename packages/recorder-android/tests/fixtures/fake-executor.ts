@@ -2,7 +2,7 @@ import {
   ProcessExecutionOptions,
   ProcessExecutionResult,
   ProcessExecutor,
-} from './process-executor.js';
+} from '../../src/process-executor.js';
 
 export interface RecordedProcessCall {
   executable: string;

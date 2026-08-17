@@ -6,6 +6,7 @@ import {
   stableStringify,
 } from './errors.js';
 import { createRuntimeId } from './runtime-id.js';
+import type { NativeProtocolMethodMap } from './native.interface.js';
 
 export const IPC_PROTOCOL_VERSION = '1.0' as const;
 export type IpcProtocolVersion = typeof IPC_PROTOCOL_VERSION;
@@ -72,7 +73,7 @@ export type NdjsonResponse<Payload = unknown> = IpcResponse<Payload>;
 export type NdjsonEvent<Payload = unknown> = IpcEvent<Payload>;
 export type NdjsonCancel = IpcCancel;
 
-export interface ProtocolMethodMap {
+export interface ProtocolMethodMap extends NativeProtocolMethodMap {
   'session.validate': { session: unknown };
   'session.normalize': { session: unknown };
   'generator.generate': { session: unknown; framework: string; language: string };

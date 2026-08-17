@@ -139,3 +139,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
+
+@media (forced-colors: active) {
+  *, *::before, *::after { forced-color-adjust: auto; }
+  button, input, select, textarea { border: 1px solid ButtonText; }
+  button:disabled, input:disabled, select:disabled, textarea:disabled { border-color: GrayText; color: GrayText; }
+  .farm-device-card, .dialog-card, .field, .field-inline, .farm-observation-summary { border-color: ButtonText; background: Canvas; color: CanvasText; }
+}

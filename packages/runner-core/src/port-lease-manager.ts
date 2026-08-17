@@ -1,5 +1,4 @@
-import { PortAllocation, PortLease } from '@automate-plus/contracts';
-import crypto from 'node:crypto';
+import { createRuntimeId, PortAllocation, PortLease } from '@automate-plus/contracts';
 
 export interface DevicePorts {
   appiumPort: number;
@@ -8,25 +7,42 @@ export interface DevicePorts {
   mjpegServerPort?: number;
 }
 
+export interface PortLeaseManagerOptions {
+  appiumStart?: number;
+  systemStart?: number;
+  chromedriverStart?: number;
+  mjpegStart?: number;
+  rangeSize?: number;
+}
+
 export class PortLeaseManager {
-  private baseAppiumPort = 4723;
-  private baseSystemPort = 8200;
-  private baseChromedriverPort = 9500;
-  private baseMjpegPort = 9100;
+  private readonly baseAppiumPort: number;
+  private readonly baseSystemPort: number;
+  private readonly baseChromedriverPort: number;
+  private readonly baseMjpegPort: number;
+  private readonly rangeSize: number;
 
   private allocatedPorts: Set<number> = new Set();
   private deviceAllocations: Map<string, DevicePorts> = new Map(); // deviceId -> DevicePorts
   private activeLeases: Map<string, PortLease> = new Map();
+
+  public constructor(options: PortLeaseManagerOptions = {}) {
+    this.baseAppiumPort = options.appiumStart ?? 49152;
+    this.baseSystemPort = options.systemStart ?? 49252;
+    this.baseChromedriverPort = options.chromedriverStart ?? 49352;
+    this.baseMjpegPort = options.mjpegStart ?? 49452;
+    this.rangeSize = options.rangeSize ?? 100;
+  }
 
   public allocate(deviceId: string, runId?: string): DevicePorts {
     if (this.deviceAllocations.has(deviceId)) {
       return this.deviceAllocations.get(deviceId)!;
     }
 
-    let appiumPort = this.findFreePort(this.baseAppiumPort, 100);
-    let systemPort = this.findFreePort(this.baseSystemPort, 100);
-    let chromedriverPort = this.findFreePort(this.baseChromedriverPort, 100);
-    let mjpegServerPort = this.findFreePort(this.baseMjpegPort, 100);
+    const appiumPort = this.findFreePort(this.baseAppiumPort, this.rangeSize);
+    const systemPort = this.findFreePort(this.baseSystemPort, this.rangeSize);
+    const chromedriverPort = this.findFreePort(this.baseChromedriverPort, this.rangeSize);
+    const mjpegServerPort = this.findFreePort(this.baseMjpegPort, this.rangeSize);
 
     const ports: DevicePorts = {
       appiumPort,
@@ -51,8 +67,8 @@ export class PortLeaseManager {
 
     const lease: PortLease = {
       schemaVersion: 1,
-      leaseId: crypto.randomUUID(),
-      runId: runId || crypto.randomUUID(),
+      leaseId: createRuntimeId(),
+      runId: runId || createRuntimeId(),
       deviceId,
       allocations,
       state: 'active',
@@ -74,8 +90,6 @@ export class PortLeaseManager {
     }
     const lease = this.activeLeases.get(deviceId);
     if (lease) {
-      (lease as any).state = 'released';
-      (lease as any).releasedAt = Date.now();
       this.activeLeases.delete(deviceId);
     }
   }
@@ -101,6 +115,6 @@ export class PortLeaseManager {
         return port;
       }
     }
-    return base + Math.floor(Math.random() * 500);
+    throw new Error(`PortLeaseError: no available port in range ${base}-${base + range - 1}`);
   }
 }

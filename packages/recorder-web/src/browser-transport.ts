@@ -84,7 +84,7 @@ export interface PlaywrightElementHandleLike {
 const REPORT_BINDING = '__automatePlusReportAction';
 
 export function createDefaultPlaywrightRuntimeLoader(
-  importModule: ModuleImporter = (moduleName) => import(moduleName),
+  importModule: ModuleImporter = (moduleName) => import(/* @vite-ignore */ moduleName),
 ): PlaywrightRuntimeLoader {
   return async () => {
     let loaded: unknown;

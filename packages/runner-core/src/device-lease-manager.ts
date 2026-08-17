@@ -1,5 +1,4 @@
-import { DeviceLease, DeviceLeaseState, PortAllocation } from '@automate-plus/contracts';
-import crypto from 'node:crypto';
+import { createRuntimeId, DeviceLease, DeviceLeaseState, PortAllocation } from '@automate-plus/contracts';
 
 export class DeviceLeaseManager {
   private leases: Map<string, DeviceLease> = new Map(); // leaseId -> Lease
@@ -17,7 +16,7 @@ export class DeviceLeaseManager {
       throw new Error(`DeviceLockError: Device '${deviceId}' (${adbSerialSnapshot}) is currently locked by another active run.`);
     }
 
-    const leaseId = crypto.randomUUID();
+    const leaseId = createRuntimeId();
     const lease: DeviceLease = {
       schemaVersion: 1,
       leaseId,

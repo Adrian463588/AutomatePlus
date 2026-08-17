@@ -27,7 +27,11 @@
     "typecheck:sidecar": "tsc -p apps/sidecar/tsconfig.json --noEmit",
     "lint": "node scripts/quality-check.mjs lint",
     "format:check": "node scripts/quality-check.mjs format:check",
-    "format": "node scripts/quality-check.mjs format:check"
+    "format": "node scripts/quality-check.mjs format:check",
+    "native:preflight": "node scripts/build-native-offline.mjs --preflight",
+    "native:check": "node scripts/build-native-offline.mjs --check",
+    "native:build": "node scripts/build-native-offline.mjs --build",
+    "native:run": "scripts\\Run-AutomatePlus.bat"
   },
   "devDependencies": {
     "@types/node": "^22.10.2",

@@ -10,9 +10,29 @@ import { SessionIR } from '@automate-plus/ir-schema';
 import { DeviceLeaseManager } from './device-lease-manager.js';
 import { PortLeaseManager } from './port-lease-manager.js';
 import { InteractivePlayer, InteractiveStepExecutor } from './interactive-player.js';
-import crypto from 'node:crypto';
+import { createRuntimeId } from '@automate-plus/contracts';
 
 export type FarmProgressCallback = (summary: MultiDeviceRunSummary) => void;
+
+class ConcurrencyLimiter {
+  private active = 0;
+  private readonly waiters: Array<() => void> = [];
+
+  public constructor(private readonly limit: number) {}
+
+  public async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.active >= this.limit) {
+      await new Promise<void>((resolve) => this.waiters.push(resolve));
+    }
+    this.active += 1;
+    try {
+      return await task();
+    } finally {
+      this.active -= 1;
+      this.waiters.shift()?.();
+    }
+  }
+}
 
 export class MultiDeviceRunner {
   private leaseManager: DeviceLeaseManager;
@@ -36,7 +56,7 @@ export class MultiDeviceRunner {
     onProgress?: FarmProgressCallback
   ): Promise<MultiDeviceRunSummary> {
     this.isCancelled = false;
-    const farmRunId = crypto.randomUUID();
+    const farmRunId = createRuntimeId();
     const startTime = Date.now();
 
     // 1. Filter target devices
@@ -85,12 +105,17 @@ export class MultiDeviceRunner {
     };
 
     // 3. Acquire Leases and execute per-device workers
-    const workerPromises = targetDevices.map(async (device) => {
+    const concurrency = Math.min(
+      targetDevices.length,
+      Number.isInteger(spec.maxParallelDevices) && spec.maxParallelDevices > 0 ? spec.maxParallelDevices : 1,
+    );
+    const limiter = new ConcurrencyLimiter(concurrency);
+    const workerPromises = targetDevices.map((device) => limiter.run(async () => {
       const deviceId = device.deviceId || (device as any).id;
       const plannedIterations = plannedPerDevice.get(deviceId) || 1;
 
       const deviceRunResult: DeviceRunResult = {
-        deviceRunId: crypto.randomUUID(),
+        deviceRunId: createRuntimeId(),
         deviceId,
         adbSerial: device.adbSerial,
         model: device.model,
@@ -118,7 +143,10 @@ export class MultiDeviceRunner {
         });
 
         // Run iterations
-        const executor = this.executorFactory ? this.executorFactory(deviceId) : { execute: async () => undefined };
+        if (!this.executorFactory) {
+          throw new Error('DeviceFarmError: no device-bound executor is configured; native host execution is required.');
+        }
+        const executor = this.executorFactory(deviceId);
         const player = new InteractivePlayer(executor);
         for (let i = 1; i <= plannedIterations; i++) {
           if (this.isCancelled) {
@@ -171,13 +199,14 @@ export class MultiDeviceRunner {
         if (deviceRunResult.status !== 'cancelled') {
           deviceRunResult.status = deviceRunResult.failedIterations === 0 ? 'passed' : 'failed';
         }
-      } catch (err: any) {
-        deviceRunResult.status = 'failed';
-        deviceRunResult.error = err.message;
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        deviceRunResult.status = message.startsWith('DeviceFarmError:') ? 'blocked' : 'failed';
+        deviceRunResult.error = message;
         onLog({
           timestamp: Date.now(),
           type: 'stderr',
-          message: `[DEVICE ${device.model}] Error: ${err.message}`,
+          message: `[DEVICE ${device.model}] Error: ${message}`,
         });
       } finally {
         if (lease) {
@@ -185,13 +214,17 @@ export class MultiDeviceRunner {
         }
         this.portManager.release(deviceId);
       }
-    });
+    }));
 
     await Promise.all(workerPromises);
 
     summary.finishedAt = Date.now();
     summary.durationMs = summary.finishedAt - startTime;
-    summary.status = summary.totalFailedIterations === 0 ? 'passed' : 'failed';
+    summary.status = summary.totalCompletedIterations === 0
+      ? 'blocked'
+      : summary.totalFailedIterations === 0 && summary.totalCompletedIterations === summary.totalPlannedIterations
+        ? 'passed'
+        : 'failed';
 
     onLog({
       timestamp: Date.now(),

@@ -4,55 +4,56 @@
 
 ## Source of truth
 
-- `PRD.md` defines product scope and acceptance.
-- `DESIGN.md` defines architecture, contracts, security, and capability rules.
-- `specs/` contains active spec-driven implementation contracts.
-- `reference/` and `docs/` are read-only research material; never copy or modify them.
-- `apps/desktop` is a browser-safe migration shell. Native evidence comes only from WinUI, verified packs, and real devices.
+- `PRD.md` defines product behavior and acceptance.
+- `DESIGN.md` defines the active Tauri/Rust architecture and security boundaries.
+- `specs/` contains implementation contracts.
+- `reference/` and `docs/` are read-only research material. Never modify or copy them into production.
 
-## Architecture
+## Active runtime
 
-- WinUI/.NET 8 owns MVVM, orchestration, SQLite, runtime resolution, process isolation, device discovery/leases, cancellation, and report normalization.
-- The TypeScript sidecar owns versioned IR validation, selector scoring, recording adapters, and generators.
-- Use versioned NDJSON IPC. Do not share mutable process state across the boundary.
-- UI depends on application contracts, never directly on ADB, Appium, scrcpy, Playwright, k6, or generated-framework APIs.
-- `AutomationSession` and `ActionIR` are canonical; farm metadata and device serials stay outside IR.
+- The released desktop host is Tauri 2 + Rust under `apps/desktop/src-tauri`.
+- React/TypeScript under `apps/desktop` is the renderer. Ordinary browser mode is a migration shell.
+- TypeScript sidecar packages own IR validation, selector ranking, recorder adapters, and generators.
+- The old .NET/WinUI tree is legacy source only and is not a release dependency.
+- Runtime is Windows x64 and offline. No test or launcher may download, install, log in, or call cloud services.
 
-## Sprint 2 farm rules
+## Boundaries and correctness
 
-- Support `single`, `all-devices`, and `split-iterations` through `FarmRunSpec`; do not add `RunMode=farm`.
-- Use stable local device IDs plus current ADB serial snapshots. Bind every ADB/Appium/scrcpy action to the leased serial.
-- One worker owns one device lease and one Appium session. Release leases, ports, and process trees on every terminal path.
-- Default failure policy is `continue-other-devices`; `fail-fast` stops only unclaimed work.
-- Use primary/follower recording. Only primary actions enter canonical IR; followers produce observations. Never broadcast coordinates silently.
-- Generate one project per framework/language with required runtime device context. Never emit fixed serials, fixed ports, fake imports, silent fallbacks, or TODO stubs.
-- Missing device, runtime pack, target package, project prerequisite, or unsupported action is `Blocked`, never a simulated pass.
-- Functional/UI-soak metrics are iterations and duration; API RPS is k6 only.
+- Rust owns Tauri commands, ADB/Appium/scrcpy process boundaries, device locks, port leases, SQLite, cancellation, cleanup, and evidence.
+- Cross-boundary messages use the versioned IPC envelope (`protocolVersion: 1.0`) and NDJSON-compatible payloads.
+- `SessionIR` and `ActionIR` are canonical. Farm metadata and live ADB serial snapshots never enter `ActionIR`.
+- One worker owns one leased serial and one isolated runtime session. Every ADB operation uses the bound serial.
+- Use `single`, `all-devices`, and `split-iterations`; default failure policy is `continue-other-devices`.
+- Primary/follower recording produces one primary IR and independent follower observations. Never broadcast coordinates silently.
+- Generators emit one project per framework/language and require external runtime context. Never emit fixed serials, fixed ports, fake imports, TODO stubs, or silent fallbacks.
+- Missing packs, devices, target apps, project prerequisites, or unsupported actions are `Blocked`, never a simulated pass.
 
-## Offline and security
+## Security and UX
 
-- Use local checksum/license-verified runtime packs. Never download or install dependencies during a run.
-- Launch allowlisted executables with argument arrays and `shell:false`; validate canonical paths, redact secrets, enforce timeouts, and terminate complete process trees.
-- Bind Appium to loopback. Store large evidence as hashed files under the workspace; do not embed unbounded logs or screenshots in session JSON.
-- Preserve unrelated user changes. Never reset, clean, stash, uninstall, or delete project/device data without explicit authorization.
+- Resolve only checksum/license-verified local packs. Use an executable allowlist, argument arrays, canonical path checks, loopback Appium binding, timeouts, redaction, and process-tree cleanup.
+- Persist large evidence as hashed files under the workspace; keep session JSON bounded.
+- All controls need a real handler or a disabled state with an explanation. Use semantic labels, keyboard/focus support, live status, reduced-motion behavior, and interactive targets of at least 48×48 px.
+- Never add fake devices, fake targets, fake battery/time/progress, fabricated metrics, or production test doubles. Test doubles belong only at fixture/unit boundaries.
 
 ## Verification
 
+Use the RTK wrapper for shell commands. Run the applicable gates after the final diff:
+
 | Scope | Command |
 |---|---|
-| Locked install | `npm ci --offline` |
-| TypeScript tests | `npm test` |
-| Lint/format/typecheck | `npm run lint` / `npm run format:check` / `npm run typecheck` |
-| Package/sidecar/UI build | `npm run build:packages` / `npm run build:sidecar` / `npm run build:desktop` |
-| Smoke/docs/authenticity | `npm run verify:sidecar` / `npm run verify:k6` / `npm run verify:docs` / `npm run verify:authenticity` |
-| Native format/build/test | `dotnet format AutomatePlus.sln --verify-no-changes`; `dotnet build AutomatePlus.sln --no-restore`; `dotnet test AutomatePlus.sln --no-restore` |
+| Locked offline install | `npm ci --offline` |
+| TypeScript quality | `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test` |
+| TypeScript builds | `npm run build:packages`, `npm run build:sidecar`, `npm run build:desktop` |
+| Smoke and docs | `npm run verify:sidecar`, `npm run verify:k6`, `npm run verify:docs`, `npm run verify:authenticity` |
+| Native source | `cargo fmt --check`, `cargo clippy --offline -- -D warnings`, `cargo test --offline` |
+| Native packaging | `npm run native:preflight`, `npm run native:check`, `npm run native:build` |
 
-- Run file-scoped checks during implementation; run all applicable gates after the final diff.
-- Do not claim `.NET 8`, runtime-pack, WinUI, Android, or multi-device acceptance without fresh evidence.
-- Report commands/results, runtime/device limitations, and open risks separately.
+Do not report Rust/Tauri, pack, Appium, or multi-device acceptance as `Verified` when the offline Cargo cache, Tauri CLI, verified packs, target app, or physical devices are absent. Report the exact blocker and exit code.
 
-## Delivery
+## Change discipline
 
-- Update `PRD.md` and `DESIGN.md` when public behavior changes; keep this file operational and concise.
-- `CLAUDE.md` remains a non-duplicating alias to this file.
-- AI commits must include `Co-Authored-By: GPT-5 <noreply@example.com>`.
+- Preserve unrelated user changes. Never reset, clean, stash, uninstall, or delete project/device data.
+- Keep `reference/` and `docs/Sprint2/` byte-for-byte unchanged.
+- Update `PRD.md`, `DESIGN.md`, and the relevant spec when a public contract changes.
+- Use BMAD/spec-driven traceability: requirement → interface/ADR → module → test → evidence → status.
+- AI commits include `Co-Authored-By: GPT-5 <noreply@example.com>`.

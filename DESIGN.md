@@ -1,1000 +1,202 @@
-# AutomatePlus System and Technical Design
+# AutomatePlus System Design
 
-**Design version:** 2.0.0  
-**Status:** Proposed implementation contract  
-**Target OS:** Windows 10/11 x64  
-**Desktop shell:** WinUI 3 + .NET 8  
-**Automation sidecar:** Node.js/TypeScript  
-**Persistence:** SQLite metadata plus workspace files  
-**Connectivity:** Local-first; no required cloud service
+Version: 3.0.0
+Status: Active implementation contract
+Desktop runtime: Tauri 2 + Rust on Windows x64
+Renderer and sidecar: React/TypeScript with local versioned IPC
+Operating boundary: offline only
 
-This document is the technical source of truth for the requirements in `PRD.md`. It defines boundaries, contracts, state transitions, data ownership, security controls, and verification gates. It does not claim that the current Vite scaffold is production-ready.
+## 1. Decision summary
 
-## 1. Architecture decisions
+Tauri 2 + Rust is the active desktop host. The React/Vite application is the same renderer used by Tauri and remains a safe migration shell when opened in an ordinary browser. The previous .NET/WinUI implementation is retained as legacy reference source only; it is not built, launched, or required by the release path because the required .NET 8 toolchain is not available on the target workstation.
 
-### ADR-01 — WinUI/.NET host with TypeScript sidecar
+Rust owns the privileged and stateful operations:
 
-AutomatePlus uses a hybrid desktop architecture:
+- Tauri window and command boundary.
+- ADB discovery, serial binding, device leases, Appium/scrcpy/sidecar process lifecycle, cancellation, and cleanup.
+- Offline runtime-pack verification, loopback port leases, SQLite migrations, artifact files, and report aggregation.
 
-- WinUI 3 and .NET 8 own the Windows application shell, MVVM state, orchestration, SQLite, runtime management, process isolation, device locks, cancellation, and normalized reports.
-- A long-lived Node.js/TypeScript sidecar owns Automation IR validation/normalization, selector scoring, Playwright/CDP Web recording, and framework generator adapters.
-- Target frameworks and tools run as separate local processes selected from a verified runtime manifest.
-- The sidecar is never loaded into the WinUI UI process and the Web target is never granted privileged host APIs.
+TypeScript owns portable automation semantics:
 
-The existing TypeScript packages are treated as a migration source for the sidecar. They are not a reason to keep browser-only UI code in production or to expose Node APIs to a renderer.
+- SessionIR/ActionIR validation and normalization.
+- Selector scoring and semantic locator policy.
+- Web/Android recording adapters and code generators.
+- Versioned IPC payload contracts and NDJSON sidecar protocol.
 
-### ADR-02 — NDJSON over redirected stdio
+The renderer never calls ADB, Appium, scrcpy, Node process APIs, SQLite, or generated-framework APIs directly.
 
-The .NET host launches the sidecar with an explicit executable path and argument array. Requests, responses, and events use newline-delimited JSON over stdin/stdout. stderr is diagnostics only.
+## 2. Architecture decision records
 
-This avoids a network listener, keeps the default trust boundary local, supports streaming recorder events, and permits deterministic process-tree cleanup.
+### ADR-001 — Tauri/Rust is the production desktop boundary
 
-### ADR-03 — IR is the only cross-framework source of truth
+Decision: ship one Tauri executable with a Rust host and React renderer. It provides a local WebView frontend, a native process boundary, capability restrictions, and an offline Windows packaging path without requiring the unavailable .NET 8 SDK.
 
-Recorders produce raw events, the normalizer produces IR, and generators consume IR. A recorder never emits framework code and a generator never reaches into a recorder implementation.
+Browser mode cannot provide native evidence. It displays empty or Blocked states and never seeds a device.
 
-### ADR-04 — RPS is protocol-level
+### ADR-002 — Sidecar state crosses a versioned boundary
 
-Browser and Android sessions can be functionally looped or soaked with bounded workers. Only API/HTTP traffic is called RPS and is executed through k6's arrival-rate model.
+Use IpcRequest/IpcResponse envelopes with protocolVersion "1.0", UUID correlationId, method, and typed payload. Tauri invokes the same dispatch contract through automate_plus_dispatch; a future packaged Node sidecar uses NDJSON over stdin/stdout. Unknown protocol versions or methods fail closed with a serialized error.
 
-### ADR-05 — WinUI/.NET is the production shell
+### ADR-003 — Device identity is not the ADB serial
 
-The React/Vite scaffold and Electron/Tauri recommendations found in local reference notes are migration material only. The production desktop boundary is WinUI 3 + .NET 8 with a TypeScript sidecar. No browser renderer may own persistence, process execution, ADB, secrets, or target-page privileges.
+Hash observed hardware identity/model/product into a stable local deviceId. Store adbSerial only as current profile state and immutable run-time serial snapshot. Every worker binds its ADB/Appium/scrcpy arguments to its lease snapshot. A missing or changed serial blocks the worker.
 
-## 2. Process and module topology
+### ADR-004 — Farm execution is capability-gated
 
-```mermaid
-flowchart LR
-    UI["WinUI 3 desktop UI"] --> Host[".NET host and orchestrator"]
-    Host --> DB["SQLite metadata"]
-    Host --> FS["Workspace and artifacts"]
-    Host <-->|"versioned NDJSON stdio"| Sidecar["Node TypeScript sidecar"]
-    Sidecar --> WebRec["Playwright/CDP recorder"]
-    Sidecar --> Selector["IR normalizer and selector engine"]
-    Sidecar --> Generators["Framework generator registry"]
-    Host --> Device["ADB/Appium/scrcpy device adapter"]
-    Host --> Runner["Allowlisted process runner"]
-    Runner --> WebTools["Web runtimes"]
-    Runner --> AndroidTools["Android runtimes"]
-    Runner --> ApiTools["k6 and API runtimes"]
-    Runner --> Reports["Report parsers and artifacts"]
-```
+single, all-devices, and split-iterations are contract-level strategies. They become executable only when verified Appium/UiAutomator2/scrcpy packs, a target app, authorized devices, and a real executor are present. Missing prerequisites are Blocked; no fallback executor or simulated pass exists.
 
-### 2.1 Ownership matrix
+## 3. Runtime topology
 
-| Concern | .NET host | TypeScript sidecar | Target runtime |
-|---|---|---|---|
-| Window, navigation, MVVM | Owner | None | None |
-| Session orchestration | Owner | Stateless operations | None |
-| SQLite and migrations | Owner | No direct database access | None |
-| IR schema and normalization | Contract owner; validates envelope | Implements schema, reducer, and migration helpers | None |
-| Web recording | Lifecycle and security owner | Playwright/CDP adapter | Chromium/Playwright |
-| Locator scoring | Invokes service | Scoring implementation | DOM/UI hierarchy source |
-| Android discovery/lock | Owner | Receives normalized candidates | ADB/Appium/scrcpy |
-| Code generation | Stores and validates result | Registry and adapters | Formatter/linter/compiler |
-| Process execution | Owner | No unrestricted process spawning | Node/Python/JVM/k6/framework CLI |
-| Report normalization | Owner | Emits adapter metadata | Native report producer |
+Topology: Browser migration shell or Tauri window → React renderer → desktopBridge and IPC 1.0 → Rust native host. The host owns SQLite, ADB with a leased serial, loopback Appium/UiAutomator2, device-bound scrcpy, checksum-verified packs, and process cleanup. The bridge also reaches the TypeScript sidecar for IR, selectors, and generators.
 
-### 2.2 Proposed solution layout
+The browser shell may persist user-created projects and sessions in browser storage for migration work, but it has no native authority. Tauri is the only release host.
 
-```text
-AutomatePlus/
-├─ AutomatePlus.sln
-├─ src/
-│  ├─ AutomatePlus.App/              # WinUI 3, views, view-models, composition root
-│  ├─ AutomatePlus.Application/      # use cases, orchestration, ports, DTO mapping
-│  ├─ AutomatePlus.Domain/           # session, IR envelope, capabilities, run states
-│  ├─ AutomatePlus.Infrastructure/   # SQLite, DPAPI, process, ADB, reports, files
-│  └─ AutomatePlus.SidecarHost/      # NDJSON client and sidecar lifecycle
-├─ sidecar/
-│  ├─ package.json
-│  ├─ src/ir/                         # Zod schema, normalizer, migrations
-│  ├─ src/recorders/web/              # Playwright/CDP recorder
-│  ├─ src/selectors/                  # locator candidates and scoring
-│  └─ src/generators/                 # adapter registry and emitters
-├─ contracts/
-│  ├─ automation-ir.schema.json
-│  ├─ sidecar-protocol.schema.json
-│  └─ capability-manifest.schema.json
-├─ fixtures/
-│  ├─ web-local/
-│  ├─ api-local/
-│  └─ android-test-app/
-├─ runtime-packs/
-├─ templates/
-├─ tests/golden/
-└─ docs/
-```
+## 4. Repository modules
 
-The current `apps/desktop` and `packages/*` tree is a prototype/migration input. It must not be bundled as a browser UI with Node-only dependencies in the production WinUI renderer.
+| Layer | Location | Responsibility |
+|---|---|---|
+| Renderer | apps/desktop/src | React UI, state, responsive/a11y presentation |
+| Bridge | apps/desktop/src/services/desktopBridge.ts | Browser-safe adapters and Tauri IPC calls |
+| Contracts | packages/contracts/src | IPC, device-farm, capability, runner contracts |
+| IR | packages/ir-schema | Canonical versioned session/action schemas |
+| Selector | packages/selector-engine | Semantic locator ranking |
+| Generators | packages/generators | One project per framework/language with runtime context |
+| Sidecar | apps/sidecar and recorder packages | IR/selector/generator and recorder protocol |
+| Native host | apps/desktop/src-tauri/src | Rust discovery, preflight, leases, SQLite, processes, cleanup |
+| Native packaging | scripts/build-native-offline.mjs | Offline verification, staging, format/test/build |
+| Launcher | Run-AutomatePlus.bat | One-click entrypoint with explicit blocked exit codes |
 
-## 3. Application state machines
+reference/ and docs/Sprint2/ are research inputs and remain read-only.
 
-### 3.1 Session lifecycle
+## 5. IPC contract
 
-```mermaid
-stateDiagram-v2
-    [*] --> Idle
-    Idle --> Recording: start recorder
-    Recording --> Paused: pause
-    Paused --> Recording: resume
-    Recording --> Editing: stop
-    Paused --> Editing: stop
-    Editing --> Validating: generate
-    Validating --> Ready: all gates pass
-    Validating --> Editing: capability or validation failure
-    Ready --> Running: run
-    Running --> Passed: native result passed
-    Running --> Failed: native result failed
-    Running --> Cancelled: user cancel or timeout
-    Passed --> Editing: edit session
-    Failed --> Editing: edit or heal
-    Cancelled --> Editing: inspect and retry
-```
+Requests and responses are JSON objects:
 
-### 3.2 Run states
-
-`Queued → Preflight → Generating → Formatting → Linting → Compiling → SmokeValidating → Running → Passed|Failed|Cancelled|Blocked`.
-
-`Blocked` is reserved for missing runtime, missing Android device, missing Android Gradle project, invalid capability, invalid workspace, or a security policy rejection. It is not a disguised pass or a fallback run.
-
-### 3.3 Remediation policy
-
-- A failed preflight or run may be remediated at most three times.
-- Two identical consecutive errors stop the retry loop immediately.
-- A healed selector is recorded as `HEALED`, with the original locator, selected fallback, confidence, and evidence.
-- Self-healing never mutates the saved session automatically; the user must accept a locator change.
-
-## 4. Public contracts
-
-The JSON schemas under `contracts/` are the cross-language source of truth. C# DTOs and TypeScript types must be generated or reviewed against the same schema version.
-
-### 4.1 Core IR types
-
-```typescript
-type Platform = 'web' | 'android' | 'api';
-type SecretRef = { kind: 'secret'; key: string };
-
-interface LocatorCandidate {
-  strategy:
-    | 'testId' | 'role' | 'accessibilityId' | 'resourceId'
-    | 'label' | 'id' | 'name' | 'text' | 'css' | 'xpath' | 'bounds';
-  value: string;
-  score: number;
-  role?: string;
-  name?: string;
-  unique?: boolean;
-  source?: 'dom' | 'uiautomator' | 'appium' | 'manual';
-}
-
-interface ActionIR {
-  schemaVersion: 1;
-  id: string;
-  stepNumber: number;
-  platform: Platform;
-  action: string;
-  target?: {
-    locators: LocatorCandidate[];
-    coordinates?: { x: number; y: number };
-    framePath?: number[];
-    pageId?: string;
-  };
-  value?: string | SecretRef;
-  payload?: Record<string, unknown>;
-  assertions?: Array<Record<string, unknown>>;
-  variables?: Array<{ name: string; source: string }>;
-  timeoutMs?: number;
-  explicitSleepMs?: number;
-  metadata: {
-    recordedAt: string;
-    source: 'web-recorder' | 'android-recorder' | 'api-builder' | 'manual';
-    durationMs?: number;
-    screenshotPath?: string;
-  };
-}
-
-interface AutomationSession {
-  schemaVersion: 1;
-  id: string;
-  projectId: string;
-  name: string;
-  platform: Platform;
-  target: Record<string, unknown>;
-  environment: Record<string, string | SecretRef>;
-  steps: ActionIR[];
-  createdAt: string;
-  updatedAt: string;
-}
-```
-
-Required schema invariants:
-
-- IDs are UUIDs and step numbers are unique, positive, and contiguous after edits.
-- `platform` and action payload must agree.
-- Secrets are references, never resolved values.
-- Locators are ranked descending by score; coordinate/bounds fallback is explicit.
-- Unknown schema versions are blocked until a migration is available.
-- Every persisted action identifies its source and recording timestamp.
-
-### 4.2 Capability manifest
-
-```typescript
-interface CapabilityManifest {
-  id: string;
-  platform: 'web' | 'android' | 'api';
-  framework: string;
-  language: string;
-  outputFormat: 'typescript' | 'javascript' | 'python' | 'java' | 'kotlin' | 'robot' | 'yaml';
-  supportedActions: string[];
-  supportedAssertions: string[];
-  requiredRuntimes: string[];
-  requiresProject?: 'android-gradle' | 'none';
-  runnerCommandId: string;
-  version: string;
-}
-```
-
-The registry is the sole source for framework/language selection. A descriptor must be present before a generator is visible in the UI.
-
-### 4.3 Generator and runner ports
-
-```typescript
-interface ICodeGenerator {
-  readonly manifest: CapabilityManifest;
-  supports(session: AutomationSession): CapabilityResult;
-  generate(session: AutomationSession, options: GenerateOptions): Promise<GeneratedProject>;
-  validate(project: GeneratedProject): Promise<ValidationResult>;
-}
-
-interface GeneratedProject {
-  framework: string;
-  language: string;
-  rootRelativePath: string;
-  files: Array<{ relativePath: string; content: string; language: string }>;
-  runtimeRequirements: string[];
-  checksums: Record<string, string>;
-}
-
-interface IRecorder {
-  start(options: RecorderOptions): AsyncIterable<RecorderEvent>;
-  pause(): Promise<void>;
-  resume(): Promise<void>;
-  stop(): Promise<void>;
-}
-
-interface ITestRunner {
-  preflight(project: GeneratedProject, options: RunOptions): Promise<PreflightResult>;
-  run(project: GeneratedProject, options: RunOptions): AsyncIterable<RunEvent>;
-  cancel(runId: string): Promise<void>;
-}
-
-interface IToolchainResolver {
-  health(): Promise<ToolchainHealth[]>;
-  resolve(id: string): Promise<ResolvedToolchain>;
-  verifyPack(manifestPath: string): Promise<PackVerification>;
-}
-
-interface IReportNormalizer {
-  canParse(path: string): boolean;
-  parse(path: string): Promise<NormalizedReport>;
-}
-```
-
-The equivalent .NET ports use immutable records and `IAsyncEnumerable<T>` for streaming events. Domain projects depend on interfaces, not concrete Node, ADB, or framework classes.
-
-### 4.4 Run options and events
-
-```typescript
-type RunMode = 'functional' | 'ui-soak' | 'api-rps';
-
-interface RunOptions {
-  mode: RunMode;
-  iterations?: number;
-  workers?: number;
-  delayMs?: number;
-  targetRps?: number;
-  durationSeconds?: number;
-  maxVus?: number;
-  environment: Record<string, string | SecretRef>;
-  headless?: boolean;
-}
-
-interface RunEvent {
-  runId: string;
-  timestamp: string;
-  kind: 'state' | 'stdout' | 'stderr' | 'step' | 'metric' | 'artifact' | 'error';
-  stepId?: string;
-  status?: string;
-  message?: string;
-  data?: Record<string, unknown>;
-}
-```
-
-### 4.5 Protocol and error invariants
-
-- Every request, response, event, and cancellation envelope has `protocolVersion` and `correlationId`.
-- Cancellation is represented by `kind: "cancel"` and a correlated request; the host enforces a grace timeout before tree termination.
-- Structured error codes are stable: `CAPABILITY_ERROR`, `RUNTIME_MISSING`, `DEVICE_UNAVAILABLE`, `PROJECT_PREREQUISITE_MISSING`, `PATH_DENIED`, `PROCESS_TIMEOUT`, `CANCELLED`, and `PROTOCOL_ERROR`.
-- stdout is reserved for NDJSON protocol frames; diagnostics are written to stderr with redaction.
-- Event sequence numbers are monotonic per run and duplicate events are ignored by correlation ID.
-- Unknown schema versions and unsupported actions are blocked; no silent fallback or generated `TODO` is permitted.
-
-## 5. NDJSON sidecar protocol
-
-Every line is one complete JSON object. The host rejects lines larger than the configured limit, malformed JSON, unknown protocol versions, and responses with an unknown correlation ID.
-
-```json
-{
-  "protocolVersion": 1,
-  "correlationId": "7d73c1c6-3db8-42b9-8c1f-f84db4d6d4e1",
-  "kind": "request",
-  "method": "generator.generate",
-  "timestamp": "2026-08-16T12:00:00Z",
-  "payload": {
-    "sessionId": "session-uuid",
-    "framework": "playwright",
-    "language": "typescript"
-  }
-}
-```
-
-Response envelope:
-
-```json
-{
-  "protocolVersion": 1,
-  "correlationId": "7d73c1c6-3db8-42b9-8c1f-f84db4d6d4e1",
-  "kind": "response",
-  "ok": false,
-  "error": {
-    "code": "CAPABILITY_ERROR",
-    "message": "The selected adapter does not support action 'pinch'.",
-    "details": { "framework": "cypress", "language": "typescript" }
-  }
-}
-```
-
-Event methods use the same envelope with `kind: "event"` and include recorder, generator, or diagnostic events. The host sends cancellation as a correlated request and kills the sidecar if the grace period expires.
-
-Allowed sidecar methods:
-
-| Method | Purpose |
-|---|---|
-| `health.check` | Return sidecar version, schema version, and capabilities |
-| `session.validate` | Validate and migrate an IR session |
-| `session.normalize` | Reduce raw events into canonical IR |
-| `selector.rank` | Rank Web or Android locator candidates |
-| `recorder.web.start` | Start Playwright/CDP recording |
-| `recorder.web.stop` | Stop recording and return final recorder state |
-| `generator.list` | Return capability manifests |
-| `generator.generate` | Generate a project from a validated session |
-| `generator.validate` | Validate generated project metadata before .NET runner gates |
-
-## 6. Persistence and workspace
-
-### 6.1 SQLite ownership
-
-The .NET infrastructure layer owns migrations, transactions, and repositories. IR JSON is stored with a schema version for reproducibility; frequently queried run metadata is relational.
-
-```sql
-CREATE TABLE projects (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  workspace_path TEXT NOT NULL,
-  description TEXT,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE sessions (
-  id TEXT PRIMARY KEY,
-  project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  platform TEXT NOT NULL CHECK (platform IN ('web','android','api')),
-  schema_version INTEGER NOT NULL,
-  ir_json TEXT NOT NULL,
-  created_at TEXT NOT NULL,
-  updated_at TEXT NOT NULL
-);
-
-CREATE TABLE runs (
-  id TEXT PRIMARY KEY,
-  session_id TEXT NOT NULL REFERENCES sessions(id) ON DELETE CASCADE,
-  mode TEXT NOT NULL CHECK (mode IN ('functional','ui-soak','api-rps')),
-  framework TEXT NOT NULL,
-  language TEXT NOT NULL,
-  status TEXT NOT NULL,
-  started_at TEXT,
-  finished_at TEXT,
-  summary_json TEXT
-);
-
-CREATE TABLE artifacts (
-  id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-  kind TEXT NOT NULL,
-  relative_path TEXT NOT NULL,
-  sha256 TEXT NOT NULL,
-  created_at TEXT NOT NULL
-);
-
-CREATE TABLE metrics (
-  id TEXT PRIMARY KEY,
-  run_id TEXT NOT NULL REFERENCES runs(id) ON DELETE CASCADE,
-  name TEXT NOT NULL,
-  value REAL NOT NULL,
-  unit TEXT NOT NULL,
-  timestamp TEXT NOT NULL
-);
-
-CREATE TABLE runtime_packs (
-  id TEXT PRIMARY KEY,
-  version TEXT NOT NULL,
-  root_path TEXT NOT NULL,
-  sha256 TEXT NOT NULL,
-  license_status TEXT NOT NULL,
-  health_json TEXT NOT NULL,
-  verified_at TEXT
-);
-```
-
-Secrets are not stored in SQLite. The database stores a `SecretRef`; values are resolved only at execution boundaries through DPAPI or Windows Credential Manager.
-
-### 6.2 Workspace layout
-
-```text
-<project-workspace>/
-├─ automate-plus.db
-├─ sessions/
-│  └─ <session-id>/
-│     ├─ session.json
-│     ├─ recordings/
-│     └─ generated/
-├─ runs/
-│  └─ <run-id>/
-│     ├─ stdout.log
-│     ├─ stderr.log
-│     ├─ report.json
-│     ├─ report.html
-│     ├─ screenshots/
-│     ├─ traces/
-│     ├─ videos/
-│     └─ metrics/
-└─ runtime-locks/
-```
-
-All paths are resolved against a canonical workspace root. Absolute paths supplied by users are allowed only after explicit selection and validation; generated paths cannot escape the project root.
-
-## 7. Recorder design
-
-### 7.1 Web recorder
-
-```text
-WinUI command
-  → .NET sidecar host
-  → Node Playwright worker
-  → isolated headed Chromium
-  → injected event collector
-  → raw event
-  → debounce and normalize
-  → locator scoring
-  → ActionIR event
-  → .NET persistence/UI timeline
-```
-
-Rules:
-
-- Chromium runs in a separate browser process/context and never receives Node filesystem APIs.
-- Capture listeners observe click, dblclick, context menu, input/change, keydown, wheel, pointer/drag events, navigation, popup, download, dialog, and file chooser.
-- The recorder waits for an input/change settling window before emitting one `fill` action.
-- Wheel bursts are accumulated into one scroll action with delta and duration metadata.
-- Each event includes page ID, frame path, target fingerprint, candidate locators, and optional screenshot.
-- Assertions are user-requested through the UI; the recorder must not guess business assertions from every click.
-- New tabs/pages are tracked by page ID and generated code targets the correct page/context.
-
-Locator priority:
-
-```text
-data-testid/test attribute
-→ role + accessible name
-→ aria-label/accessibility ID
-→ associated label
-→ stable id/name/resource metadata
-→ stable visible text
-→ scoped CSS
-→ XPath
-→ coordinate fallback
-```
-
-The selector engine checks uniqueness where a live DOM is available. Dynamic classes, timestamps, random IDs, and full absolute hierarchy paths receive a low score or are rejected when a stronger candidate exists.
-
-### 7.2 Android recorder
-
-```text
-WinUI device page
-  → .NET ADB/device service
-  → scrcpy-compatible mirror/control
-  → viewer pointer event
-  → coordinate transform
-  → ADB/Appium gesture
-  → hierarchy snapshot
-  → selector ranker
-  → Android ActionIR
-```
-
-Device service responsibilities:
-
-- Discover and health-check devices.
-- Acquire/release an exclusive serial lock.
-- Read size, density, rotation, package, activity, and authorization state.
-- Start/stop scrcpy-compatible video/control and Appium UiAutomator2 sessions.
-- Execute only allowlisted ADB actions such as `tap`, `swipe`, `input text`, `keyevent`, app launch/close, screenshot, and hierarchy dump.
-- Terminate child processes and release the lock on cancellation or disconnect.
-
-Coordinate transformation:
-
-```text
-viewer point
-→ remove letterbox/padding
-→ apply viewer-to-frame scale
-→ apply orientation transform
-→ apply device pixel mapping
-→ device point
-```
-
-At pointer release, the service captures a hierarchy snapshot and finds the smallest node containing the point. `resource-id`, accessibility/content description, text, class, and bounds become candidates. Bounds are retained as a fallback for canvas/game/map/custom-rendered elements.
-
-Physical taps performed outside the AutomatePlus viewer are not assumed to be recordable. The supported recording surface is the integrated viewer/control path.
-
-### 7.3 API builder
-
-The API builder is a .NET application feature. It writes `httpRequest` and assertion actions directly to IR. It does not require a browser recorder. Network calls are initiated only by an explicit user run or response inspection action and are never made during startup.
-
-## 8. Generator architecture
-
-### 8.1 Registry
-
-```mermaid
-classDiagram
-    class CapabilityManifest {
-      +id
-      +platform
-      +framework
-      +language
-      +supportedActions
-      +requiredRuntimes
-      +runnerCommandId
-    }
-    class ICodeGenerator {
-      <<interface>>
-      +manifest()
-      +supports(session)
-      +generate(session, options)
-      +validate(project)
-    }
-    class GeneratorRegistry {
-      +register(generator)
-      +list()
-      +resolve(framework, language, platform)
-    }
-    GeneratorRegistry o-- ICodeGenerator
-    ICodeGenerator --> CapabilityManifest
-```
-
-Each adapter has one responsibility and uses a structured emitter appropriate to its output:
-
-| Output | Emitter rule |
-|---|---|
-| TypeScript/JavaScript | AST or structured templates with escaping |
-| Python | Structured templates plus Ruff and syntax validation |
-| Java | JavaPoet or structured templates plus formatter/compiler |
-| Kotlin | KotlinPoet or structured templates plus formatter/compiler |
-| Robot | Keyword-oriented serializer producing `.robot` |
-| Maestro | YAML serializer with schema validation |
-
-Avoid a central framework switch. New adapters register a manifest and implement `ICodeGenerator`; existing generators do not need modification.
-
-### 8.2 Generated project contract
-
-Every generated project includes only files required by its target and has a manifest describing:
-
-- framework, language, adapter version, and IR schema version;
-- entrypoint/test files;
-- runtime and dependency requirements;
-- formatter/linter/compiler commands;
-- expected report format;
-- source checksums;
-- unsupported actions, if generation was intentionally blocked.
-
-Examples:
-
-```text
-playwright-typescript/
-├─ package.json
-├─ playwright.config.ts
-├─ tsconfig.json
-├─ tests/session.spec.ts
-├─ fixtures/
-└─ automate-plus.generated.json
-
-selenium-python/
-├─ pyproject.toml
-├─ conftest.py
-├─ tests/session_test.py
-└─ automate-plus.generated.json
-
-appium-kotlin/
-├─ settings.gradle.kts
-├─ build.gradle.kts
-├─ src/androidTest/kotlin/SessionTest.kt
-└─ automate-plus.generated.json
-```
-
-Espresso and Robolectric adapters require an Android Gradle project context. If none is selected, they return `PROJECT_PREREQUISITE_MISSING` and the Run button remains blocked.
-
-Maestro output is YAML Flow. Appium JavaScript/TypeScript output uses the selected WebdriverIO/Appium adapter. Cypress output is JavaScript/TypeScript only.
-
-### 8.3 Generated-code validation
-
-```text
-IR
- → capability validation
- → generation
- → formatter
- → linter
- → typecheck/compile
- → local fixture smoke test
- → save as Ready
-```
-
-An adapter is release-ready only when it has:
-
-- capability manifest tests;
-- golden input/output fixtures;
-- negative tests for unsupported actions;
-- formatter/linter tests;
-- compile/typecheck tests;
-- a local execution fixture;
-- report parsing and normalized status tests.
-
-## 9. Runner and process isolation
-
-The .NET `ProcessRunner` maps `runnerCommandId` to a checked-in allowlist. It resolves an executable from the verified runtime manifest and uses `ProcessStartInfo.ArgumentList`; no shell command string is accepted.
-
-The allowlist records:
-
-```text
-command ID
-executable relative path
-allowed arguments and placeholders
-working-directory policy
-environment-variable allowlist
-timeout
-report/artifact paths
-```
-
-The runner:
-
-1. Creates a run directory below the project workspace.
-2. Resolves and verifies all required toolchains.
-3. Writes generated files with canonical paths.
-4. Runs formatter, lint, compile/typecheck, and smoke validation.
-5. Starts the selected framework process with redirected stdout/stderr.
-6. Emits structured step and process events.
-7. Enforces timeout and cancellation.
-8. Terminates the full process tree and releases device locks.
-9. Parses reports and persists artifacts/metrics.
-
-No run may report `Passed` when generation, validation, or cleanup failed.
-
-### 9.1 Functional loop
-
-The loop scheduler creates isolated Web browser contexts or bounded worker processes. Android has one worker per locked serial. Each iteration receives a unique run/iteration ID and artifacts are kept separately.
-
-### 9.2 UI soak
-
-UI soak is a bounded scheduler for repeated browser/device sessions. It reports workers, iterations, delays, resource usage, and failures. It does not create an HTTP RPS metric.
-
-### 9.3 API RPS
-
-The k6 adapter generates a JavaScript script using `constant-arrival-rate`, explicit duration, target rate, preallocated/max VUs, thresholds, and sanitized variables. Metrics are parsed from k6's real output or JSON summary. Randomly synthesized metrics are prohibited.
-
-## 10. Reporting model
-
-```typescript
-interface NormalizedReport {
-  runId: string;
-  status: 'passed' | 'failed' | 'cancelled' | 'blocked';
-  suite: { name: string; framework: string; language: string };
-  tests: Array<{
-    id: string;
-    name: string;
-    status: string;
-    durationMs: number;
-    steps: Array<{ stepId: string; status: string; error?: string; artifacts: string[] }>;
-  }>;
-  metrics: Array<{ name: string; value: number; unit: string }>;
-  artifacts: Array<{ kind: string; relativePath: string; sha256: string }>;
-}
-```
-
-The UI shows terminal output, step state, failure traces, screenshots, video/trace links, HTML summary, raw JSON, JUnit XML where available, and k6 metric export. Reports are local and may be copied only through explicit user action.
-
-## 11. Runtime packs and offline operation
-
-### 11.1 Runtime manifest
-
-```json
-{
-  "packId": "web-node-win-x64",
-  "version": "locked-by-release",
-  "platform": "win-x64",
-  "tools": [
     {
-      "id": "node",
-      "relativePath": "node/node.exe",
-      "version": "locked",
-      "sha256": "verified-at-import",
-      "licenseFile": "licenses/node.txt"
+      "protocolVersion": "1.0",
+      "kind": "request",
+      "correlationId": "uuid",
+      "method": "devices.discover",
+      "payload": {}
     }
-  ],
-  "packSha256": "verified-at-import"
-}
-```
 
-Pack import verifies archive checksum, each tool checksum, architecture, required license file, and health command. A missing or unverified pack produces a blocked capability with a repair/import action.
-
-Expected pack families:
-
-```text
-node + Chromium + Playwright/Cypress/Puppeteer/WebdriverIO
-python + Selenium/Robot/Requests/Ruff
-openjdk + Maven/Gradle/Appium/Espresso/Robolectric
-android-platform-tools + ADB
-scrcpy
-maestro
-k6
-```
-
-The installer must support a core shell pack and optional offline runtime packs. Redistribution, third-party licenses, and dependency caches are release gates.
+    {
+      "protocolVersion": "1.0",
+      "kind": "response",
+      "correlationId": "uuid",
+      "method": "devices.discover",
+      "payload": { "ok": true, "data": { "devices": [] } }
+    }
 
-### 11.2 No implicit network
+Supported methods are native.health, native.capabilities, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.cancel, artifacts.list, and native.run. Failure payloads use shared automation error codes; native failures never become a pass.
 
-- No startup ping, telemetry, login, cloud report, auto-update, or dependency install.
-- A target Web/API request occurs only after an explicit recording, response inspection, or run command.
-- Offline tests use local fixtures and preinstalled packs.
+## 6. Device model and discovery
 
-### 11.3 Offline scope of truth
+DeviceProfile contains schemaVersion, stable deviceId, current adbSerial, model, manufacturer, product, Android version, SDK level, emulator flag, resolution, density, orientation, transport, status, health state, and lastSeenAt.
 
-- AutomatePlus installation, project/session persistence, generation, reporting, and runtime resolution are offline by design.
-- A user may intentionally test a remote Web/API target; that target network dependency is outside the host offline guarantee.
-- Missing or unverified local dependencies produce `RUNTIME_MISSING` and block the run; the application never auto-fetches packages or tools.
-- Fonts, UI assets, fixtures, and diagnostics required by the desktop shell must be local or bundled.
-
-## 12. Security design
+Rust executes real adb devices -l. For an authorized row it binds all property queries as adb -s serial and reads getprop, wm size, and wm density. Missing properties remain explicitly unknown/zero; they are never replaced with a sample value. Unauthorized/offline rows are visible but ineligible for a run.
 
-### 12.1 Process security
+Discovery and health are separate from execution readiness. A device can be discovered while native health remains Blocked because packs, target app, or another prerequisite is missing.
 
-- WinUI UI calls only approved .NET application commands.
-- Sidecar protocol methods are allowlisted and schema-validated.
-- External processes use absolute verified paths and argument arrays.
-- Environment variables are allowlisted; secret values are injected only at the final runner boundary.
-- Timeouts, cancellation tokens, process-tree termination, and output-size limits are mandatory.
+## 7. Farm contract and scheduler
 
-### 12.2 Workspace security
+FarmRunSpec contains sessionId, an explicit stable deviceIds list or deviceGroupId, strategy, iteration count, maxParallelDevices, delay, and failure policy. The selected group is snapshotted before workers start.
 
-- Canonicalize and verify every project, generated, report, and artifact path.
-- Reject traversal, junction/symlink escapes where policy requires, and writes outside the workspace.
-- Store hashes for generated files and artifacts.
-- Do not commit raw credentials, runtime packs, device dumps, screenshots, or user data by default.
+    discover
+      -> snapshot group
+      -> acquire one device lease per worker
+      -> preflight serial, target app, and runtime
+      -> reserve Appium/system/MJPEG/ChromeDriver ports
+      -> create isolated session
+      -> execute iterations
+      -> persist evidence and hashes
+      -> stop processes/session
+      -> release ports and device lease
 
-### 12.3 Android security
+single preserves one-device behavior. all-devices runs iterationsPerDevice on every selected device. split-iterations claims a global totalIterations queue exactly once. maxParallelDevices bounds active workers. continue-other-devices lets independent workers continue; fail-fast prevents new work while active workers clean up.
 
-- Bind commands to the selected device serial.
-- Use an explicit ADB command allowlist; arbitrary shell passthrough is not a product capability.
-- Bind local Appium to loopback and stop it after the run.
-- Release serial locks on normal stop, failure, device disconnect, and host shutdown.
-
-### 12.4 Secret security
+One worker owns one lease. Lease and port cleanup is idempotent on success, failure, cancellation, timeout, disconnect, and host shutdown. SQLite startup recovers stale reserved, preparing, running, or cleaning leases.
 
-```text
-user secret
- → DPAPI/Credential Manager
- → SecretRef in IR
- → temporary process environment/input
- → redacted logs and reports
-```
-
-Generated source contains `${secret.KEY}` or framework-native environment references, never the resolved value.
-
-## 13. WinUI UX design
-
-```text
-┌──────────────────────────────────────────────────────────────────────┐
-│ AutomatePlus | Project | Web | Android | API | Runtime | Run / Stop  │
-├──────────────────┬──────────────────────────────┬────────────────────┤
-│ Explorer          │ Recorder / API workspace    │ Code & properties  │
-│ Projects          │ browser or device mirror    │ framework selector  │
-│ Sessions          │ action timeline             │ language selector   │
-│ Devices           │ assertion builder           │ generated project   │
-│ Run history       │ drag/drop reorder           │ validation status  │
-├──────────────────┴──────────────────────────────┴────────────────────┤
-│ Terminal | Step details | Metrics | Reports | Runtime health          │
-└──────────────────────────────────────────────────────────────────────┘
-```
+Aggregate status is:
 
-WinUI controls own navigation, accessibility labels, focus, keyboard commands, and error dialogs. A WebView2 surface may host Monaco or the decoded device canvas only as an isolated presentation surface; it receives no unrestricted .NET or filesystem bridge.
+- passed only when all planned iterations pass;
+- failed when an execution failure occurs;
+- blocked when no iteration can start because prerequisites are unavailable;
+- cancelled when the user cancels;
+- completion complete or partial describes whether planned work reached a terminal result.
 
-Required UI states:
+## 8. Ports and process isolation
 
-- empty project;
-- recording/paused/stopped;
-- device unauthorized/offline/ready/locked;
-- capability unsupported;
-- runtime missing/unverified/ready;
-- validation running/passed/failed;
-- run queued/running/passed/failed/cancelled/blocked;
-- secret redaction and artifact path errors.
+PortLeaseManager binds loopback TCP listeners while a lease is active. It validates the configured offline range, rejects duplicate/privileged ports, reserves atomically under a mutex, and releases listeners idempotently. A parallel Appium session receives unique systemPort and mjpegServerPort; chromedriverPort is allocated only for a required webview.
 
-## 14. Testing and quality gates
+Rust starts only allowlisted executables from the verified runtime root: ADB, Appium, scrcpy, Node, and the packaged sidecar. Arguments are arrays, not shell strings. On Windows, cancellation terminates the complete owned process tree through taskkill /T /F, then waits for the child.
 
-### 14.1 .NET host
+## 9. Recording and semantic observation
 
-```powershell
-dotnet format AutomatePlus.sln --verify-no-changes
-dotnet build AutomatePlus.sln --no-restore
-dotnet test AutomatePlus.sln --no-restore
-```
+RecordingPlan uses mode primary-followers, one primaryDeviceId, and follower IDs. The primary produces the only canonical ActionIR stream and receives the full mirror/input stream. Followers independently inspect hierarchy/status and resolve semantic locators. Outcomes are MATCHED, FALLBACK_USED, SEMANTIC_SELECTOR_MISSING, DEVICE_VARIANT_MISMATCH, NEEDS_REVIEW, BLOCKED, or FAILED.
 
-Tests cover domain invariants, migrations, IPC framing, command allowlists, path validation, DPAPI references, process cancellation, report parsing, device locking, and WinUI smoke journeys.
+Follower observations never become extra actions and never silently receive primary coordinates. A mismatch remains reviewable and cannot be reported as successful device coverage. Independent synchronized timelines are deferred beyond Sprint 2.
 
-### 14.2 TypeScript sidecar
+## 10. Generation boundary
 
-```powershell
-npm ci --offline
-npm run lint
-npm run typecheck
-npm test
-```
+The generator creates one project per framework/language. Appium output requires external runtime context:
 
-Tests cover Zod/JSON Schema parity, IR migration, debounce, selector ranking, web recorder events, capability registry, generator golden fixtures, and protocol error/cancellation behavior.
+    AUTOMATEPLUS_APPIUM_URL
+    AUTOMATEPLUS_DEVICE_UDID
+    AUTOMATEPLUS_SYSTEM_PORT
+    AUTOMATEPLUS_MJPEG_SERVER_PORT
+    AUTOMATEPLUS_CHROMEDRIVER_PORT (when required)
 
-### 14.3 Generated adapters
+Missing context is an explicit capability/runtime error. Generated source contains no fixed serial, 4723 fallback, device-specific path, or source duplicate per device. Capability manifests declare supported strategies, parallel-session model, required packs, physical-device requirement, and project prerequisites.
 
-For every capability matrix entry:
+## 11. SQLite and evidence
 
-1. Parse the golden IR fixture.
-2. Generate the complete project.
-3. Run formatter and linter.
-4. Run typecheck/compiler/schema validation.
-5. Execute against a local fixture where the framework permits it.
-6. Parse the native report.
-7. Verify normalized result and artifact links.
+The native migration creates schema_migrations, device_profiles, device_groups, device_leases, port_leases, farm_runs, device_runs, device_iterations, observations, and artifact_index. The Rust host opens the database, applies migrations, records the applied version, saves real profiles, and recovers stale leases.
 
-Negative tests cover invalid language pairs, unsupported actions, missing runtimes, absent Android Gradle projects, unavailable devices, invalid secrets, and path escapes.
+Large evidence is stored as files below:
 
-### 14.4 Current baseline boundary
+    runs/<farmRunId>/devices/<deviceId>/iterations/<iterationId>/
 
-The current repository baseline is useful only for migration comparison:
+The artifact index stores relative path, kind/media type, and SHA-256. Screenshots, logs, traces, and videos are not session JSON blobs.
 
-- `npm test` currently passes 94 tests across IR, IPC, generator, persistence, recorder, API runner, runner, cancellation, stress, and desktop migration-shell component suites.
-- `npm run build:packages` currently passes.
-- `npm run build:sidecar` and `npm run build:desktop` currently pass; the browser-safe Vite shell no longer imports Node-only APIs.
-- Root `npm run typecheck`, `npm run lint`, and `npm run format:check` currently pass with `reference/`, `docs/`, and generated output excluded from the production projects.
-- A package-level test or generated-code check remains component evidence; it is not native runtime acceptance.
-- `AutomatePlus.sln` and the six .NET 8 host projects now exist, but the current machine only has SDK 5.0.406; `dotnet build --no-restore` is `Blocked` with `NETSDK1045`, so `dotnet test` cannot provide meaningful native test evidence.
-- The browser migration shell uses blocked facades for host-only process/ADB/k6 execution. The native `ProcessRunner` and k6 runner now use real child-process boundaries, but they are not runtime acceptance evidence until local runtimes and fixtures are verified.
-- `npm run verify:k6` passed against a loopback HTTP fixture using the installed k6 1.3.0 binary; this validates the local k6 process and summary path, not production capacity planning.
+## 12. Security and offline distribution
 
-## 15. Migration from the current scaffold
+The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. They never download dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present; otherwise it reports native blockers and opens the browser-safe migration shell. The shell keeps Android/device capabilities Blocked. It returns exit code 2 only when the shell itself cannot start, and accepts `--browser` to force migration mode.
 
-1. Preserve `reference/`, `docs/`, and unrelated local files.
-2. Introduce the .NET solution and sidecar protocol contracts without copying reference-project code.
-3. Move orchestration, storage, process execution, and security out of browser-only `desktopBridge` code.
-4. Reuse or port IR, selector, recorder, and generator logic behind the sidecar contract.
-5. Remove demo credentials, external demo URLs, fake devices, simulated metrics, and simulated process results.
-6. Add explicit root/sidecar project boundaries so reference sources are excluded from production typecheck/build.
-7. Verify each adapter using fresh generated-code and runtime evidence before marking it Ready.
+Tauri capabilities are least privilege. CSP permits only the local renderer and loopback development connection. Secrets are references, redacted in logs and errors, and never placed in generated source as plaintext.
 
-## 16. Design invariants
+## 13. UI and accessibility
 
-```text
-Recorder ≠ Generator
-Generator ≠ Runner
-Runner ≠ UI
-UI ≠ Database
-Framework adapter ≠ Domain model
-ADB ≠ Appium
-scrcpy ≠ Recorder semantics
-IR ≠ Generated source
-Functional loop ≠ API RPS
-Prototype test pass ≠ runtime acceptance
+The farm workspace is responsive at 390, 600, 768, 840, 1024, 1280, and 1440 px. It uses an adaptive device grid, 48px targets, focus-visible styling, semantic headings/list/status regions, keyboard reachability, reduced-motion-safe transitions, and bounded scroll areas for logs/timelines. Only the active device can receive a full mirror; other devices expose status/thumbnail evidence when a verified runtime provides it.
 
-## 17. Sprint 2 offline Android device farm
+Every button has a real action or an explanatory disabled state. Browser mode has no fake ShopApp, device, battery, clock, progress, or run result. Empty and Blocked states explain the missing user input or runtime prerequisite.
 
-### 17.1 Ownership and boundaries
+## 14. Verification and evidence status
 
-The farm is a local, single-host capability. WinUI calls application ports; the application owns device selection, scheduling, leases, preflight, cancellation, aggregation, and persistence. Infrastructure owns ADB/Appium/scrcpy process boundaries, runtime-pack resolution, port allocation, artifact files, and SQLite. The TypeScript sidecar continues to own IR validation, selector ranking, and code generation. No cloud coordinator, farm sidecar, or second mutable IR is introduced.
-
-The WinUI composition root wires the real local ADB registry and SQLite workspace when they are available. Farm scheduling and recording coordinators are injected only when a verified runner/sidecar runtime is present; otherwise the UI exposes a blocked state and never creates a simulated device, run, or evidence result.
-
-The canonical `AutomationSession` and `ActionIR` do not contain live ADB serials or farm scheduling state. Existing single-device `targetConfig.deviceId` is resolved through a compatibility path. New farm runs use stable local device profile IDs and retain the current serial only in run evidence.
-
-### 17.2 Public contracts
-
-The shared contracts use these values:
-
-```text
-DeviceExecutionStrategy = single | all-devices | split-iterations
-FarmFailurePolicy = continue-other-devices | fail-fast
-FarmRunStatus = queued | running | passed | failed | blocked | cancelled
-CompletionState = complete | partial
-ObservationStatus = MATCHED | FALLBACK_USED | SEMANTIC_SELECTOR_MISSING
-                    | DEVICE_VARIANT_MISMATCH | NEEDS_REVIEW | BLOCKED | FAILED
-```
-
-`FarmRunSpec` contains `sessionId`, `deviceGroupId` or explicit stable `deviceIds`, strategy, `iterationsPerDevice` for `all-devices` or `totalIterations` for `split-iterations`, `maxParallelDevices`, delay, failure policy, framework, and language. Validation rejects both missing and conflicting iteration fields.
-
-`DeviceProfile` contains stable ID, current `adbSerial`, manufacturer, model, Android version/API level, emulator flag, resolution, density, orientation, transport, authorization, health, and `lastSeen`. `DeviceLease` contains lease ID/token, owner, run/recording ID, stable device ID, serial snapshot, state, and timestamps. `DeviceRunContext` contains the leased serial and runtime ports; it cannot be constructed without a lease.
-
-`FarmRunReport` contains aggregate status/completion plus `DeviceRunReport` records. Each device report contains preflight checks, iterations, observations, evidence references, and cleanup state. A report is `Passed` only when all planned work passes. An execution error produces `Failed`; no started work due to missing prerequisites produces `Blocked`; user cancellation produces `Cancelled`; mixed terminal results set `completion=partial`.
-
-### 17.3 Scheduler and lease lifecycle
-
-```text
-discover
-  → snapshot selected group
-  → reserve profile
-  → acquire serial lease
-  → preflight device/app/runtime
-  → acquire required ports
-  → create local Appium session
-  → execute iterations
-  → persist step/artifact evidence
-  → terminate session/processes
-  → release ports
-  → release serial lease
-```
-
-One worker owns one lease and one Appium session. The worker never calls unbound ADB. Lease release and port release are idempotent and execute on success, failure, cancellation, timeout, disconnect, and host shutdown. Persisted stale leases are recovered on startup. `continue-other-devices` allows independent workers to proceed; `fail-fast` stops unclaimed work but does not skip cleanup.
-
-The port manager uses a configured offline range and an atomic in-process reservation plus bind probe. The single loopback Appium server has one server port; each device session receives a unique `systemPort` and `mjpegServerPort`, with `chromedriverPort` only when a webview capability requires it. Generated source receives values through `DeviceRunContext`, never a fixed port.
-
-### 17.4 Recording
-
-Sprint 2 implements `RecordingPlan(mode=primary-followers, primaryDeviceId, followerDeviceIds)`. The primary recorder owns the canonical action stream and full mirror/input path. For each primary action, followers capture a hierarchy observation and resolve the semantic locator independently. Follower observations are written outside `ActionIR` and cannot silently promote a coordinate to a semantic match. Independent synchronized timelines are a later scope.
-
-### 17.5 Persistence and artifacts
-
-SQLite migrations add:
-
-```text
-device_profiles
-device_groups (with versioned member ID JSON)
-device_leases
-farm_runs
-device_runs
-device_iterations
-device_observations
-port_leases
-artifact_index
-```
-
-Large evidence is stored below the canonical workspace path:
-
-```text
-runs/<farmRunId>/devices/<deviceId>/iterations/<iterationId>/
-```
-
-The artifact index stores relative path, kind, and SHA-256. Session JSON never embeds screenshots, videos, or unbounded logs.
-
-### 17.6 Generation and capability metadata
-
-`CapabilityManifest` adds supported device strategies, parallel-session model, runtime inputs, and physical-device/project prerequisites. Appium generators create one project per framework/language and read a required runtime context. Missing context is a capability/runtime error. Appium, Espresso, and Maestro adapters must declare their actual farm strategy support; Robolectric remains JVM-only. Existing Web/API capabilities are unchanged.
-
-### 17.7 UX and acceptance
-
-The WinUI farm page exposes discovery, group selection, primary/follower recording, replay strategy, iteration settings, per-device progress, artifacts, failure reasons, and cancellation state. Full mirror is limited to the active device; the farm grid uses bounded thumbnails/status. Every unavailable prerequisite has a visible `Blocked` explanation. Interactive targets are at least 48×48, keyboard reachable, screen-reader labeled, high-contrast compatible, and reduced-motion safe. Long timelines and logs use bounded/virtualized presentation.
-
-The browser renderer remains a truthful migration shell. Empty device lists and host-only errors are blocked/empty states, never simulated device data. Component/fake tests are not native evidence. Sprint 2 runtime acceptance requires two authorized physical devices, a real target package/activity, non-empty checksum-verified local packs, generated-project gates, and fresh per-device artifacts.
-```
+| Gate | Command | Current rule |
+|---|---|---|
+| TypeScript | npm ci --offline, lint, format, typecheck, test | Required and runnable locally |
+| Packages/UI | build:packages, build:sidecar, build:desktop | Required before release |
+| Smoke/docs | verify:sidecar, verify:k6, verify:docs, verify:authenticity | Component evidence only |
+| Rust source | cargo fmt --check | Must pass independently |
+| Rust build/test | cargo clippy --offline, cargo test --offline | Blocked when crates are not cached |
+| Tauri build | npm run native:build | Requires local Tauri CLI/packs |
+| Physical Android | two authorized devices, target app, verified packs | Blocked until present |
+
+Fixtures may exercise parsers, selectors, IPC, lease logic, and failure transitions. They cannot promote native or physical acceptance to Verified.
+
+## 15. Traceability
+
+| Requirement | Contract/ADR | Module | Test/evidence | Status |
+|---|---|---|---|---|
+| Offline Tauri launch | ADR-001, launcher contract | src-tauri, Run-AutomatePlus.bat | preflight/launcher smoke | Implemented; pack/CLI blocked |
+| Real discovery and stable IDs | FR-14, ADR-003 | src-tauri/src/adb.rs, contracts | ADB parser tests; device evidence | Implemented; physical evidence blocked |
+| Farm strategies and leases | FR-15, ADR-004 | device-farm, runner core, Rust ports | scheduler/lease tests | Contract/component; Appium executor blocked |
+| Primary/follower recording | FR-16 | recorder contracts, native dispatch | observation tests | Contract/component; runtime blocked |
+| Runtime-context generation | FR-17 | packages/generators | no-fixed-port tests | Implemented |
+| Truthful UI | NFR-05/NFR-16 | DeviceFarmView, bridge/store | authenticity/build/viewport evidence | Implemented in shell |
+| Persistence/evidence | FR-18 | Rust migration/persistence | SQLite gate | Source implemented; crate cache blocked |
+
+## 16. Legacy boundary
+
+The .NET/WinUI source and documents may be consulted for historical migration context, but no active command, launcher, package, or release acceptance depends on them. Reintroducing another native host requires an approved design change and fresh gates.

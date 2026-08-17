@@ -3,6 +3,7 @@ export * from './recorder.interface.js';
 export * from './runner.interface.js';
 export * from './errors.js';
 export * from './protocol.js';
+export * from './native.interface.js';
 export * from './runtime-id.js';
 export * from './device.interface.js';
 export * from './device-farm.interface.js';

@@ -1,7 +1,7 @@
-# AutomatePlus (v2) 🚀
+# AutomatePlus (Sprint 2) 🚀
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-98%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-100%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
@@ -15,9 +15,9 @@ The preview is captured from the real browser migration shell with an explicitly
 
 ## Evidence and acceptance boundaries
 
-The current Sprint 2 component evidence includes 94 passing TypeScript tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, sidecar capability smoke, loopback k6 smoke, an authenticity scan, and responsive smoke at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900` without horizontal overflow.
+The current Sprint 2 component evidence includes 100 passing TypeScript tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, sidecar capability smoke, loopback k6 smoke, and an authenticity scan. Responsive review targets `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900` without horizontal overflow.
 
-Native WinUI/.NET and physical Web/Android recorder acceptance remain explicitly `Blocked` until the installed .NET 8 SDK, verified runtime packs, and a user-selected real target are available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
+Native Tauri/Rust and physical Android acceptance remain explicitly `Blocked` until the offline Cargo/Tauri toolchain, verified runtime packs, WebView2, a real target app, and the required authorized devices are available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
 ### Sprint 2 Android device farm
 
@@ -34,7 +34,7 @@ Farm runtime acceptance requires at least two authorized physical devices, a rea
 
 ## 📌 Project Overview
 
-AutomatePlus empowers QA engineers, developers, and automation specialists to visually record, inspect, parameterize, and run tests without vendor lock-in. Instead of proprietary binary scripts, every recorded interaction translates into canonical, versioned JSON Intermediate Representation (`SessionIR` & `ActionIR`), which projects into **27 capability-checked framework/language combinations**. The production target is WinUI 3 + .NET 8 with a versioned TypeScript sidecar; the React/Vite app remains a browser-safe migration shell.
+AutomatePlus empowers QA engineers, developers, and automation specialists to visually record, inspect, parameterize, and run tests without vendor lock-in. Instead of proprietary binary scripts, every recorded interaction translates into canonical, versioned JSON Intermediate Representation (`SessionIR` & `ActionIR`), which projects into **27 capability-checked framework/language combinations**. The production target is Tauri 2 + Rust with a versioned TypeScript sidecar and React renderer; ordinary browser mode remains a safe migration shell.
 
 ### Core Philosophy
 1. **Low-Code Visual Recording**: Click-and-record interactions through the native headed browser and ADB device bridge.
@@ -49,10 +49,11 @@ AutomatePlus empowers QA engineers, developers, and automation specialists to vi
 
 | Layer | Technologies |
 |---|---|
-| **Production Desktop GUI** | WinUI 3, .NET 8, MVVM |
-| **Migration shell** | React 18, Vite, TypeScript, Tailwind CSS, Zustand, Lucide Icons |
+| **Production Desktop GUI** | Tauri 2, Rust, WebView2, React 18 |
+| **Native orchestration** | Rust ADB/Appium/scrcpy, SQLite, leases, ports, cancellation |
+| **Renderer and sidecar** | TypeScript, Vite, Tailwind CSS, Zustand, versioned IPC |
 | **Monorepo Architecture** | npm workspaces, TypeScript Project References |
-| **Testing & Verification** | Vitest, Node.js v20+; .NET 8 solution and tests |
+| **Testing & Verification** | Vitest, Node.js, cargo fmt/check/test, Tauri offline preflight |
 | **IR & Schema Validation** | Zod (v3.23) Schema Contracts |
 | **Selector Engine** | Multi-attribute scoring algorithm (Test ID, Role, Text, CSS, XPath) |
 | **Stress & Looping Engine** | k6 runner (constant-arrival-rate), interactive stepping looper |
@@ -77,11 +78,12 @@ AutomatePlus/
 │   ├── runner-core/             # Interactive in-app player & process runner
 │   └── stress-engine/           # Functional looper & k6 RPS load generator
 ├── docs/                        # Architecture & reference documentation
-├── src/                         # WinUI/.NET 8 host layers
-├── tests/                       # .NET host tests
+├── apps/desktop/src-tauri/      # Tauri 2 + Rust native host
+├── src/                         # Legacy .NET source; not a release dependency
+├── tests/                       # Legacy .NET tests; not a release gate
 ├── runtime-packs/               # Offline runtime manifest; no binaries committed
 ├── scripts/                     # Quality and loopback verification fixtures
-├── AutomatePlus.sln             # .NET 8 host solution
+├── Run-AutomatePlus.bat         # Root one-click offline launcher
 ├── AGENTS.md                    # Agent behavior & verification rules
 ├── DESIGN.md                    # System architecture specification
 ├── PRD.md                       # Product requirement document
@@ -146,11 +148,13 @@ npm ci --offline
 ## 🚀 Running & Building
 
 ### 1. Run Desktop Application (Development Mode)
-Start the browser-safe migration shell (native recorder/run acceptance remains host-only):
+Start the browser-safe migration shell. It is safe for editing and API fixtures; native Android/device actions remain Blocked without Tauri:
 ```bash
 npm run dev:desktop
 ```
-Open your browser at `http://localhost:5173` to interact with the GUI.
+Open your browser at `http://127.0.0.1:5173` to interact with the GUI.
+
+For the official one-click offline desktop path, double-click `Run-AutomatePlus.bat` in the repository root. It starts a published `AutomatePlus.exe` when present; otherwise it reports the native preflight and opens the browser-safe shell locally so the UI remains usable. Android farm/recording stay `Blocked` until the native host is actually available. The launcher never downloads a dependency. Pass `--browser` to force the migration shell.
 
 ### 2. Build Monorepo Packages
 Compile all internal TypeScript packages:
@@ -160,7 +164,7 @@ npm run build:sidecar
 ```
 
 ### 3. Build Desktop Application Bundle
-Compile and bundle the production desktop app:
+Compile the renderer with npm run build:desktop. Build the offline native package with npm run native:build after the local Tauri CLI, Cargo cache, WebView2, and verified packs are present:
 ```bash
 npm run build:desktop
 ```
@@ -218,7 +222,8 @@ flowchart LR
 
 - **No Plaintext Secrets**: Passwords, API tokens, and private keys use `SecretRef` objects (`${secret.KEY}`) that resolve securely at runtime.
 - **Process Isolation**: Command execution strictly uses allowlisted executables and argument arrays (preventing shell injection).
-- **Offline First**: The production host persists sessions, selector rankings, code generation, and logs in local SQLite/workspace storage; the browser migration shell uses a browser-safe local storage bridge and remains non-production evidence.
+- **Offline First**: The native Tauri/Rust host owns SQLite, device leases, farm evidence, process state, and cleanup; the browser migration shell uses browser-safe local storage and remains non-production native evidence.
+- **Truthful acceptance**: Component gates may pass locally, while native Tauri and physical Android remain Blocked until Cargo/Tauri, verified packs, a target app, and the required real devices are available.
 
 ---
 

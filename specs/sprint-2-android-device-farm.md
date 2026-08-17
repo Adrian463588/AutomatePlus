@@ -1,7 +1,10 @@
 # Sprint 2 Android Device Farm Contract
 
-**Status:** Proposed implementation contract
+**Status:** Active implementation contract; native/physical acceptance remains Blocked until prerequisites exist
 **Scope:** Offline Windows host, real Android devices, Appium/UiAutomator2 primary path
+**Desktop host:** Tauri 2 + Rust; React/TypeScript remains the renderer and sidecar boundary
+
+The previous .NET/WinUI host is legacy source only. This spec is authoritative for the active Tauri/Rust implementation; reference/Sprint2 and docs/Sprint2 remain read-only.
 
 ## Goal
 

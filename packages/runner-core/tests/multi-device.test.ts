@@ -118,7 +118,7 @@ describe('Multi-Device Android Phone Farm Testing', () => {
 
   describe('MultiDeviceRunner', () => {
     it('executes all-devices replay strategy across device farm', async () => {
-      const runner = new MultiDeviceRunner();
+      const runner = new MultiDeviceRunner(undefined, undefined, () => ({ execute: async () => undefined }));
       const logs: string[] = [];
 
       const spec: FarmRunSpec = {
@@ -150,7 +150,7 @@ describe('Multi-Device Android Phone Farm Testing', () => {
     });
 
     it('executes split-iterations strategy distributed across device pool', async () => {
-      const runner = new MultiDeviceRunner();
+      const runner = new MultiDeviceRunner(undefined, undefined, () => ({ execute: async () => undefined }));
       const logs: string[] = [];
 
       const spec: FarmRunSpec = {
@@ -178,6 +178,26 @@ describe('Multi-Device Android Phone Farm Testing', () => {
       // 6 total split across 2 devices = 3 each
       expect(summary.deviceRuns[0].completedIterations).toBe(3);
       expect(summary.deviceRuns[1].completedIterations).toBe(3);
+    });
+
+    it('blocks when no device-bound executor is configured', async () => {
+      const runner = new MultiDeviceRunner();
+      const spec: FarmRunSpec = {
+        sessionId: sampleAndroidSession.id,
+        strategy: 'single',
+        targetDeviceIds: ['phone-s24'],
+        iterations: 1,
+        iterationsPerDevice: 1,
+        maxParallelDevices: 1,
+        failurePolicy: 'continue-other-devices',
+      };
+
+      const summary = await runner.runFarm(sampleAndroidSession, spec, sampleDevices, () => undefined);
+
+      expect(summary.status).toBe('blocked');
+      expect(summary.totalPassedIterations).toBe(0);
+      expect(summary.totalCompletedIterations).toBe(0);
+      expect(summary.deviceRuns[0]?.status).toBe('blocked');
     });
   });
 });

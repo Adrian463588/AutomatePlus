@@ -10,59 +10,66 @@ export const DeviceFarmPanel: React.FC = () => {
     devices,
     deviceDiscoveryMessage,
     activeDevice,
+    selectedDeviceIds,
+    primaryDeviceId,
+    nativeHostAvailable,
+    nativeHostMessage,
     discoverDevices,
-    setActiveDevice,
-    setFeedback,
+    toggleDeviceSelection,
+    setPrimaryDevice,
+    runFarmTest,
   } = useAppStore();
   const [strategy, setStrategy] = useState<FarmStrategy>('all-devices');
   const [iterations, setIterations] = useState('2');
   const [maxParallelDevices, setMaxParallelDevices] = useState('2');
-  const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  const [primaryId, setPrimaryId] = useState('');
 
   const eligibleDevices = useMemo(
     () => devices.filter((device) => device.status === 'device'),
     [devices],
   );
-  const resolvedPrimaryId = selectedIds.includes(primaryId)
-    ? primaryId
-    : selectedIds.includes(activeDevice ?? '')
+  const resolvedPrimaryId = selectedDeviceIds.includes(primaryDeviceId ?? '')
+    ? primaryDeviceId ?? ''
+    : selectedDeviceIds.includes(activeDevice ?? '')
       ? activeDevice ?? ''
-      : selectedIds[0] || '';
-  const followers = selectedIds.filter((id) => id !== resolvedPrimaryId);
+      : selectedDeviceIds[0] || '';
+  const followers = selectedDeviceIds.filter((id) => id !== resolvedPrimaryId);
   const isAndroid = activeSession?.platform === 'android';
   const numericIterations = Number(iterations);
   const numericParallel = Number(maxParallelDevices);
   const minimumDevices = strategy === 'single' ? 1 : 2;
   const farmReady = isAndroid
+    && nativeHostAvailable
     && activeSession.ir.steps.length > 0
-    && selectedIds.length >= minimumDevices
+    && selectedDeviceIds.length >= minimumDevices
     && Number.isInteger(numericIterations)
     && numericIterations > 0
     && Number.isInteger(numericParallel)
     && numericParallel > 0;
 
-  const toggleDevice = (id: string) => {
-    setSelectedIds((current) => {
-      const next = current.includes(id) ? current.filter((value) => value !== id) : [...current, id];
-      if (primaryId && !next.includes(primaryId)) setPrimaryId(next[0] ?? '');
-      return next;
-    });
-  };
-
   const runFarm = () => {
     if (!farmReady) return;
-    setFeedback({
-      kind: 'blocked',
-      message: 'Android farm execution is available only through the native WinUI host; the browser shell cannot start ADB/Appium workers.',
+    const resolvedDeviceIds = strategy === 'single' ? [resolvedPrimaryId] : selectedDeviceIds;
+    if (!resolvedPrimaryId || resolvedDeviceIds.length === 0) return;
+    void runFarmTest({
+      schemaVersion: 1,
+      sessionId: activeSession.id,
+      strategy,
+      deviceIds: resolvedDeviceIds,
+      iterationsPerDevice: strategy === 'all-devices' ? numericIterations : undefined,
+      totalIterations: strategy === 'split-iterations' ? numericIterations : undefined,
+      maxParallelDevices: numericParallel,
+      iterationDelayMs: 0,
+      failurePolicy: 'continue-other-devices',
     });
   };
 
   const reason = !isAndroid
     ? 'Select an Android session to configure a device farm.'
     : devices.length === 0
-      ? 'No device is available in this browser migration shell. Native host discovery is required.'
-      : selectedIds.length < minimumDevices
+      ? nativeHostMessage
+      : !nativeHostAvailable
+        ? nativeHostMessage
+      : selectedDeviceIds.length < minimumDevices
         ? `Select at least ${minimumDevices} authorized device${minimumDevices === 1 ? '' : 's'} for this replay strategy.`
         : activeSession.ir.steps.length === 0
           ? 'Add at least one user-created action before replay.'
@@ -86,7 +93,7 @@ export const DeviceFarmPanel: React.FC = () => {
       <div className="farm-controls mt-4">
         <label className="farm-control">
           <span>Replay strategy</span>
-          <select value={strategy} onChange={(event) => setStrategy(event.target.value as FarmStrategy)} disabled={!isAndroid}>
+          <select className="min-h-12" value={strategy} onChange={(event) => setStrategy(event.target.value as FarmStrategy)} disabled={!isAndroid}>
             <option value="single">Single device</option>
             <option value="all-devices">All selected devices</option>
             <option value="split-iterations">Split iterations</option>
@@ -94,11 +101,11 @@ export const DeviceFarmPanel: React.FC = () => {
         </label>
         <label className="farm-control">
           <span>{strategy === 'split-iterations' ? 'Total iterations' : 'Iterations per device'}</span>
-          <input type="number" min="1" step="1" value={iterations} onChange={(event) => setIterations(event.target.value)} disabled={!isAndroid} inputMode="numeric" />
+          <input className="min-h-12" type="number" min="1" step="1" value={iterations} onChange={(event) => setIterations(event.target.value)} disabled={!isAndroid} inputMode="numeric" />
         </label>
         <label className="farm-control">
           <span>Max parallel devices</span>
-          <input type="number" min="1" step="1" value={maxParallelDevices} onChange={(event) => setMaxParallelDevices(event.target.value)} disabled={!isAndroid} inputMode="numeric" />
+          <input className="min-h-12" type="number" min="1" step="1" value={maxParallelDevices} onChange={(event) => setMaxParallelDevices(event.target.value)} disabled={!isAndroid} inputMode="numeric" />
         </label>
       </div>
 
@@ -107,7 +114,7 @@ export const DeviceFarmPanel: React.FC = () => {
           <Radio className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
           <span>{deviceDiscoveryMessage}</span>
         </div>
-        <button type="button" className="button-small bg-slate-800 hover:bg-slate-700" onClick={() => void discoverDevices()}>
+        <button type="button" className="button-small min-h-12 bg-slate-800 hover:bg-slate-700" onClick={() => void discoverDevices()}>
           <Smartphone className="h-3.5 w-3.5" aria-hidden="true" /> Refresh devices
         </button>
       </div>
@@ -116,14 +123,14 @@ export const DeviceFarmPanel: React.FC = () => {
         {devices.length === 0 ? (
           <div className="farm-empty-state">
             <AlertTriangle className="h-4 w-4 text-amber-400" aria-hidden="true" />
-            <span>No Android devices are available in the browser shell. Native WinUI discovery remains required.</span>
+            <span>No Android devices were reported by the native host. Browser mode does not fabricate devices.</span>
           </div>
         ) : devices.map((device) => {
-          const selected = selectedIds.includes(device.id);
+          const selected = selectedDeviceIds.includes(device.id);
           const eligible = device.status === 'device';
           return (
             <label key={device.id} className={`farm-device-card ${selected ? 'farm-device-card-selected' : ''} ${!eligible ? 'farm-device-card-blocked' : ''}`}>
-              <input type="checkbox" checked={selected} disabled={!eligible || !isAndroid} onChange={() => toggleDevice(device.id)} />
+              <input type="checkbox" checked={selected} disabled={!eligible || !isAndroid || !nativeHostAvailable} onChange={() => toggleDeviceSelection(device.id)} />
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-2 text-xs font-semibold text-slate-100"><Smartphone className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />{device.model || device.id}</span>
                 <span className="mt-1 block truncate font-mono text-[10px] text-slate-500">{device.id}</span>
@@ -138,15 +145,15 @@ export const DeviceFarmPanel: React.FC = () => {
       <div className="farm-recording-row mt-3">
         <label className="farm-control">
           <span>Recording mode</span>
-          <select value="primary-followers" disabled aria-label="Recording mode">
+          <select className="min-h-12" value="primary-followers" disabled aria-label="Recording mode">
             <option value="primary-followers">Primary + followers</option>
           </select>
         </label>
         <label className="farm-control">
           <span>Primary device</span>
-          <select value={resolvedPrimaryId} onChange={(event) => { setPrimaryId(event.target.value); setActiveDevice(event.target.value); }} disabled={selectedIds.length === 0 || !isAndroid}>
+          <select className="min-h-12" value={resolvedPrimaryId} onChange={(event) => setPrimaryDevice(event.target.value)} disabled={selectedDeviceIds.length === 0 || !isAndroid || !nativeHostAvailable}>
             <option value="">Select primary</option>
-            {selectedIds.map((id) => <option key={id} value={id}>{eligibleDevices.find((device) => device.id === id)?.model || id}</option>)}
+            {selectedDeviceIds.map((id) => <option key={id} value={id}>{eligibleDevices.find((device) => device.id === id)?.model || id}</option>)}
           </select>
         </label>
         <div className="farm-observation-summary" role="status" aria-live="polite">
@@ -156,7 +163,7 @@ export const DeviceFarmPanel: React.FC = () => {
       </div>
 
       <div className="mt-4 flex flex-wrap items-center gap-3">
-        <button type="button" className="button-primary" disabled={!farmReady} onClick={runFarm} title={reason}>
+        <button type="button" className="button-primary min-h-12" disabled={!farmReady} onClick={runFarm} title={reason}>
           <Circle className="h-3.5 w-3.5" aria-hidden="true" /> Replay selected devices
         </button>
         <span className="text-xs leading-5 text-amber-300" role="status" aria-live="polite">{reason}</span>
