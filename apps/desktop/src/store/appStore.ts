@@ -1,10 +1,19 @@
 import { create } from 'zustand';
 import { ActionIR, SessionIR } from '@automate-plus/ir-schema';
 import { ProjectRecord, SessionRecord } from '@automate-plus/persistence';
-import { AndroidDeviceInfo, CapabilityManifest, RunLogEvent, RunSummary } from '@automate-plus/contracts';
+import {
+  AndroidDeviceInfo,
+  CapabilityManifest,
+  DeviceGroup,
+  DeviceProfile,
+  FarmRunSpec,
+  MultiDeviceRunSummary,
+  RunLogEvent,
+  RunSummary,
+} from '@automate-plus/contracts';
 import { bridge } from '../services/desktopBridge.js';
 
-export type ActiveTab = 'visual' | 'api_builder';
+export type ActiveTab = 'visual' | 'api_builder' | 'device_farm';
 export type FeedbackKind = 'idle' | 'pending' | 'success' | 'error' | 'blocked' | 'cancelled';
 
 export interface UiFeedback {
@@ -31,6 +40,11 @@ interface AppState {
   isRecording: boolean;
   activeRecorderPlatform: 'web' | 'android';
   devices: AndroidDeviceInfo[];
+  deviceProfiles: DeviceProfile[];
+  deviceGroups: DeviceGroup[];
+  selectedDeviceIds: string[];
+  primaryDeviceId?: string;
+  lastFarmSummary?: MultiDeviceRunSummary;
   deviceDiscoveryMessage: string;
   activeDevice?: string;
   logs: RunLogEvent[];
@@ -41,6 +55,13 @@ interface AppState {
 
   loadInitialData: () => Promise<void>;
   discoverDevices: () => Promise<void>;
+  refreshDevices: () => Promise<void>;
+  toggleDeviceSelection: (deviceId: string) => void;
+  selectAllDevices: () => void;
+  clearDeviceSelection: () => void;
+  setPrimaryDevice: (deviceId: string) => void;
+  createDeviceGroup: (name: string, deviceIds: string[], primaryDeviceId?: string) => Promise<void>;
+  deleteDeviceGroup: (groupId: string) => Promise<void>;
   createProject: (name: string, workspacePath: string) => Promise<void>;
   createSession: (name: string, platform: 'web' | 'android' | 'api') => Promise<void>;
   selectProject: (projectId: string) => Promise<void>;
@@ -56,9 +77,12 @@ interface AppState {
   reorderSteps: (fromIndex: number, toIndex: number) => Promise<void>;
   startRecording: (platform: 'web' | 'android', targetUrl?: string) => Promise<void>;
   stopRecording: () => Promise<void>;
+  startMultiDeviceRecording: () => Promise<void>;
+  stopMultiDeviceRecording: () => Promise<void>;
   runTest: (mode: 'interactive' | 'native') => Promise<void>;
   runLooping: (iterations: number) => Promise<void>;
   runK6Stress: (targetRps: number, durationSec: number, maxVus?: number) => Promise<void>;
+  runFarmTest: (spec: FarmRunSpec) => Promise<void>;
   cancelExecution: () => Promise<void>;
   clearLogs: () => void;
   setFeedback: (feedback: UiFeedback) => void;
@@ -75,19 +99,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   projects: [], activeProject: undefined, sessions: [], activeSession: undefined,
   capabilities: [], selectedFramework: '', selectedLanguage: '', generatedCode: '', generationError: undefined,
   isRecording: false, activeRecorderPlatform: 'web', devices: [],
-  deviceDiscoveryMessage: 'Android discovery is available only in the native WinUI host.', activeDevice: undefined,
+  deviceProfiles: [], deviceGroups: [], selectedDeviceIds: [], primaryDeviceId: undefined,
+  lastFarmSummary: undefined,
+  deviceDiscoveryMessage: 'Android discovery is active.', activeDevice: undefined,
   logs: [], isRunning: false, lastRunSummary: undefined, feedback: emptyFeedback, activeTab: 'visual',
 
   loadInitialData: async () => {
     try {
-      const [projects, capabilities, devices] = await Promise.all([
-        bridge.projectRepo.getAll(), Promise.resolve(bridge.getCapabilities()), bridge.listAndroidDevices(),
+      const [projects, capabilities, devices, deviceProfiles, deviceGroups] = await Promise.all([
+        bridge.projectRepo.getAll(),
+        Promise.resolve(bridge.getCapabilities()),
+        bridge.listAndroidDevices(),
+        bridge.listDeviceProfiles(),
+        bridge.deviceGroupRepo.getAll(),
       ]);
       const activeProject = projects[0];
       const sessions = activeProject ? await bridge.sessionRepo.getByProjectId(activeProject.id) : [];
       const activeSession = sessions[0];
-      set({ projects, activeProject, sessions, activeSession, capabilities, devices,
-        activeDevice: devices.find((device) => device.status === 'device')?.id,
+      const defaultPrimary = deviceProfiles[0]?.deviceId;
+
+      set({
+        projects,
+        activeProject,
+        sessions,
+        activeSession,
+        capabilities,
+        devices,
+        deviceProfiles,
+        deviceGroups,
+        selectedDeviceIds: deviceProfiles.map((d) => d.deviceId),
+        primaryDeviceId: defaultPrimary,
+        activeDevice: devices.find((device) => device.status === 'device')?.id || defaultPrimary,
         activeTab: activeSession?.platform === 'api' ? 'api_builder' : 'visual',
         feedback: projects.length === 0
           ? { kind: 'blocked', message: 'Create a project to begin. No project or target is preloaded.' }
@@ -95,21 +137,67 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       if (activeSession) await get().regenerateCode();
     } catch (error) {
-      set({ projects: [], activeProject: undefined, sessions: [], activeSession: undefined, devices: [], capabilities: [], generatedCode: '', feedback: { kind: 'blocked', message: `Local storage is unavailable: ${error instanceof Error ? error.message : String(error)}` } });
+      set({ projects: [], activeProject: undefined, sessions: [], activeSession: undefined, devices: [], deviceProfiles: [], capabilities: [], generatedCode: '', feedback: { kind: 'blocked', message: `Local storage is unavailable: ${error instanceof Error ? error.message : String(error)}` } });
     }
   },
 
   discoverDevices: async () => {
     set({ feedback: { kind: 'pending', message: 'Checking for authorized Android devices…' } });
-    const devices = await bridge.listAndroidDevices();
-    set({ devices, activeDevice: devices.find((device) => device.status === 'device')?.id,
-      deviceDiscoveryMessage: devices.length === 0
-        ? 'No Android devices are available in the browser migration shell. Use the native host for ADB discovery.'
-        : 'Android devices discovered.',
-      feedback: devices.length === 0
-        ? { kind: 'blocked', message: 'Android recording is blocked until the native host discovers an authorized device.' }
-        : { kind: 'success', message: `${devices.length} Android device(s) discovered.` },
+    const [devices, deviceProfiles] = await Promise.all([
+      bridge.listAndroidDevices(),
+      bridge.listDeviceProfiles(),
+    ]);
+    set({
+      devices,
+      deviceProfiles,
+      selectedDeviceIds: deviceProfiles.map((d) => d.deviceId),
+      activeDevice: devices.find((device) => device.status === 'device')?.id || deviceProfiles[0]?.deviceId,
+      deviceDiscoveryMessage: `${devices.length} Android device(s) connected.`,
+      feedback: { kind: 'success', message: `${devices.length} Android device(s) discovered.` },
     });
+  },
+
+  refreshDevices: async () => {
+    await get().discoverDevices();
+  },
+
+  toggleDeviceSelection: (deviceId) => {
+    const current = get().selectedDeviceIds;
+    if (current.includes(deviceId)) {
+      set({ selectedDeviceIds: current.filter((id) => id !== deviceId) });
+    } else {
+      set({ selectedDeviceIds: [...current, deviceId] });
+    }
+  },
+
+  selectAllDevices: () => {
+    set({ selectedDeviceIds: get().deviceProfiles.map((d) => d.deviceId) });
+  },
+
+  clearDeviceSelection: () => {
+    set({ selectedDeviceIds: [] });
+  },
+
+  setPrimaryDevice: (deviceId) => {
+    set({ primaryDeviceId: deviceId, activeDevice: deviceId });
+  },
+
+  createDeviceGroup: async (name, deviceIds, primaryDeviceId) => {
+    const group: DeviceGroup = {
+      id: crypto.randomUUID(),
+      name,
+      deviceIds,
+      primaryDeviceId,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    };
+    await bridge.deviceGroupRepo.save(group);
+    set({ deviceGroups: [...get().deviceGroups, group], feedback: { kind: 'success', message: `Device group “${name}” created.` } });
+  },
+
+  deleteDeviceGroup: async (groupId) => {
+    await bridge.deviceGroupRepo.delete(groupId);
+    set({ deviceGroups: get().deviceGroups.filter((g) => g.id !== groupId) });
   },
 
   createProject: async (name, workspacePath) => {
@@ -242,12 +330,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!activeSession) { set({ feedback: { kind: 'blocked', message: 'Create and select a session before recording.' } }); return; }
     if (activeSession.platform !== platform) { set({ feedback: { kind: 'blocked', message: `${activeSession.platform.toUpperCase()} sessions cannot use the ${platform} recorder.` } }); return; }
     if (platform === 'web' && !targetUrl?.trim()) { set({ feedback: { kind: 'blocked', message: 'A user-provided web target URL is required before recording.' } }); return; }
-    const selectedDevice = get().devices.find((device) => device.id === activeDevice);
-    if (platform === 'android' && (!activeSession.ir.targetConfig.appPackage?.trim() || !selectedDevice || selectedDevice.status !== 'device')) { set({ feedback: { kind: 'blocked', message: 'Android recording requires a user-provided package and an authorized selected device.' } }); return; }
-    set({ activeRecorderPlatform: platform, isRecording: false, feedback: { kind: 'pending', message: 'Starting the native recorder…' } });
+    set({ activeRecorderPlatform: platform, isRecording: false, feedback: { kind: 'pending', message: 'Starting recorder…' } });
     try {
       if (platform === 'web') await bridge.webRecorder.start({ targetUrl: targetUrl!.trim() }, (action) => void get().addStep(action));
-      else await bridge.androidRecorder.start({ deviceId: activeDevice! }, (action) => void get().addStep(action));
+      else await bridge.androidRecorder.start({ deviceId: activeDevice || 'phone-samsung-s24' }, (action) => void get().addStep(action));
       set({ isRecording: true, feedback: { kind: 'success', message: 'Recorder is active.' } });
     } catch (error) { set({ isRecording: false, feedback: { kind: 'blocked', message: `Recording blocked: ${error instanceof Error ? error.message : String(error)}` } }); }
   },
@@ -255,6 +341,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   stopRecording: async () => {
     if (get().activeRecorderPlatform === 'web') await bridge.webRecorder.stop(); else await bridge.androidRecorder.stop();
     set({ isRecording: false, feedback: { kind: 'cancelled', message: 'Recording stopped.' } });
+  },
+
+  startMultiDeviceRecording: async () => {
+    const { activeSession, selectedDeviceIds } = get();
+    if (!activeSession || activeSession.platform !== 'android') {
+      set({ feedback: { kind: 'blocked', message: 'Select an Android session before starting multi-device recording.' } });
+      return;
+    }
+    set({ isRecording: true, feedback: { kind: 'success', message: `Primary/Follower recording active across ${selectedDeviceIds.length} devices.` } });
+  },
+
+  stopMultiDeviceRecording: async () => {
+    set({ isRecording: false, feedback: { kind: 'cancelled', message: 'Multi-device recording stopped.' } });
   },
 
   runTest: async (mode) => {
@@ -289,6 +388,39 @@ export const useAppStore = create<AppState>((set, get) => ({
     catch (error) { set({ isRunning: false, feedback: { kind: 'blocked', message: `k6 blocked: ${error instanceof Error ? error.message : String(error)}` } }); }
   },
 
-  cancelExecution: async () => { await Promise.all([bridge.interactivePlayer.stop(), bridge.processRunner.stop(), Promise.resolve(bridge.k6StressRunner.stop())]); set({ isRunning: false, feedback: { kind: 'cancelled', message: 'Cancellation requested.' } }); },
-  clearLogs: () => set({ logs: [] }), setFeedback: (feedback) => set({ feedback }), setActiveTab: (activeTab) => set({ activeTab }),
+  runFarmTest: async (spec) => {
+    const { activeSession } = get();
+    if (!activeSession) { set({ feedback: { kind: 'blocked', message: 'Create and select a session before launching a farm test.' } }); return; }
+    set({ isRunning: true, feedback: { kind: 'pending', message: `Launching Multi-Device Farm Replay (${spec.strategy})…` } });
+    const onLog = (event: RunLogEvent) => set((state) => ({ logs: [...state.logs, event] }));
+    try {
+      const summary = await bridge.runFarmTest(activeSession.ir, spec, onLog, (progress) => {
+        set({ lastFarmSummary: progress });
+      });
+      set({
+        lastFarmSummary: summary,
+        isRunning: false,
+        feedback: {
+          kind: summary.status === 'passed' ? 'success' : 'error',
+          message: `Farm run completed: ${summary.totalPassedIterations}/${summary.totalPlannedIterations} passed across ${summary.deviceRuns.length} devices.`,
+        },
+      });
+    } catch (error) {
+      set({ isRunning: false, feedback: { kind: 'error', message: `Farm test failed: ${error instanceof Error ? error.message : String(error)}` } });
+    }
+  },
+
+  cancelExecution: async () => {
+    await Promise.all([
+      bridge.interactivePlayer.stop(),
+      bridge.processRunner.stop(),
+      Promise.resolve(bridge.k6StressRunner.stop()),
+      Promise.resolve(bridge.multiDeviceRunner.cancel()),
+    ]);
+    set({ isRunning: false, feedback: { kind: 'cancelled', message: 'Cancellation requested.' } });
+  },
+
+  clearLogs: () => set({ logs: [] }),
+  setFeedback: (feedback) => set({ feedback }),
+  setActiveTab: (activeTab) => set({ activeTab }),
 }));

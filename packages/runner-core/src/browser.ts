@@ -1,5 +1,8 @@
 export * from './interactive-player.js';
 export * from './api-runner.js';
+export * from './device-lease-manager.js';
+export * from './port-lease-manager.js';
+export * from './multi-device-runner.js';
 import { AutomationError, RunLogCallback, RunSummary, RunnerStatus } from '@automate-plus/contracts';
 import type { ProcessRunOptions } from './process-runner.js';
 import type { SessionIR } from '@automate-plus/ir-schema';
