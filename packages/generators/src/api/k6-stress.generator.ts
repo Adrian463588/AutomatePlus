@@ -52,14 +52,15 @@ export class K6StressGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertStatusCode') {
-      return `  check(lastResponse, { 'status code matches': (r) => r.status === ${Number(action.expectedValue) || 200} });`;
+      const expectedStatus = this.requireExpectedNumber(action, 100, 599);
+      return `  check(lastResponse, { 'status code matches': (r) => r.status === ${expectedStatus} });`;
     }
 
     if (action.action === 'sleep') {
       return `  sleep(${(action.timeoutMs ?? 1000) / 1000});`;
     }
 
-    return `  // Action: ${action.action}`;
+    return this.unsupportedAction(action);
   }
 
   public generateFooter(_session: SessionIR, _options?: GeneratorOptions): string {

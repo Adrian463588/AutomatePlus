@@ -84,7 +84,7 @@ export class CypressJsGenerator extends BaseCodeGenerator {
         return `    cy.url().should('include', '${expected}');`;
 
       default:
-        return `    // Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -106,8 +106,9 @@ export class CypressJsGenerator extends BaseCodeGenerator {
       case 'id':
         return `cy.get('#${loc.value}')`;
       case 'css':
-      default:
         return `cy.get('${loc.value}')`;
+      default:
+        return this.unsupportedLocator(loc);
     }
   }
 }

@@ -78,17 +78,14 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
         return `        wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause})).clear();`;
 
       case 'swipe': {
-        const sx = action.swipeVector?.startX ?? 500;
-        const sy = action.swipeVector?.startY ?? 1500;
-        const ex = action.swipeVector?.endX ?? 500;
-        const ey = action.swipeVector?.endY ?? 500;
-        return `        driver.executeScript("mobile: swipeGesture", java.util.Map.of("left", ${Math.min(sx, ex)}, "top", ${Math.min(sy, ey)}, "width", 400, "height", 600, "direction", "up", "percent", 0.75));`;
+        const vector = action.swipeVector;
+        if (!vector) return this.unsupportedAction(action);
+        return `        driver.executeScript("mobile: swipeGesture", java.util.Map.of("startX", ${vector.startX}, "startY", ${vector.startY}, "endX", ${vector.endX}, "endY", ${vector.endY}, "duration", ${vector.durationMs}));`;
       }
 
       case 'drag':
       case 'dragAndDrop': {
-        const targetLoc = action.dragTarget?.locators[0];
-        const targetBy = targetLoc ? this.formatAppiumBy(targetLoc) : `By.xpath("//*")`;
+        const targetBy = this.formatAppiumBy(this.requireDragTarget(action));
         return `        WebElement src = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}));\n        WebElement dst = wait.until(ExpectedConditions.visibilityOfElementLocated(${targetBy}));\n        driver.executeScript("mobile: dragGesture", java.util.Map.of("elementId", ((org.openqa.selenium.remote.RemoteWebElement) src).getId(), "endX", dst.getLocation().getX(), "endY", dst.getLocation().getY()));`;
       }
 
@@ -114,7 +111,7 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
         return `        assertEquals(${expected}, wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause})).getText());`;
 
       default:
-        return `        // Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -141,7 +138,7 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
       case 'xpath':
         return `By.xpath("${loc.value}")`;
       default:
-        return `By.id("${loc.value}")`;
+        return this.unsupportedLocator(loc);
     }
   }
 

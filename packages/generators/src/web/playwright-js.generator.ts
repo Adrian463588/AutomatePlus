@@ -87,7 +87,7 @@ export class PlaywrightJsGenerator extends BaseCodeGenerator {
         return `    await expect(page).toHaveURL(${expected});`;
 
       default:
-        return `    // Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -114,8 +114,9 @@ export class PlaywrightJsGenerator extends BaseCodeGenerator {
         return `page.locator('xpath=${loc.value}')`;
       case 'css':
       case 'id':
-      default:
         return `page.locator('${loc.value}')`;
+      default:
+        return this.unsupportedLocator(loc);
     }
   }
 }

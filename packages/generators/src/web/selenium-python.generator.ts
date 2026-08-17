@@ -101,7 +101,7 @@ export class SeleniumPythonGenerator extends BaseCodeGenerator {
         return `    assert ${expected} in driver.current_url`;
 
       default:
-        return `    # Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -122,8 +122,9 @@ export class SeleniumPythonGenerator extends BaseCodeGenerator {
       case 'text':
         return `By.XPATH, "//*[text()='${loc.value}']"`;
       case 'css':
-      default:
         return `By.CSS_SELECTOR, "${loc.value}"`;
+      default:
+        return this.unsupportedLocator(loc);
     }
   }
 }

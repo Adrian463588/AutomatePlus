@@ -877,12 +877,12 @@ Negative tests cover invalid language pairs, unsupported actions, missing runtim
 
 The current repository baseline is useful only for migration comparison:
 
-- `npm test` currently passes 80 tests across IR, IPC, generator, persistence, recorder, API runner, runner, cancellation, and stress component suites.
+- `npm test` currently passes 85 tests across IR, IPC, generator, persistence, recorder, API runner, runner, cancellation, stress, and desktop migration-shell component suites.
 - `npm run build:packages` currently passes.
 - `npm run build:sidecar` and `npm run build:desktop` currently pass; the browser-safe Vite shell no longer imports Node-only APIs.
 - Root `npm run typecheck`, `npm run lint`, and `npm run format:check` currently pass with `reference/`, `docs/`, and generated output excluded from the production projects.
 - A package-level test or generated-code check remains component evidence; it is not native runtime acceptance.
-- `AutomatePlus.sln` and the six .NET 8 host projects now exist, but the current machine only has SDK 5.0.406; `dotnet build/test --no-restore` therefore remain `Blocked` with `NETSDK1045`.
+- `AutomatePlus.sln` and the six .NET 8 host projects now exist, but the current machine only has SDK 5.0.406; `dotnet build --no-restore` is `Blocked` with `NETSDK1045`, so `dotnet test` cannot provide meaningful native test evidence.
 - The browser migration shell uses blocked facades for host-only process/ADB/k6 execution. The native `ProcessRunner` and k6 runner now use real child-process boundaries, but they are not runtime acceptance evidence until local runtimes and fixtures are verified.
 - `npm run verify:k6` passed against a loopback HTTP fixture using the installed k6 1.3.0 binary; this validates the local k6 process and summary path, not production capacity planning.
 

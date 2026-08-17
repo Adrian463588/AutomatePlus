@@ -88,7 +88,7 @@ export class PlaywrightPythonGenerator extends BaseCodeGenerator {
         return `    expect(page).to_have_url(${expected})`;
 
       default:
-        return `    # Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -112,8 +112,9 @@ export class PlaywrightPythonGenerator extends BaseCodeGenerator {
         return `page.locator("xpath=${loc.value}")`;
       case 'css':
       case 'id':
-      default:
         return `page.locator("${loc.value}")`;
+      default:
+        return this.unsupportedLocator(loc);
     }
   }
 }

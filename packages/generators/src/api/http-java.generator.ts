@@ -50,7 +50,7 @@ export class HttpJavaGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertStatusCode') {
-      return `        lastResponse.then().statusCode(${Number(action.expectedValue) || 200});`;
+      return `        lastResponse.then().statusCode(${this.requireExpectedNumber(action, 100, 599)});`;
     }
 
     if (action.action === 'assertJsonPath') {
@@ -66,7 +66,7 @@ export class HttpJavaGenerator extends BaseCodeGenerator {
       return `        try { Thread.sleep(${action.timeoutMs ?? 1000}); } catch (InterruptedException ignored) {}`;
     }
 
-    return `        // Action: ${action.action}`;
+    return this.unsupportedAction(action);
   }
 
   public generateFooter(_session: SessionIR, _options?: GeneratorOptions): string {

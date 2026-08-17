@@ -3,6 +3,7 @@ import {
   LocatorCandidate,
   SecretRef,
   SessionIR,
+  SessionIRSchema,
 } from '@automate-plus/ir-schema';
 import {
   CapabilityManifest,
@@ -48,6 +49,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     session: SessionIR,
     options?: GeneratorOptions
   ): Promise<GeneratedProject> {
+    this.validateSessionInput(session);
     const capability = this.supportsSession(session);
     if (!capability.supported) {
       throw new CapabilityError(capability.reason ?? 'Session is not supported by the selected generator', {
@@ -62,14 +64,6 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
       step,
       code: this.generateStep(step, session, options),
     }));
-    const fallback = generatedSteps.find(({ code }) => /(^|\n)\s*(\/\/|#)\s*Action:/u.test(code));
-    if (fallback) {
-      throw new CapabilityError(`Generator emitted an unsupported action instead of native code: ${fallback.step.action}`, {
-        framework: this.framework,
-        language: this.language,
-        action: fallback.step.action,
-      });
-    }
     const steps = generatedSteps
       .map(({ code }) => code)
       .filter((line) => line.trim().length > 0)
@@ -91,7 +85,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
 
     files.push(...this.generateSupportFiles(session, files[0].relativePath));
 
-    return {
+    const project: GeneratedProject = {
       framework: this.framework,
       language: this.language,
       files,
@@ -99,10 +93,27 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
       entrypoint: files[0].relativePath,
       runtimeRequirements: this.manifest.requiredRuntimes,
     };
+
+    const validation = await this.validate(project);
+    if (!validation.valid) {
+      throw new CapabilityError('Generated project failed truthful validation.', {
+        framework: this.framework,
+        language: this.language,
+        errors: validation.errors ?? [],
+      });
+    }
+    return project;
   }
 
   protected generateSupportFiles(session: SessionIR, entrypoint: string): GeneratedFile[] {
-    const projectName = session.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'automate-plus-project';
+    const projectName = session.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    if (!projectName) {
+      throw new CapabilityError('Session name must produce a valid generated project name.', {
+        framework: this.framework,
+        language: this.language,
+        sessionName: session.name,
+      });
+    }
     const manifestFile: GeneratedFile = {
       relativePath: 'automateplus.manifest.json',
       language: 'json',
@@ -219,8 +230,136 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     return `plugins { kotlin("jvm") version "2.0.21" }\n\nrepositories { mavenCentral() }\n\ndependencies {\n  testImplementation(kotlin("test"))\n  testImplementation("io.appium:java-client:9.4.0")\n}\n\ntasks.test { useJUnitPlatform() }\n`;
   }
 
-  public async validate?(project: GeneratedProject): Promise<ValidationResult> {
-    return { valid: true };
+  public async validate(project: GeneratedProject): Promise<ValidationResult> {
+    const errors: string[] = [];
+    for (const file of project.files) {
+      if (/(^|\n)\s*(\/\/|#)\s*Action:/u.test(file.content)) {
+        errors.push(`${file.relativePath} contains an unsupported action comment fallback`);
+      }
+      if (/\bTODO\b|50%,50%|isRoot\(\)|By\.xpath\("\/\*"\)/u.test(file.content)) {
+        errors.push(`${file.relativePath} contains fabricated generator output`);
+      }
+    }
+    if (project.entrypoint !== project.files[0]?.relativePath) {
+      errors.push('Generated entrypoint does not reference the first generated test file');
+    }
+    return { valid: errors.length === 0, errors };
+  }
+
+  protected unsupportedAction(action: ActionIR): never {
+    throw new CapabilityError(`Action '${action.action}' is not implemented by ${this.framework}/${this.language}.`, {
+      framework: this.framework,
+      language: this.language,
+      action: action.action,
+    });
+  }
+
+  protected requireLocator(action: ActionIR): LocatorCandidate {
+    const locator = this.getPrimaryLocator(action);
+    if (!locator) {
+      throw new CapabilityError(`Action '${action.action}' requires an explicit locator.`, {
+        framework: this.framework,
+        language: this.language,
+        action: action.action,
+        stepId: action.id,
+      });
+    }
+    return locator;
+  }
+
+  protected requireDragTarget(action: ActionIR): LocatorCandidate {
+    const locator = action.dragTarget?.locators[0];
+    if (!locator) {
+      throw new CapabilityError(`Action '${action.action}' requires an explicit drag target locator.`, {
+        framework: this.framework,
+        language: this.language,
+        action: action.action,
+        stepId: action.id,
+      });
+    }
+    return locator;
+  }
+
+  protected requireExpectedNumber(action: ActionIR, minimum?: number, maximum?: number): number {
+    const raw = action.expectedValue ?? action.assertion?.expected;
+    const value = typeof raw === 'number' ? raw : typeof raw === 'string' && raw.trim() !== '' ? Number(raw) : Number.NaN;
+    if (!Number.isFinite(value) || (minimum !== undefined && value < minimum) || (maximum !== undefined && value > maximum)) {
+      throw new CapabilityError(`Action '${action.action}' requires a valid numeric expected value.`, {
+        framework: this.framework,
+        language: this.language,
+        action: action.action,
+        expectedValue: raw,
+      });
+    }
+    return value;
+  }
+
+  protected unsupportedLocator(locator: LocatorCandidate): never {
+    throw new CapabilityError(`Locator strategy '${locator.strategy}' is not supported by ${this.framework}/${this.language}.`, {
+      framework: this.framework,
+      language: this.language,
+      locatorStrategy: locator.strategy,
+    });
+  }
+
+  protected requireTargetField(session: SessionIR, field: 'appPackage' | 'appActivity' | 'startUrl'): string {
+    const value = session.targetConfig[field];
+    if (!value) {
+      throw new CapabilityError(`Generation requires targetConfig.${field} from the user IR.`, {
+        framework: this.framework,
+        language: this.language,
+        field,
+      });
+    }
+    return value;
+  }
+
+  private validateSessionInput(session: SessionIR): void {
+    const parsed = SessionIRSchema.safeParse(session);
+    if (!parsed.success) {
+      throw new CapabilityError('Session IR validation failed before generation.', {
+        framework: this.framework,
+        language: this.language,
+        issues: parsed.error.issues.map((issue) => ({ path: issue.path, message: issue.message })),
+      });
+    }
+    if (session.platform !== this.supportedPlatforms[0]) {
+      throw new CapabilityError(`Session platform '${session.platform}' is not supported by ${this.framework}/${this.language}.`, {
+        framework: this.framework,
+        language: this.language,
+        platform: session.platform,
+      });
+    }
+
+    if (session.platform === 'android') {
+      this.requireTargetField(session, 'appPackage');
+      if (this.framework === 'espresso' || this.framework === 'robolectric') {
+        this.requireTargetField(session, 'appActivity');
+      }
+    }
+
+    const locatorActions = new Set([
+      'click', 'doubleClick', 'rightClick', 'hover', 'fill', 'clear', 'waitFor', 'dragAndDrop',
+      'tap', 'doubleTap', 'longPress', 'drag', 'pinch', 'assertVisible', 'assertHidden',
+      'assertText', 'assertValue', 'assertAttribute',
+    ]);
+    for (const action of session.steps) {
+      if (locatorActions.has(action.action)) this.requireLocator(action);
+      if ((action.action === 'drag' || action.action === 'dragAndDrop')) this.requireDragTarget(action);
+      if (action.action === 'httpRequest' && !action.apiPayload) this.unsupportedAction(action);
+      if (action.action === 'navigate' && !action.value) this.unsupportedAction(action);
+      if (action.action === 'fill' && action.value === undefined) this.unsupportedAction(action);
+      if (action.action === 'pressKey' && typeof action.value !== 'string') this.unsupportedAction(action);
+      if (action.action === 'scroll' && !action.scrollOffset) this.unsupportedAction(action);
+      if (action.action === 'swipe' && !action.swipeVector) this.unsupportedAction(action);
+      if (['assertText', 'assertValue', 'assertAttribute', 'assertUrl', 'assertStatusCode', 'assertJsonPath', 'assertHeader', 'assertResponseTime'].includes(action.action)
+        && action.expectedValue === undefined && action.assertion?.expected === undefined) {
+        this.unsupportedAction(action);
+      }
+      if (['assertAttribute', 'assertJsonPath', 'assertHeader'].includes(action.action) && !action.attributeName && !action.assertion?.jsonPath && !action.assertion?.headerName) {
+        this.unsupportedAction(action);
+      }
+    }
   }
 
   protected getPrimaryLocator(action: ActionIR): LocatorCandidate | undefined {

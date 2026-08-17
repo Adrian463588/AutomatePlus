@@ -1,11 +1,21 @@
 # AutomatePlus (v2) 🚀
 
-[![CI/CD Status](https://img.shields.io/badge/Build-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-80%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-85%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
+
+![AutomatePlus Sprint 2 empty-workspace preview](docs/assets/sprint-2-preview-1440x900.png)
+
+The preview shows the truthful empty workspace: no project, session, target, device, secret, generated code, or synthetic run result is created until the user supplies real data.
+
+## Evidence and acceptance boundaries
+
+The current Sprint 2 component evidence includes 85 passing TypeScript tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, sidecar capability smoke, loopback k6 smoke, an authenticity scan, and responsive smoke at `1440x900`, `1280x800`, `1024x768`, `768x1024`, and `390x844` without horizontal overflow.
+
+Native WinUI/.NET and physical Web/Android recorder acceptance remain explicitly `Blocked` until the installed .NET 8 SDK, verified runtime packs, and a user-selected real target are available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
 ---
 
@@ -109,7 +119,7 @@ Clone the repository and install all workspace dependencies:
 
 ```bash
 # Clone the repository
-git clone https://github.com/AdrianSyahAbidin/AutomatePlus.git
+git clone https://github.com/Adrian463588/AutomatePlus.git
 
 # Navigate to project directory
 cd AutomatePlus
@@ -194,7 +204,7 @@ flowchart LR
 
 - **No Plaintext Secrets**: Passwords, API tokens, and private keys use `SecretRef` objects (`${secret.KEY}`) that resolve securely at runtime.
 - **Process Isolation**: Command execution strictly uses allowlisted executables and argument arrays (preventing shell injection).
-- **Offline First**: The production host persists sessions, selector rankings, code generation, and logs in local SQLite/workspace storage; the browser migration shell uses an explicitly non-production in-memory bridge.
+- **Offline First**: The production host persists sessions, selector rankings, code generation, and logs in local SQLite/workspace storage; the browser migration shell uses a browser-safe local storage bridge and remains non-production evidence.
 
 ---
 

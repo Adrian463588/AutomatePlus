@@ -17,26 +17,14 @@ export const App: React.FC = () => {
   }, [loadInitialData]);
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden font-sans">
-      {/* Top Application Header */}
+    <div className="app-shell flex flex-col min-h-screen w-full bg-slate-950 text-slate-100 font-sans">
       <Header onOpenStressModal={() => setIsStressModalOpen(true)} />
-
-      {/* Main Workspace (3-Panel Layout) */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left Panel: Explorer & Sessions */}
+      <div className="workspace-layout flex-1 min-h-0">
         <Sidebar />
-
-        {/* Center Panel: Visual Canvas OR API Builder */}
         {activeTab === 'api_builder' ? <ApiBuilderView /> : <VisualCanvas />}
-
-        {/* Right Panel: Live Monaco Code & Generator */}
         <MonacoView />
       </div>
-
-      {/* Bottom Panel: Terminal Logs & Metrics */}
       <TerminalPanel />
-
-      {/* Stress Looping Modal */}
       <StressModal
         isOpen={isStressModalOpen}
         onClose={() => setIsStressModalOpen(false)}

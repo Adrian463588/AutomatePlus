@@ -20,6 +20,7 @@ export interface K6StressOptions {
 export interface K6StressMetrics {
   runId: string;
   targetRps: number;
+  maxVUs: number;
   actualRps: number;
   totalRequests: number;
   p50LatencyMs: number;
@@ -120,7 +121,7 @@ export class K6StressRunner {
     session: SessionIR,
     options: K6StressOptions,
     onLog: RunLogCallback,
-    onMetric?: (metric: { rps: number; latencyMs: number; errorRate: number }) => void,
+    onMetric?: (metric: { rps: number; latencyMs: number; errorRate: number; maxVUs: number }) => void,
   ): Promise<K6StressMetrics> {
     validateOptions(options);
     this.stopRequested = false;
@@ -204,7 +205,8 @@ export class K6StressRunner {
     const p95LatencyMs = metricValue(duration, 'p(95)');
     const p99LatencyMs = metricValue(duration, 'p(99)');
     const errorRate = metricValue(failed, 'rate');
-    const metric = { rps: actualRps, latencyMs: p95LatencyMs, errorRate };
+    const maxVUs = options.maxVUs ?? 100;
+    const metric = { rps: actualRps, latencyMs: p95LatencyMs, errorRate, maxVUs };
     onLog({
       timestamp: Date.now(),
       type: 'metric',
@@ -226,6 +228,7 @@ export class K6StressRunner {
     return {
       runId,
       targetRps: options.targetRps,
+      maxVUs,
       actualRps,
       totalRequests,
       p50LatencyMs,

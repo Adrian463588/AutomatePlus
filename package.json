@@ -18,6 +18,7 @@
     "verify:k6": "npm run build:packages && node scripts/verify-k6-fixture.mjs",
     "verify:sidecar": "npm run build:packages && npm run build:sidecar && node scripts/verify-sidecar.mjs",
     "verify:docs": "node scripts/verify-markdown.mjs",
+    "verify:authenticity": "node scripts/verify-authenticity.mjs",
     "build": "npm run build:packages && npm run build:sidecar && npm run build:desktop",
     "test": "vitest run",
     "typecheck": "npm run typecheck:packages && npm run typecheck:sidecar && npm run typecheck:desktop",

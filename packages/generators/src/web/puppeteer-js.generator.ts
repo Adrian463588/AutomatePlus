@@ -89,7 +89,7 @@ export class PuppeteerJsGenerator extends BaseCodeGenerator {
         return `    expect(page.url()).toContain(${expected});`;
 
       default:
-        return `    // Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -107,8 +107,9 @@ export class PuppeteerJsGenerator extends BaseCodeGenerator {
       case 'id':
         return `#${loc.value}`;
       case 'css':
-      default:
         return loc.value;
+      default:
+        return this.unsupportedLocator(loc);
     }
   }
 }

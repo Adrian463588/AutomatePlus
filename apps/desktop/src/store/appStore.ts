@@ -1,38 +1,56 @@
 import { create } from 'zustand';
 import { ActionIR, SessionIR } from '@automate-plus/ir-schema';
 import { ProjectRecord, SessionRecord } from '@automate-plus/persistence';
+import { AndroidDeviceInfo, CapabilityManifest, RunLogEvent, RunSummary } from '@automate-plus/contracts';
 import { bridge } from '../services/desktopBridge.js';
-import { RunLogEvent, RunSummary } from '@automate-plus/contracts';
 
-export type ActiveTab = 'visual' | 'api_builder' | 'stress_modal';
+export type ActiveTab = 'visual' | 'api_builder';
+export type FeedbackKind = 'idle' | 'pending' | 'success' | 'error' | 'blocked' | 'cancelled';
+
+export interface UiFeedback {
+  kind: FeedbackKind;
+  message: string;
+}
+
+export interface ApiAssertionDraft {
+  action: 'assertStatusCode' | 'assertJsonPath' | 'assertHeader' | 'assertResponseTime';
+  expectedValue: string;
+  attributeName?: string;
+}
 
 interface AppState {
   projects: ProjectRecord[];
   activeProject?: ProjectRecord;
   sessions: SessionRecord[];
   activeSession?: SessionRecord;
-
+  capabilities: CapabilityManifest[];
   selectedFramework: string;
   selectedLanguage: string;
   generatedCode: string;
-
+  generationError?: string;
   isRecording: boolean;
   activeRecorderPlatform: 'web' | 'android';
-  devices: Array<{ id: string; model: string; status: string }>;
+  devices: AndroidDeviceInfo[];
+  deviceDiscoveryMessage: string;
   activeDevice?: string;
-
   logs: RunLogEvent[];
   isRunning: boolean;
   lastRunSummary?: RunSummary;
+  feedback: UiFeedback;
   activeTab: ActiveTab;
 
-  // Actions
   loadInitialData: () => Promise<void>;
+  discoverDevices: () => Promise<void>;
+  createProject: (name: string, workspacePath: string) => Promise<void>;
+  createSession: (name: string, platform: 'web' | 'android' | 'api') => Promise<void>;
   selectProject: (projectId: string) => Promise<void>;
   selectSession: (sessionId: string) => Promise<void>;
+  setActiveDevice: (deviceId: string) => void;
+  updateTargetConfig: (targetConfig: SessionIR['targetConfig']) => Promise<void>;
   setFrameworkAndLanguage: (framework: string, language: string) => Promise<void>;
   regenerateCode: () => Promise<void>;
   addStep: (step: ActionIR) => Promise<void>;
+  saveApiRequest: (request: ActionIR, assertions: ApiAssertionDraft[]) => Promise<void>;
   updateStep: (stepIndex: number, step: ActionIR) => Promise<void>;
   deleteStep: (stepIndex: number) => Promise<void>;
   reorderSteps: (fromIndex: number, toIndex: number) => Promise<void>;
@@ -40,317 +58,237 @@ interface AppState {
   stopRecording: () => Promise<void>;
   runTest: (mode: 'interactive' | 'native') => Promise<void>;
   runLooping: (iterations: number) => Promise<void>;
-  runK6Stress: (targetRps: number, durationSec: number) => Promise<void>;
+  runK6Stress: (targetRps: number, durationSec: number, maxVus?: number) => Promise<void>;
+  cancelExecution: () => Promise<void>;
   clearLogs: () => void;
+  setFeedback: (feedback: UiFeedback) => void;
   setActiveTab: (tab: ActiveTab) => void;
 }
 
+const emptyFeedback: UiFeedback = { kind: 'idle', message: 'Waiting for a user action.' };
+
+function nextSteps(steps: ActionIR[]): ActionIR[] {
+  return steps.map((step, index) => ({ ...step, stepNumber: index + 1 }));
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
-  projects: [],
-  activeProject: undefined,
-  sessions: [],
-  activeSession: undefined,
-
-  selectedFramework: 'playwright',
-  selectedLanguage: 'typescript',
-  generatedCode: '// Select or record a test session to view generated code',
-
-  isRecording: false,
-  activeRecorderPlatform: 'web',
-  devices: [],
-  activeDevice: undefined,
-
-  logs: [],
-  isRunning: false,
-  lastRunSummary: undefined,
-  activeTab: 'visual',
+  projects: [], activeProject: undefined, sessions: [], activeSession: undefined,
+  capabilities: [], selectedFramework: '', selectedLanguage: '', generatedCode: '', generationError: undefined,
+  isRecording: false, activeRecorderPlatform: 'web', devices: [],
+  deviceDiscoveryMessage: 'Android discovery is available only in the native WinUI host.', activeDevice: undefined,
+  logs: [], isRunning: false, lastRunSummary: undefined, feedback: emptyFeedback, activeTab: 'visual',
 
   loadInitialData: async () => {
-    const projects = await bridge.projectRepo.getAll();
-    const activeProject = projects[0];
-    let sessions: SessionRecord[] = [];
-    let activeSession: SessionRecord | undefined;
-
-    if (activeProject) {
-      sessions = await bridge.sessionRepo.getByProjectId(activeProject.id);
-      activeSession = sessions[0];
-    }
-
-    set({ projects, activeProject, sessions, activeSession });
-    if (activeSession) {
-      await get().regenerateCode();
+    try {
+      const [projects, capabilities, devices] = await Promise.all([
+        bridge.projectRepo.getAll(), Promise.resolve(bridge.getCapabilities()), bridge.listAndroidDevices(),
+      ]);
+      const activeProject = projects[0];
+      const sessions = activeProject ? await bridge.sessionRepo.getByProjectId(activeProject.id) : [];
+      const activeSession = sessions[0];
+      set({ projects, activeProject, sessions, activeSession, capabilities, devices,
+        activeDevice: devices.find((device) => device.status === 'device')?.id,
+        activeTab: activeSession?.platform === 'api' ? 'api_builder' : 'visual',
+        feedback: projects.length === 0
+          ? { kind: 'blocked', message: 'Create a project to begin. No project or target is preloaded.' }
+          : activeSession ? emptyFeedback : { kind: 'blocked', message: 'Create a session before recording, running, or generating.' },
+      });
+      if (activeSession) await get().regenerateCode();
+    } catch (error) {
+      set({ projects: [], activeProject: undefined, sessions: [], activeSession: undefined, devices: [], capabilities: [], generatedCode: '', feedback: { kind: 'blocked', message: `Local storage is unavailable: ${error instanceof Error ? error.message : String(error)}` } });
     }
   },
 
-  selectProject: async (projectId: string) => {
-    const project = await bridge.projectRepo.getById(projectId);
-    if (!project) return;
+  discoverDevices: async () => {
+    set({ feedback: { kind: 'pending', message: 'Checking for authorized Android devices…' } });
+    const devices = await bridge.listAndroidDevices();
+    set({ devices, activeDevice: devices.find((device) => device.status === 'device')?.id,
+      deviceDiscoveryMessage: devices.length === 0
+        ? 'No Android devices are available in the browser migration shell. Use the native host for ADB discovery.'
+        : 'Android devices discovered.',
+      feedback: devices.length === 0
+        ? { kind: 'blocked', message: 'Android recording is blocked until the native host discovers an authorized device.' }
+        : { kind: 'success', message: `${devices.length} Android device(s) discovered.` },
+    });
+  },
+
+  createProject: async (name, workspacePath) => {
+    const trimmedName = name.trim();
+    const trimmedWorkspace = workspacePath.trim();
+    if (!trimmedName || !trimmedWorkspace) {
+      set({ feedback: { kind: 'error', message: 'Project name and workspace path are required.' } }); return;
+    }
+    const now = Date.now();
+    const project: ProjectRecord = { id: crypto.randomUUID(), name: trimmedName, workspacePath: trimmedWorkspace,
+      defaultFramework: '', defaultLanguage: '', createdAt: now, updatedAt: now };
+    await bridge.projectRepo.save(project);
+    set({ projects: [...get().projects, project], activeProject: project, sessions: [], activeSession: undefined,
+      selectedFramework: '', selectedLanguage: '', generatedCode: '', feedback: { kind: 'success', message: `Project “${project.name}” created.` } });
+  },
+
+  createSession: async (name, platform) => {
+    const project = get().activeProject;
+    const trimmedName = name.trim();
+    if (!project) { set({ feedback: { kind: 'blocked', message: 'Create or select a project before creating a session.' } }); return; }
+    if (!trimmedName) { set({ feedback: { kind: 'error', message: 'Session name is required.' } }); return; }
+    const now = Date.now();
+    const sessionId = crypto.randomUUID();
+    const session: SessionRecord = { id: sessionId, projectId: project.id, name: trimmedName, platform,
+      ir: { id: sessionId, schemaVersion: 2, projectId: project.id, name: trimmedName, platform,
+        targetConfig: {}, environmentVariables: {}, steps: [], createdAt: now, updatedAt: now }, createdAt: now, updatedAt: now };
+    await bridge.sessionRepo.save(session);
+    set({ sessions: [...get().sessions, session], activeSession: session, selectedFramework: '', selectedLanguage: '',
+      generatedCode: '', activeTab: platform === 'api' ? 'api_builder' : 'visual',
+      feedback: { kind: 'success', message: `Session “${session.name}” created. Add a real target before running.` } });
+  },
+
+  selectProject: async (projectId) => {
+    const project = await bridge.projectRepo.getById(projectId); if (!project) return;
     const sessions = await bridge.sessionRepo.getByProjectId(projectId);
-    set({
-      activeProject: project,
-      sessions,
-      activeSession: sessions[0],
-      selectedFramework: project.defaultFramework,
-      selectedLanguage: project.defaultLanguage,
-    });
-    if (sessions[0]) {
-      await get().regenerateCode();
-    }
+    set({ activeProject: project, sessions, activeSession: sessions[0], selectedFramework: '', selectedLanguage: '',
+      generatedCode: '', generationError: undefined, activeTab: sessions[0]?.platform === 'api' ? 'api_builder' : 'visual',
+      feedback: sessions[0] ? emptyFeedback : { kind: 'blocked', message: 'Create a session before recording, running, or generating.' } });
   },
 
-  selectSession: async (sessionId: string) => {
-    const session = await bridge.sessionRepo.getById(sessionId);
-    if (!session) return;
-
-    let defaultFw = get().selectedFramework;
-    let defaultLang = get().selectedLanguage;
-
-    if (session.platform === 'android') {
-      defaultFw = 'maestro';
-      defaultLang = 'yaml';
-    } else if (session.platform === 'api') {
-      defaultFw = 'k6';
-      defaultLang = 'javascript';
-    } else {
-      defaultFw = 'playwright';
-      defaultLang = 'typescript';
-    }
-
-    set({
-      activeSession: session,
-      selectedFramework: defaultFw,
-      selectedLanguage: defaultLang,
-      activeTab: session.platform === 'api' ? 'api_builder' : 'visual',
-    });
-
-    await get().regenerateCode();
+  selectSession: async (sessionId) => {
+    const session = await bridge.sessionRepo.getById(sessionId); if (!session) return;
+    set({ activeSession: session, selectedFramework: '', selectedLanguage: '', generatedCode: '', generationError: undefined,
+      activeTab: session.platform === 'api' ? 'api_builder' : 'visual', feedback: emptyFeedback });
   },
 
-  setFrameworkAndLanguage: async (framework: string, language: string) => {
-    set({ selectedFramework: framework, selectedLanguage: language });
+  setActiveDevice: (deviceId) => set({ activeDevice: deviceId || undefined }),
+
+  updateTargetConfig: async (targetConfig) => {
+    const activeSession = get().activeSession; if (!activeSession) return;
+    const updatedSession: SessionRecord = { ...activeSession, ir: { ...activeSession.ir, targetConfig, updatedAt: Date.now() }, updatedAt: Date.now() };
+    await bridge.sessionRepo.save(updatedSession);
+    set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session), feedback: { kind: 'success', message: 'Target configuration saved.' } });
+  },
+
+  setFrameworkAndLanguage: async (framework, language) => {
+    const session = get().activeSession;
+    const supported = get().capabilities.some((capability) => capability.platform === session?.platform && capability.framework === framework && capability.language === language);
+    if (!supported) { set({ generationError: 'CapabilityError: the selected framework/language is not registered for this platform.', feedback: { kind: 'blocked', message: 'That framework/language pair is unavailable for this session.' } }); return; }
+    set({ selectedFramework: framework, selectedLanguage: language, generationError: undefined, feedback: { kind: 'pending', message: 'Generating from the current session IR…' } });
     await get().regenerateCode();
   },
 
   regenerateCode: async () => {
-    const { activeSession, selectedFramework, selectedLanguage } = get();
-    if (!activeSession) return;
-    try {
-      const project = await bridge.generateCode(
-        activeSession.ir,
-        selectedFramework,
-        selectedLanguage
-      );
-      set({ generatedCode: project.files[0]?.content || '// No code generated' });
-    } catch (err: any) {
-      set({ generatedCode: `// Code generation error: ${err.message}` });
+    const { activeSession, selectedFramework, selectedLanguage, capabilities } = get();
+    if (!activeSession || !selectedFramework || !selectedLanguage) { set({ generatedCode: '', generationError: undefined }); return; }
+    if (!capabilities.some((item) => item.platform === activeSession.platform && item.framework === selectedFramework && item.language === selectedLanguage)) {
+      set({ generatedCode: '', generationError: 'CapabilityError: no registered generator matches this session.' }); return;
     }
-  },
-
-  addStep: async (step: ActionIR) => {
-    const { activeSession } = get();
-    if (!activeSession) return;
-
-    const updatedIR: SessionIR = {
-      ...activeSession.ir,
-      steps: [...activeSession.ir.steps, step],
-      updatedAt: Date.now(),
-    };
-
-    const updatedSession = { ...activeSession, ir: updatedIR, updatedAt: Date.now() };
-    await bridge.sessionRepo.save(updatedSession);
-    set({ activeSession: updatedSession });
-    await get().regenerateCode();
-  },
-
-  updateStep: async (stepIndex: number, step: ActionIR) => {
-    const { activeSession } = get();
-    if (!activeSession) return;
-
-    const newSteps = [...activeSession.ir.steps];
-    newSteps[stepIndex] = step;
-
-    const updatedIR: SessionIR = {
-      ...activeSession.ir,
-      steps: newSteps,
-      updatedAt: Date.now(),
-    };
-
-    const updatedSession = { ...activeSession, ir: updatedIR, updatedAt: Date.now() };
-    await bridge.sessionRepo.save(updatedSession);
-    set({ activeSession: updatedSession });
-    await get().regenerateCode();
-  },
-
-  deleteStep: async (stepIndex: number) => {
-    const { activeSession } = get();
-    if (!activeSession) return;
-
-    const newSteps = activeSession.ir.steps.filter((_, idx) => idx !== stepIndex);
-    const updatedIR: SessionIR = {
-      ...activeSession.ir,
-      steps: newSteps,
-      updatedAt: Date.now(),
-    };
-
-    const updatedSession = { ...activeSession, ir: updatedIR, updatedAt: Date.now() };
-    await bridge.sessionRepo.save(updatedSession);
-    set({ activeSession: updatedSession });
-    await get().regenerateCode();
-  },
-
-  reorderSteps: async (fromIndex: number, toIndex: number) => {
-    const { activeSession } = get();
-    if (!activeSession) return;
-
-    const newSteps = [...activeSession.ir.steps];
-    const [moved] = newSteps.splice(fromIndex, 1);
-    newSteps.splice(toIndex, 0, moved);
-
-    const renumberedSteps = newSteps.map((step, idx) => ({
-      ...step,
-      stepNumber: idx + 1,
-    }));
-
-    const updatedIR: SessionIR = {
-      ...activeSession.ir,
-      steps: renumberedSteps,
-      updatedAt: Date.now(),
-    };
-
-    const updatedSession = { ...activeSession, ir: updatedIR, updatedAt: Date.now() };
-    await bridge.sessionRepo.save(updatedSession);
-    set({ activeSession: updatedSession });
-    await get().regenerateCode();
-  },
-
-  startRecording: async (platform: 'web' | 'android', targetUrl?: string) => {
-    const { activeSession } = get();
-    if (!activeSession) {
-      set((state) => ({
-        logs: [...state.logs, { timestamp: Date.now(), type: 'stderr', message: 'Select a session before recording.' }],
-      }));
-      return;
-    }
-
-    set({ activeRecorderPlatform: platform, isRecording: false });
     try {
-      if (platform === 'web') {
-        const resolvedTargetUrl = targetUrl?.trim() || activeSession.ir.targetConfig.startUrl;
-        if (!resolvedTargetUrl) throw new Error('A web target URL is required before recording.');
-        await bridge.webRecorder.start(
-          { targetUrl: resolvedTargetUrl },
-          (action) => {
-            void get().addStep(action);
-          },
-        );
-      } else {
-        await bridge.androidRecorder.start(
-          { deviceId: get().activeDevice || '' },
-          (action) => {
-            void get().addStep(action);
-          },
-        );
-      }
-      set({ isRecording: true });
+      const project = await bridge.generateCode(activeSession.ir, selectedFramework, selectedLanguage);
+      const entrypoint = project.files.find((file) => file.relativePath === project.entrypoint) ?? project.files[0];
+      set({ generatedCode: entrypoint?.content ?? '', generationError: undefined, feedback: { kind: 'success', message: 'Generated preview updated from the session IR.' } });
     } catch (error) {
-      set((state) => ({
-        isRecording: false,
-        logs: [...state.logs, {
-          timestamp: Date.now(),
-          type: 'stderr',
-          message: `Recording blocked: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-      }));
+      set({ generatedCode: '', generationError: error instanceof Error ? error.message : String(error), feedback: { kind: 'blocked', message: 'Generation is blocked by the selected capability or session data.' } });
     }
+  },
+
+  addStep: async (step) => {
+    const activeSession = get().activeSession;
+    if (!activeSession) { set({ feedback: { kind: 'blocked', message: 'Create and select a session before adding actions.' } }); return; }
+    if (step.platform !== activeSession.platform) { set({ feedback: { kind: 'blocked', message: `The ${step.platform} action cannot be added to a ${activeSession.platform} session.` } }); return; }
+    const updatedSession: SessionRecord = { ...activeSession, ir: { ...activeSession.ir, steps: nextSteps([...activeSession.ir.steps, step]), updatedAt: Date.now() }, updatedAt: Date.now() };
+    await bridge.sessionRepo.save(updatedSession);
+    set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session), feedback: { kind: 'success', message: 'Action added to the session IR.' } });
+    await get().regenerateCode();
+  },
+
+  saveApiRequest: async (request, assertions) => {
+    const activeSession = get().activeSession;
+    if (!activeSession || activeSession.platform !== 'api') { set({ feedback: { kind: 'blocked', message: 'Select an API session before sending a request.' } }); return; }
+    const assertionSteps: ActionIR[] = assertions.filter((item) => item.expectedValue.trim()).map((item, index) => ({
+      id: crypto.randomUUID(), schemaVersion: 2, stepNumber: index + 1, platform: 'api', action: item.action,
+      attributeName: item.attributeName?.trim() || undefined, expectedValue: item.expectedValue.trim() || undefined,
+      assertion: item.action === 'assertJsonPath' && item.attributeName?.trim()
+        ? { operator: item.expectedValue.trim() ? 'equals' : 'exists', jsonPath: item.attributeName.trim(), ...(item.expectedValue.trim() ? { expected: item.expectedValue.trim() } : {}) }
+        : item.action === 'assertHeader' && item.attributeName?.trim()
+          ? { operator: item.expectedValue.trim() ? 'contains' : 'exists', headerName: item.attributeName.trim(), ...(item.expectedValue.trim() ? { expected: item.expectedValue.trim() } : {}) }
+          : undefined,
+      timeoutMs: 5000, timestamp: Date.now(), optional: false,
+    }));
+    const updatedSession: SessionRecord = { ...activeSession, ir: { ...activeSession.ir, steps: nextSteps([...activeSession.ir.steps, request, ...assertionSteps]), updatedAt: Date.now() }, updatedAt: Date.now() };
+    await bridge.sessionRepo.save(updatedSession);
+    set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session), feedback: { kind: 'success', message: 'Request, assertions, and extraction variables saved to the session IR.' } });
+    await get().regenerateCode();
+  },
+
+  updateStep: async (stepIndex, step) => {
+    const activeSession = get().activeSession; if (!activeSession || stepIndex < 0 || stepIndex >= activeSession.ir.steps.length) return;
+    const steps = [...activeSession.ir.steps]; steps[stepIndex] = step;
+    const updatedSession: SessionRecord = { ...activeSession, ir: { ...activeSession.ir, steps: nextSteps(steps), updatedAt: Date.now() }, updatedAt: Date.now() };
+    await bridge.sessionRepo.save(updatedSession); set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session) }); await get().regenerateCode();
+  },
+
+  deleteStep: async (stepIndex) => {
+    const activeSession = get().activeSession; if (!activeSession) return;
+    const updatedSession: SessionRecord = { ...activeSession, ir: { ...activeSession.ir, steps: nextSteps(activeSession.ir.steps.filter((_, index) => index !== stepIndex)), updatedAt: Date.now() }, updatedAt: Date.now() };
+    await bridge.sessionRepo.save(updatedSession); set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session), feedback: { kind: 'success', message: 'Action removed from the session IR.' } }); await get().regenerateCode();
+  },
+
+  reorderSteps: async (fromIndex, toIndex) => {
+    const activeSession = get().activeSession; if (!activeSession || fromIndex < 0 || toIndex < 0 || fromIndex >= activeSession.ir.steps.length || toIndex >= activeSession.ir.steps.length) return;
+    const steps = [...activeSession.ir.steps]; const [moved] = steps.splice(fromIndex, 1); if (!moved) return; steps.splice(toIndex, 0, moved);
+    const updatedSession: SessionRecord = { ...activeSession, ir: { ...activeSession.ir, steps: nextSteps(steps), updatedAt: Date.now() }, updatedAt: Date.now() };
+    await bridge.sessionRepo.save(updatedSession); set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session), feedback: { kind: 'success', message: 'Action order updated.' } }); await get().regenerateCode();
+  },
+
+  startRecording: async (platform, targetUrl) => {
+    const { activeSession, activeDevice } = get();
+    if (!activeSession) { set({ feedback: { kind: 'blocked', message: 'Create and select a session before recording.' } }); return; }
+    if (activeSession.platform !== platform) { set({ feedback: { kind: 'blocked', message: `${activeSession.platform.toUpperCase()} sessions cannot use the ${platform} recorder.` } }); return; }
+    if (platform === 'web' && !targetUrl?.trim()) { set({ feedback: { kind: 'blocked', message: 'A user-provided web target URL is required before recording.' } }); return; }
+    const selectedDevice = get().devices.find((device) => device.id === activeDevice);
+    if (platform === 'android' && (!activeSession.ir.targetConfig.appPackage?.trim() || !selectedDevice || selectedDevice.status !== 'device')) { set({ feedback: { kind: 'blocked', message: 'Android recording requires a user-provided package and an authorized selected device.' } }); return; }
+    set({ activeRecorderPlatform: platform, isRecording: false, feedback: { kind: 'pending', message: 'Starting the native recorder…' } });
+    try {
+      if (platform === 'web') await bridge.webRecorder.start({ targetUrl: targetUrl!.trim() }, (action) => void get().addStep(action));
+      else await bridge.androidRecorder.start({ deviceId: activeDevice! }, (action) => void get().addStep(action));
+      set({ isRecording: true, feedback: { kind: 'success', message: 'Recorder is active.' } });
+    } catch (error) { set({ isRecording: false, feedback: { kind: 'blocked', message: `Recording blocked: ${error instanceof Error ? error.message : String(error)}` } }); }
   },
 
   stopRecording: async () => {
-    if (get().activeRecorderPlatform === 'web') {
-      await bridge.webRecorder.stop();
-    } else {
-      await bridge.androidRecorder.stop();
-    }
-    set({ isRecording: false });
+    if (get().activeRecorderPlatform === 'web') await bridge.webRecorder.stop(); else await bridge.androidRecorder.stop();
+    set({ isRecording: false, feedback: { kind: 'cancelled', message: 'Recording stopped.' } });
   },
 
-  runTest: async (mode: 'interactive' | 'native') => {
+  runTest: async (mode) => {
     const { activeSession, selectedFramework, selectedLanguage } = get();
-    if (!activeSession) return;
-
-    set({ isRunning: true });
-    const onLog = (event: RunLogEvent) => {
-      set((state) => ({ logs: [...state.logs, event] }));
-    };
-
+    if (!activeSession) { set({ feedback: { kind: 'blocked', message: 'Create and select a session before running.' } }); return; }
+    if (activeSession.ir.steps.length === 0) { set({ feedback: { kind: 'blocked', message: 'Add at least one user-created action before running.' } }); return; }
+    if (mode === 'native' && (!selectedFramework || !selectedLanguage)) { set({ feedback: { kind: 'blocked', message: 'Select a registered framework and language before a native run.' } }); return; }
+    set({ isRunning: true, feedback: { kind: 'pending', message: mode === 'native' ? 'Native run requested; waiting for host runtime evidence…' : 'Interactive run requested…' } });
+    const onLog = (event: RunLogEvent) => set((state) => ({ logs: [...state.logs, event] }));
     try {
-      let summary: RunSummary;
-      if (mode === 'interactive') {
-        summary = await bridge.runInteractiveTest(activeSession.ir, onLog);
-      } else {
-        summary = await bridge.runNativeTest(
-          activeSession.ir,
-          selectedFramework,
-          selectedLanguage,
-          onLog
-        );
-      }
-      set({ lastRunSummary: summary, isRunning: false });
-    } catch (err: any) {
-      onLog({
-        timestamp: Date.now(),
-        type: 'stderr',
-        message: `Execution failed: ${err.message}`,
-      });
-      set({ isRunning: false });
-    }
+      const summary = mode === 'interactive' ? await bridge.runInteractiveTest(activeSession.ir, onLog) : await bridge.runNativeTest(activeSession.ir, selectedFramework, selectedLanguage, onLog);
+      const kind: FeedbackKind = summary.status === 'passed' ? 'success' : summary.status === 'cancelled' || summary.status === 'stopped' ? 'cancelled' : summary.status === 'blocked' ? 'blocked' : 'error';
+      set({ lastRunSummary: summary, isRunning: false, feedback: { kind, message: summary.error ?? `Run finished: ${summary.status}.` } });
+    } catch (error) { const message = error instanceof Error ? error.message : String(error); onLog({ timestamp: Date.now(), type: 'error', message }); set({ isRunning: false, feedback: { kind: 'error', message: `Run failed: ${message}` } }); }
   },
 
-  runLooping: async (iterations: number) => {
+  runLooping: async (iterations) => {
     const { activeSession } = get();
-    if (!activeSession) return;
-
-    set({ isRunning: true });
-    const onLog = (event: RunLogEvent) => {
-      set((state) => ({ logs: [...state.logs, event] }));
-    };
-
-    try {
-      const summary = await bridge.runLooping(activeSession.ir, iterations, onLog);
-      onLog({
-        timestamp: Date.now(),
-        type: 'stdout',
-        message: `Looping finished: ${summary.successfulIterations}/${summary.totalIterations} passed in ${summary.averageIterationMs.toFixed(0)}ms avg.`,
-      });
-      set({ isRunning: false });
-    } catch (err: any) {
-      onLog({ timestamp: Date.now(), type: 'stderr', message: `Loop error: ${err.message}` });
-      set({ isRunning: false });
-    }
+    if (!activeSession || !Number.isInteger(iterations) || iterations < 1) { set({ feedback: { kind: 'blocked', message: 'A session and a positive loop count are required.' } }); return; }
+    set({ isRunning: true, feedback: { kind: 'pending', message: 'Loop run requested…' } });
+    const onLog = (event: RunLogEvent) => set((state) => ({ logs: [...state.logs, event] }));
+    try { const summary = await bridge.runLooping(activeSession.ir, iterations, onLog); set({ isRunning: false, feedback: { kind: summary.failedIterations === 0 ? 'success' : 'error', message: `Loop finished: ${summary.successfulIterations}/${summary.totalIterations} iterations passed.` } }); }
+    catch (error) { set({ isRunning: false, feedback: { kind: 'error', message: `Loop failed: ${error instanceof Error ? error.message : String(error)}` } }); }
   },
 
-  runK6Stress: async (targetRps: number, durationSec: number) => {
+  runK6Stress: async (targetRps, durationSec, maxVus) => {
     const { activeSession } = get();
-    if (!activeSession) return;
-
-    set({ isRunning: true });
-    const onLog = (event: RunLogEvent) => {
-      set((state) => ({ logs: [...state.logs, event] }));
-    };
-
-    try {
-      const metrics = await bridge.runK6Stress(activeSession.ir, targetRps, durationSec, onLog);
-      onLog({
-        timestamp: Date.now(),
-        type: 'stdout',
-        message: `k6 stress run finished: ${metrics.actualRps.toFixed(1)} RPS achieved, p95=${metrics.p95LatencyMs.toFixed(1)}ms.`,
-      });
-      set({ isRunning: false });
-    } catch (err: any) {
-      onLog({ timestamp: Date.now(), type: 'stderr', message: `k6 error: ${err.message}` });
-      set({ isRunning: false });
-    }
+    if (!activeSession || activeSession.platform !== 'api' || !Number.isFinite(targetRps) || !Number.isFinite(durationSec) || targetRps <= 0 || durationSec <= 0 || (maxVus !== undefined && (!Number.isInteger(maxVus) || maxVus <= 0))) { set({ feedback: { kind: 'blocked', message: 'An API session and valid user-provided stress values are required.' } }); return; }
+    set({ isRunning: true, feedback: { kind: 'pending', message: 'k6 run requested; no browser-side metrics will be synthesized.' } });
+    const onLog = (event: RunLogEvent) => set((state) => ({ logs: [...state.logs, event] }));
+    try { await bridge.runK6Stress(activeSession.ir, targetRps, durationSec, maxVus, onLog); set({ isRunning: false, feedback: { kind: 'success', message: 'k6 completed with host-provided evidence.' } }); }
+    catch (error) { set({ isRunning: false, feedback: { kind: 'blocked', message: `k6 blocked: ${error instanceof Error ? error.message : String(error)}` } }); }
   },
 
-  clearLogs: () => set({ logs: [] }),
-  setActiveTab: (tab: ActiveTab) => set({ activeTab: tab }),
+  cancelExecution: async () => { await Promise.all([bridge.interactivePlayer.stop(), bridge.processRunner.stop(), Promise.resolve(bridge.k6StressRunner.stop())]); set({ isRunning: false, feedback: { kind: 'cancelled', message: 'Cancellation requested.' } }); },
+  clearLogs: () => set({ logs: [] }), setFeedback: (feedback) => set({ feedback }), setActiveTab: (activeTab) => set({ activeTab }),
 }));

@@ -76,17 +76,14 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
         return `        wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause})).clear()`;
 
       case 'swipe': {
-        const sx = action.swipeVector?.startX ?? 500;
-        const sy = action.swipeVector?.startY ?? 1500;
-        const ex = action.swipeVector?.endX ?? 500;
-        const ey = action.swipeVector?.endY ?? 500;
-        return `        driver.executeScript("mobile: swipeGesture", mapOf("left" to ${Math.min(sx, ex)}, "top" to ${Math.min(sy, ey)}, "width" to 400, "height" to 600, "direction" to "up", "percent" to 0.75))`;
+        const vector = action.swipeVector;
+        if (!vector) return this.unsupportedAction(action);
+        return `        driver.executeScript("mobile: swipeGesture", mapOf("startX" to ${vector.startX}, "startY" to ${vector.startY}, "endX" to ${vector.endX}, "endY" to ${vector.endY}, "duration" to ${vector.durationMs}))`;
       }
 
       case 'drag':
       case 'dragAndDrop': {
-        const targetLoc = action.dragTarget?.locators[0];
-        const targetBy = targetLoc ? this.formatAppiumBy(targetLoc) : `By.xpath("//*")`;
+        const targetBy = this.formatAppiumBy(this.requireDragTarget(action));
         return `        val src = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}))\n        val dst = wait.until(ExpectedConditions.visibilityOfElementLocated(${targetBy}))\n        driver.executeScript("mobile: dragGesture", mapOf("elementId" to (src as org.openqa.selenium.remote.RemoteWebElement).id, "endX" to dst.location.x, "endY" to dst.location.y))`;
       }
 
@@ -112,7 +109,7 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
         return `        assertEquals(${expected}, wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause})).text)`;
 
       default:
-        return `        // Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -139,7 +136,7 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
       case 'xpath':
         return `By.xpath("${loc.value}")`;
       default:
-        return `By.id("${loc.value}")`;
+        return this.unsupportedLocator(loc);
     }
   }
 

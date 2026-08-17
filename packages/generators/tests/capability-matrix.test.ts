@@ -23,7 +23,7 @@ function createSession(platform: 'web' | 'android' | 'api', action: ActionIR['ac
     projectId: '00000000-0000-4000-8000-000000000001',
     name: `matrix-${platform}-${action}`,
     platform,
-    targetConfig: {},
+    targetConfig: platform === 'android' ? { appPackage: 'com.example.app', appActivity: 'MainActivity' } : {},
     environmentVariables: {},
     steps: [step],
     createdAt: Date.now(),
@@ -61,5 +61,23 @@ describe('Capability matrix generated-project contract', () => {
       optional: false,
     };
     await expect(generator.generateFullProject(invalidSession)).rejects.toBeInstanceOf(CapabilityError);
+  });
+
+  it('rejects incomplete Android IR instead of fabricating package or locator values', async () => {
+    const generator = GeneratorFactory.getGenerator('maestro', 'yaml');
+    const incomplete = createSession('android', 'tap');
+    incomplete.targetConfig = {};
+    await expect(generator.generateFullProject(incomplete)).rejects.toBeInstanceOf(CapabilityError);
+
+    incomplete.targetConfig = { appPackage: 'com.example.app' };
+    incomplete.steps[0] = { ...incomplete.steps[0], locators: undefined };
+    await expect(generator.generateFullProject(incomplete)).rejects.toBeInstanceOf(CapabilityError);
+  });
+
+  it('rejects malformed session IR before generation', async () => {
+    const generator = GeneratorFactory.getGenerator('playwright', 'typescript');
+    const malformed = createSession('web', 'navigate');
+    malformed.id = 'not-a-uuid';
+    await expect(generator.generateFullProject(malformed)).rejects.toBeInstanceOf(CapabilityError);
   });
 });

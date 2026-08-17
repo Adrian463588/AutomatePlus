@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-labelledby="title">
+  <title>AutomatePlus</title>
+  <rect width="64" height="64" rx="14" fill="#4f46e5" />
+  <path d="M32 12 48 48h-8l-3.3-8H27.3L24 48h-8L32 12Zm0 12-2.8 9h5.6L32 24Z" fill="#fff" />
+</svg>

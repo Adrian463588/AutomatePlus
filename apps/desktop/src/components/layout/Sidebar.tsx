@@ -1,276 +1,101 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
-import { bridge } from '../../services/desktopBridge.js';
-import { SessionRecord } from '@automate-plus/persistence';
-import {
-  Plus,
-  Globe,
-  Smartphone,
-  Server,
-  SmartphoneNfc,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  ChevronDown,
-} from 'lucide-react';
+import { Globe, Smartphone, Server, SmartphoneNfc, CheckCircle2, XCircle, Clock, Plus, RefreshCw, X } from 'lucide-react';
+
+type DialogKind = 'project' | 'session' | undefined;
 
 export const Sidebar: React.FC = () => {
-  const {
-    projects,
-    activeProject,
-    sessions,
-    activeSession,
-    selectProject,
-    selectSession,
-    devices,
-    lastRunSummary,
-  } = useAppStore();
+  const { projects, activeProject, sessions, activeSession, selectProject, selectSession, createProject, createSession,
+    devices, activeDevice, setActiveDevice, discoverDevices, deviceDiscoveryMessage, lastRunSummary } = useAppStore();
+  const [dialog, setDialog] = useState<DialogKind>();
+  const [projectName, setProjectName] = useState('');
+  const [workspacePath, setWorkspacePath] = useState('');
+  const [sessionName, setSessionName] = useState('');
+  const [sessionPlatform, setSessionPlatform] = useState<'web' | 'android' | 'api'>('web');
+  const dialogRef = useRef<HTMLDivElement>(null);
 
-  const [showNewSessionModal, setShowNewSessionModal] = useState(false);
-  const [newSessionName, setNewSessionName] = useState('');
-  const [newSessionPlatform, setNewSessionPlatform] = useState<'web' | 'android' | 'api'>('web');
-
-  const handleCreateSession = async () => {
-    if (!newSessionName.trim() || !activeProject) return;
-    const newSessionId = crypto.randomUUID();
-    const newSession: SessionRecord = {
-      id: newSessionId,
-      projectId: activeProject.id,
-      name: newSessionName.trim(),
-      platform: newSessionPlatform,
-      ir: {
-        id: newSessionId,
-        schemaVersion: 2,
-        projectId: activeProject.id,
-        name: newSessionName.trim(),
-        platform: newSessionPlatform,
-        targetConfig:
-          newSessionPlatform === 'web'
-            ? { startUrl: 'http://127.0.0.1:4173' }
-            : newSessionPlatform === 'android'
-            ? { appPackage: 'com.example.app' }
-            : { baseUrl: 'http://127.0.0.1:4173' },
-        environmentVariables: {},
-        steps: [],
-        createdAt: Date.now(),
-        updatedAt: Date.now(),
-      },
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
+  useEffect(() => {
+    if (!dialog) return;
+    const previous = document.activeElement as HTMLElement | null;
+    const getFocusable = () => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('input, select, textarea, button, [href], [tabindex]:not([tabindex="-1"])') ?? []).filter((element) => !element.hasAttribute('disabled'));
+    getFocusable()[0]?.focus();
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setDialog(undefined);
+      if (event.key !== 'Tab') return;
+      const elements = getFocusable();
+      if (elements.length === 0) return;
+      const first = elements[0];
+      const last = elements[elements.length - 1];
+      if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+      else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
     };
+    document.addEventListener('keydown', onKeyDown);
+    return () => {
+      document.removeEventListener('keydown', onKeyDown);
+      previous?.focus();
+    };
+  }, [dialog]);
 
-    await bridge.sessionRepo.save(newSession);
-    useAppStore.setState((state) => ({
-      sessions: [...state.sessions, newSession],
-      activeSession: newSession,
-    }));
-
-    setNewSessionName('');
-    setShowNewSessionModal(false);
+  const closeDialog = () => setDialog(undefined);
+  const submitProject = async () => {
+    await createProject(projectName, workspacePath);
+    if (projectName.trim() && workspacePath.trim()) { setProjectName(''); setWorkspacePath(''); closeDialog(); }
+  };
+  const submitSession = async () => {
+    await createSession(sessionName, sessionPlatform);
+    if (sessionName.trim() && activeProject) { setSessionName(''); closeDialog(); }
   };
 
   return (
-    <aside className="w-64 bg-slate-900 border-r border-slate-800 flex flex-col justify-between text-xs select-none">
-      {/* Top Explorer Section */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-4">
-        {/* Project Selector */}
-        <div>
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-            <span>Workspace</span>
-            <span className="text-slate-500 font-mono">Offline</span>
+    <aside className="sidebar-panel bg-slate-900 border-r border-slate-800 flex flex-col text-xs">
+      <div className="flex-1 overflow-y-auto p-3 space-y-5">
+        <section aria-labelledby="workspace-heading">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span id="workspace-heading">Workspace</span><span className="text-slate-500 font-mono">Local only</span>
           </div>
-          <div className="relative">
-            <select
-              value={activeProject?.id || ''}
-              onChange={(e) => selectProject(e.target.value)}
-              className="w-full bg-slate-950 text-slate-200 border border-slate-800 rounded-md py-1.5 px-2.5 text-xs font-medium focus:outline-none focus:border-indigo-500 appearance-none cursor-pointer"
-            >
-              {projects.map((p) => (
-                <option key={p.id} value={p.id}>
-                  📁 {p.name}
-                </option>
-              ))}
+          <div className="flex gap-2">
+            <select aria-label="Select project" value={activeProject?.id ?? ''} onChange={(event) => void selectProject(event.target.value)} className="min-w-0 flex-1 bg-slate-950 text-slate-200 border border-slate-800 rounded-md py-2 px-2.5 text-xs font-medium focus:outline-none focus:border-indigo-500">
+              <option value="">No project selected</option>
+              {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
-            <ChevronDown className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-2.5 pointer-events-none" />
+            <button type="button" onClick={() => setDialog('project')} className="shrink-0 p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md border border-slate-800" aria-label="Create project" title="Create project"><Plus className="w-4 h-4" /></button>
           </div>
-        </div>
+        </section>
 
-        {/* Test Sessions List */}
-        <div>
+        <section aria-labelledby="sessions-heading">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span>Test Sessions ({sessions.length})</span>
-            <button
-              onClick={() => setShowNewSessionModal(true)}
-              className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded transition-colors"
-              title="Add New Test Session"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
+            <span id="sessions-heading">Test Sessions ({sessions.length})</span>
+            <button type="button" disabled={!activeProject} onClick={() => setDialog('session')} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-40" aria-label="Create session" title={activeProject ? 'Create session' : 'Create a project first'}><Plus className="w-3.5 h-3.5" /></button>
           </div>
+          {sessions.length === 0 ? <p className="rounded-md border border-dashed border-slate-800 p-3 text-slate-500 leading-5">No session exists. Create one, then provide its real target.</p> :
+            <div className="space-y-1">{sessions.map((session) => <button key={session.id} type="button" onClick={() => void selectSession(session.id)} aria-pressed={activeSession?.id === session.id} className={`w-full flex items-center justify-between p-2.5 rounded-md text-left border ${activeSession?.id === session.id ? 'bg-indigo-600/20 text-indigo-200 border-indigo-500/40' : 'text-slate-300 hover:bg-slate-800/60 border-transparent'}`}>
+              <span className="flex items-center gap-2 truncate">{session.platform === 'web' && <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />}{session.platform === 'android' && <Smartphone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}{session.platform === 'api' && <Server className="w-3.5 h-3.5 text-amber-400 shrink-0" />}<span className="truncate font-medium">{session.name}</span></span>
+              <span className="text-[10px] font-mono text-slate-500">{session.ir.steps.length} steps</span>
+            </button>)}</div>}
+        </section>
 
-          <div className="space-y-1">
-            {sessions.map((session) => {
-              const isActive = activeSession?.id === session.id;
-              return (
-                <button
-                  key={session.id}
-                  onClick={() => selectSession(session.id)}
-                  className={`w-full flex items-center justify-between p-2 rounded-md transition-all text-left group ${
-                    isActive
-                      ? 'bg-indigo-600/20 text-indigo-200 border border-indigo-500/40 shadow-sm'
-                      : 'text-slate-300 hover:bg-slate-800/60 border border-transparent'
-                  }`}
-                >
-                  <div className="flex items-center gap-2 truncate">
-                    {session.platform === 'web' && <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />}
-                    {session.platform === 'android' && (
-                      <Smartphone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
-                    )}
-                    {session.platform === 'api' && <Server className="w-3.5 h-3.5 text-amber-400 shrink-0" />}
-                    <span className="truncate font-medium">{session.name}</span>
-                  </div>
-                  <span className="text-[10px] font-mono text-slate-500 group-hover:text-slate-400">
-                    {session.ir?.steps?.length ?? 0} steps
-                  </span>
-                </button>
-              );
-            })}
+        <section aria-labelledby="devices-heading">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between"><span id="devices-heading">Android preflight</span><SmartphoneNfc className="w-3.5 h-3.5 text-slate-500" /></div>
+          <div className="rounded-md border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+            <div className="flex items-start gap-2 text-slate-500 leading-5"><span className="mt-1 h-2 w-2 rounded-full bg-slate-600 shrink-0" /> <span>{deviceDiscoveryMessage}</span></div>
+            <button type="button" onClick={() => void discoverDevices()} className="flex items-center gap-1.5 px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-slate-700"><RefreshCw className="w-3.5 h-3.5" /> Check devices</button>
+            {devices.length > 0 && <select aria-label="Select Android device" value={activeDevice ?? ''} onChange={(event) => setActiveDevice(event.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-200">{devices.map((device) => <option key={device.id} value={device.id}>{device.model || device.id} · {device.status}</option>)}</select>}
+            {devices.map((device) => <div key={device.id} className="flex items-center justify-between text-[10px] font-mono"><span className={device.status === 'device' ? 'text-emerald-300' : 'text-amber-300'}>{device.status}</span><span className="text-slate-500">{device.id}</span></div>)}
           </div>
-        </div>
-
-        {/* Connected Android Devices */}
-        <div>
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span>Android Devices</span>
-            <SmartphoneNfc className="w-3.5 h-3.5 text-slate-500" />
-          </div>
-          <div className="space-y-1">
-            {devices.map((d) => (
-              <div
-                key={d.id}
-                className="flex items-center justify-between p-2 rounded bg-slate-950/60 border border-slate-800/80"
-              >
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                  <span className="font-mono text-slate-300 text-[11px]">{d.model}</span>
-                </div>
-                <span className="text-[10px] bg-slate-800 text-slate-400 px-1 rounded font-mono">
-                  {d.id}
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
+        </section>
       </div>
 
-      {/* Bottom Run Summary Status */}
       <div className="p-3 border-t border-slate-800 bg-slate-950/40">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between">
-          <span>Latest Run Outcome</span>
-          <Clock className="w-3 h-3 text-slate-500" />
-        </div>
-        {lastRunSummary ? (
-          <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800">
-            <div className="flex items-center gap-1.5 font-medium">
-              {lastRunSummary.status === 'passed' ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-              ) : (
-                <XCircle className="w-4 h-4 text-rose-400" />
-              )}
-              <span
-                className={
-                  lastRunSummary.status === 'passed' ? 'text-emerald-300 font-bold' : 'text-rose-300 font-bold'
-                }
-              >
-                {lastRunSummary.status.toUpperCase()}
-              </span>
-            </div>
-            <span className="text-[11px] font-mono text-slate-400">
-              {lastRunSummary.passedSteps}/{lastRunSummary.totalSteps} in {lastRunSummary.durationMs}ms
-            </span>
-          </div>
-        ) : (
-          <div className="text-slate-500 italic text-[11px] text-center py-1">Ready for execution</div>
-        )}
+        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5 flex items-center justify-between"><span>Latest run</span><Clock className="w-3 h-3 text-slate-500" /></div>
+        {lastRunSummary ? <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800"><span className="flex items-center gap-1.5 font-bold">{lastRunSummary.status === 'passed' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <XCircle className="w-4 h-4 text-rose-400" />}{lastRunSummary.status.toUpperCase()}</span><span className="text-[11px] font-mono text-slate-400">{lastRunSummary.passedSteps}/{lastRunSummary.totalSteps}</span></div> : <div className="text-slate-500 italic text-[11px] text-center py-1">No run evidence yet.</div>}
       </div>
 
-      {/* New Session Modal */}
-      {showNewSessionModal && (
-        <div className="fixed inset-0 bg-black/70 backdrop-blur-xs flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-xl p-5 w-full max-w-sm shadow-2xl space-y-4">
-            <h3 className="text-sm font-bold text-white flex items-center gap-2">
-              <Plus className="w-4 h-4 text-indigo-400" /> Create Test Session
-            </h3>
-
-            <div className="space-y-3">
-              <div>
-                <label className="text-[11px] font-medium text-slate-300 block mb-1">Session Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. User Signup & Checkout Flow"
-                  value={newSessionName}
-                  onChange={(e) => setNewSessionName(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-medium text-slate-300 block mb-1">Target Platform</label>
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setNewSessionPlatform('web')}
-                    className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border text-[11px] font-medium transition-all ${
-                      newSessionPlatform === 'web'
-                        ? 'bg-sky-950/60 border-sky-500 text-sky-200'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <Globe className="w-4 h-4 text-sky-400" /> Web
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewSessionPlatform('android')}
-                    className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border text-[11px] font-medium transition-all ${
-                      newSessionPlatform === 'android'
-                        ? 'bg-emerald-950/60 border-emerald-500 text-emerald-200'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <Smartphone className="w-4 h-4 text-emerald-400" /> Android
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setNewSessionPlatform('api')}
-                    className={`flex flex-col items-center gap-1.5 p-2 rounded-lg border text-[11px] font-medium transition-all ${
-                      newSessionPlatform === 'api'
-                        ? 'bg-amber-950/60 border-amber-500 text-amber-200'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:text-slate-200'
-                    }`}
-                  >
-                    <Server className="w-4 h-4 text-amber-400" /> API
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <button
-                onClick={() => setShowNewSessionModal(false)}
-                className="px-3 py-1.5 text-xs text-slate-400 hover:text-white rounded hover:bg-slate-800"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={() => void handleCreateSession()}
-                className="px-4 py-1.5 text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white rounded-md shadow-sm"
-              >
-                Create
-              </button>
-            </div>
-          </div>
+      {dialog && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}>
+        <div ref={dialogRef} className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="sidebar-dialog-title">
+          <div className="flex items-center justify-between gap-3"><h2 id="sidebar-dialog-title" className="text-sm font-bold text-white">{dialog === 'project' ? 'Create project' : 'Create session'}</h2><button type="button" onClick={closeDialog} className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800" aria-label="Close dialog"><X className="w-4 h-4" /></button></div>
+          {dialog === 'project' ? <form onSubmit={(event) => { event.preventDefault(); void submitProject(); }} className="space-y-3 mt-4"><label className="block text-slate-300">Project name<input required value={projectName} onChange={(event) => setProjectName(event.target.value)} className="field mt-1" /></label><label className="block text-slate-300">Workspace path<input required value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} className="field mt-1" /></label><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} className="button-muted">Cancel</button><button type="submit" className="button-primary">Create project</button></div></form> : <form onSubmit={(event) => { event.preventDefault(); void submitSession(); }} className="space-y-3 mt-4"><label className="block text-slate-300">Session name<input required value={sessionName} onChange={(event) => setSessionName(event.target.value)} className="field mt-1" /></label><label className="block text-slate-300">Platform<select value={sessionPlatform} onChange={(event) => setSessionPlatform(event.target.value as 'web' | 'android' | 'api')} className="field mt-1"><option value="web">Web</option><option value="android">Android</option><option value="api">API</option></select></label><p className="text-xs text-slate-500">Targets, packages, URLs, secrets, and actions are entered explicitly after creation.</p><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} className="button-muted">Cancel</button><button type="submit" className="button-primary">Create session</button></div></form>}
         </div>
-      )}
+      </div>}
     </aside>
   );
 };

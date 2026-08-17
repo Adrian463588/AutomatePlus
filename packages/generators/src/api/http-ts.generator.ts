@@ -42,7 +42,7 @@ export class HttpTsGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertStatusCode') {
-      return `    expect(lastResponse.status).toBe(${Number(action.expectedValue) || 200});`;
+      return `    expect(lastResponse.status).toBe(${this.requireExpectedNumber(action, 100, 599)});`;
     }
 
     if (action.action === 'assertJsonPath') {
@@ -54,14 +54,14 @@ export class HttpTsGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertResponseTime') {
-      return `    // assert response time under threshold`;
+      return this.unsupportedAction(action);
     }
 
     if (action.action === 'sleep') {
       return `    await new Promise((r) => setTimeout(r, ${action.timeoutMs ?? 1000}));`;
     }
 
-    return `    // Action: ${action.action}`;
+    return this.unsupportedAction(action);
   }
 
   public generateFooter(_session: SessionIR, _options?: GeneratorOptions): string {

@@ -9,7 +9,7 @@ export class RobolectricKotlinGenerator extends BaseCodeGenerator {
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
     const className = this.toPascalCase(session.name) + 'Test';
-    const activityName = session.targetConfig.appActivity ?? 'MainActivity';
+    const activityName = this.requireTargetField(session, 'appActivity');
     return [
       `package com.automateplus.tests`,
       ``,
@@ -36,7 +36,7 @@ export class RobolectricKotlinGenerator extends BaseCodeGenerator {
 
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
     const loc = this.getPrimaryLocator(action);
-    const matcher = loc ? this.formatEspressoMatcher(loc) : 'isRoot()';
+    const matcher = loc ? this.formatEspressoMatcher(loc) : this.unsupportedAction(action);
     const val = this.getJavaValue(action.value);
     const expected = this.getJavaValue(action.expectedValue ?? action.value);
 
@@ -62,7 +62,7 @@ export class RobolectricKotlinGenerator extends BaseCodeGenerator {
         return `            onView(${matcher}).check(matches(withText(${expected})))`;
 
       default:
-        return `            // Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -81,9 +81,9 @@ export class RobolectricKotlinGenerator extends BaseCodeGenerator {
       case 'accessibilityId':
         return `withContentDescription("${loc.value}")`;
       case 'text':
-        return `withText("${loc.value}")`;
+        return this.unsupportedLocator(loc);
       default:
-        return `withText("${loc.value}")`;
+        return this.unsupportedLocator(loc);
     }
   }
 

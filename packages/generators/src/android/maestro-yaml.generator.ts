@@ -8,7 +8,7 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
   public readonly supportedPlatforms = ['android'] as const;
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
-    const appId = session.targetConfig.appPackage ?? 'com.example.app';
+    const appId = this.requireTargetField(session, 'appPackage');
     return [
       `appId: ${appId}`,
       `---`,
@@ -17,29 +17,26 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
   }
 
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
-    const loc = this.getPrimaryLocator(action);
     const rawVal = this.getRawValue(action.value);
     const expected = this.getRawValue(action.expectedValue ?? action.value);
 
     switch (action.action) {
       case 'tap':
       case 'click':
-        return loc ? `- tapOn:\n    ${this.formatMaestroSelector(loc)}` : `- tapOn: { point: "50%,50%" }`;
+        return `- tapOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}`;
 
       case 'doubleTap':
       case 'doubleClick':
-        return loc ? `- doubleTapOn:\n    ${this.formatMaestroSelector(loc)}` : `- tapOn: { point: "50%,50%" }`;
+        return `- doubleTapOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}`;
 
       case 'longPress':
-        return loc ? `- longPressOn:\n    ${this.formatMaestroSelector(loc)}` : `- longPressOn: { point: "50%,50%" }`;
+        return `- longPressOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}`;
 
       case 'fill':
-        return loc
-          ? `- tapOn:\n    ${this.formatMaestroSelector(loc)}\n- inputText: "${rawVal}"`
-          : `- inputText: "${rawVal}"`;
+        return `- tapOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}\n- inputText: "${rawVal}"`;
 
       case 'clear':
-        return `- eraseText`;
+        return `- tapOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}\n- eraseText`;
 
       case 'back':
         return `- back`;
@@ -48,7 +45,7 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
         return `- scroll`;
 
       case 'swipe':
-        return `- swipe:\n    direction: UP`;
+        return this.unsupportedAction(action);
 
       case 'sleep':
         return `- delay: ${action.timeoutMs ?? 1000}`;
@@ -57,13 +54,13 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
         return `- takeScreenshot: ${rawVal || 'screenshot'}`;
 
       case 'assertVisible':
-        return loc ? `- assertVisible:\n    ${this.formatMaestroSelector(loc)}` : `- assertVisible: "true"`;
+        return `- assertVisible:\n    ${this.formatMaestroSelector(this.requireLocator(action))}`;
 
       case 'assertText':
-        return `- assertVisible: "${expected}"`;
+        return `- assertVisible:\n    ${this.formatMaestroSelector(this.requireLocator(action))}\n- assertVisible: "${expected}"`;
 
       default:
-        return `# Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -76,9 +73,9 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
       case 'resourceId':
         return `id: "${loc.value}"`;
       case 'text':
-        return `text: "${loc.value}"`;
+        return this.unsupportedLocator(loc);
       default:
-        return `text: "${loc.value}"`;
+        return this.unsupportedLocator(loc);
     }
   }
 }

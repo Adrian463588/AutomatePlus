@@ -12,7 +12,7 @@ export class K6StressRunner {
     _session: unknown,
     _options: K6StressOptions,
     _onLog: RunLogCallback,
-    _onMetric?: (metric: { rps: number; latencyMs: number; errorRate: number }) => void,
+    _onMetric?: (metric: { rps: number; latencyMs: number; errorRate: number; maxVUs: number }) => void,
   ): Promise<K6StressMetrics> {
     throw new AutomationError('RUNTIME_MISSING', 'k6 execution is host-only in the browser migration shell');
   }

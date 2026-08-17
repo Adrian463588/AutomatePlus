@@ -67,17 +67,15 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
         return `    await (await driver.$('${selector}')).clearValue();`;
 
       case 'swipe': {
-        const sx = action.swipeVector?.startX ?? 500;
-        const sy = action.swipeVector?.startY ?? 1500;
-        const ex = action.swipeVector?.endX ?? 500;
-        const ey = action.swipeVector?.endY ?? 500;
-        return `    await driver.action('pointer')\n      .move({ x: ${sx}, y: ${sy} })\n      .down()\n      .move({ x: ${ex}, y: ${ey}, duration: 500 })\n      .up()\n      .perform();`;
+        const vector = action.swipeVector;
+        if (!vector) return this.unsupportedAction(action);
+        const { startX: sx, startY: sy, endX: ex, endY: ey, durationMs } = vector;
+        return `    await driver.action('pointer')\n      .move({ x: ${sx}, y: ${sy} })\n      .down()\n      .move({ x: ${ex}, y: ${ey}, duration: ${durationMs} })\n      .up()\n      .perform();`;
       }
 
       case 'drag':
       case 'dragAndDrop': {
-        const targetLoc = action.dragTarget?.locators[0];
-        const targetSelector = targetLoc ? this.formatWdioSelector(targetLoc) : 'body';
+        const targetSelector = this.formatWdioSelector(this.requireDragTarget(action));
         return `    const src = await driver.$('${selector}');\n    const dst = await driver.$('${targetSelector}');\n    await src.dragAndDrop(dst);`;
       }
 
@@ -103,7 +101,7 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
         return `    expect(await (await driver.$('${selector}')).getText()).toContain(${expected});`;
 
       default:
-        return `    // Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -125,7 +123,7 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
       case 'xpath':
         return loc.value;
       default:
-        return `android=new UiSelector().resourceId("${loc.value}")`;
+        return this.unsupportedLocator(loc);
     }
   }
 }

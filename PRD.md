@@ -340,10 +340,10 @@ Acceptance scenarios use Given/When/Then wording. A simulator, mock device, gene
 |---|---|---|---|---|---|---|
 | REQ-GUI low-code workspace | FR-01, NFR-03 | ADR-01, UX-01 | `apps/desktop`, `src/AutomatePlus.App` | desktop typecheck; WinUI smoke | Vite build; .NET SDK blocker | Implemented/Blocked |
 | REQ-Web click-and-record | FR-02 | `IRecorder`, Web recorder design | `packages/recorder-web` | browser transport/normalizer tests | 10 Web tests; real browser pack pending | Implemented/Blocked |
-| REQ-Android ADB recorder | FR-03 | device lock, ADB boundary | `packages/recorder-android` | fake executor + ADB parser tests | 12 Android tests; no physical device | Implemented/Blocked |
+| REQ-Android ADB recorder | FR-03 | device lock, ADB boundary | `packages/recorder-android` | fake executor + ADB parser tests; authorized-device preflight | 12 Android tests; `QSWSEMRKNFZ9LJRC` discovery and lock release passed; target package not selected | Implemented/Blocked |
 | REQ-API functional flow | FR-04 | API builder, `RunEvent` | `packages/runner-core/src/api-runner.ts` | local HTTP fixture + chaining test | 3 API runner tests, including loopback fetch | Implemented |
-| REQ-27 generated targets | FR-05, NFR-04/05 | capability manifest, generator registry | `packages/generators`, sidecar | 27-entry golden matrix pending | 27 registrations; compile matrix pending | Implemented/Blocked |
-| REQ-functional/UI soak/API RPS split | FR-06/07/08 | run modes, k6 boundary | `runner-core`, `stress-engine` | k6 summary parser fixture + loopback k6 smoke | 80 component tests; real k6 loopback smoke passed at 5.99 RPS with 0% errors | Implemented/Blocked |
+| REQ-27 generated targets | FR-05, NFR-04/05 | capability manifest, generator registry | `packages/generators`, sidecar | 27-entry component generation matrix | 27 registrations/materializations; generated-target formatter/lint/compile and native runtime gates remain pending | Implemented/Blocked |
+| REQ-functional/UI soak/API RPS split | FR-06/07/08 | run modes, k6 boundary | `runner-core`, `stress-engine` | k6 summary parser fixture + loopback k6 smoke | 85 component tests; real k6 loopback smoke passed at 5.95 RPS with 0% errors | Implemented/Blocked |
 | REQ-offline desktop/runtime packs | FR-12, NFR-02/12 | ADR-01/04, runtime manifest | `.NET Infrastructure`, `apps/sidecar` | offline/network-blocked fixture pending | .NET SDK/runtime pack blocker | Implemented/Blocked |
 | REQ-secret/process/path security | FR-13, NFR-05/06/07/08 | security design, IPC errors | `.NET Infrastructure`, contracts | negative security tests pending | TypeScript IPC redaction tests; .NET gate blocked | Implemented/Blocked |
 

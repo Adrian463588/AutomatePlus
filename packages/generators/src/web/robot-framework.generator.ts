@@ -85,7 +85,7 @@ export class RobotFrameworkGenerator extends BaseCodeGenerator {
         return `    Location Should Contain    ${expected}`;
 
       default:
-        return `    # Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -106,8 +106,9 @@ export class RobotFrameworkGenerator extends BaseCodeGenerator {
       case 'text':
         return `xpath=//*[text()='${loc.value}']`;
       case 'css':
-      default:
         return `css=${loc.value}`;
+      default:
+        return this.unsupportedLocator(loc);
     }
   }
 }

@@ -42,7 +42,7 @@ export class HttpPythonGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertStatusCode') {
-      return `    assert last_response.status_code == ${Number(action.expectedValue) || 200}`;
+      return `    assert last_response.status_code == ${this.requireExpectedNumber(action, 100, 599)}`;
     }
 
     if (action.action === 'assertJsonPath') {
@@ -58,7 +58,7 @@ export class HttpPythonGenerator extends BaseCodeGenerator {
       return `    import time; time.sleep(${(action.timeoutMs ?? 1000) / 1000})`;
     }
 
-    return `    # Action: ${action.action}`;
+    return this.unsupportedAction(action);
   }
 
   public generateFooter(_session: SessionIR, _options?: GeneratorOptions): string {

@@ -6,15 +6,15 @@ import { InteractivePlayer } from '@automate-plus/runner-core';
 
 describe('Stress Engine (Looper & k6 RPS Runner)', () => {
   const sampleApiSession: SessionIR = {
-    id: 's-api-1',
-    projectId: 'p-api-1',
+    id: '10000000-0000-4000-8000-000000000101',
+    projectId: '10000000-0000-4000-8000-000000000102',
     name: 'ApiBenchmark',
     platform: 'api',
     targetConfig: {},
     environmentVariables: {},
     steps: [
       {
-        id: 'step-1',
+        id: '10000000-0000-4000-8000-000000000103',
         stepNumber: 1,
         platform: 'api',
         action: 'httpRequest',
@@ -58,7 +58,9 @@ describe('Stress Engine (Looper & k6 RPS Runner)', () => {
   });
 
   it('should run k6 stress runner and stream metrics', async () => {
+    let observedMaxVUs: string | undefined;
     const processFactory: K6ProcessFactory = (request) => {
+      observedMaxVUs = request.environment.MAX_VUS;
       const summaryPath = request.args[2];
       writeFileSync(
         summaryPath,
@@ -79,15 +81,18 @@ describe('Stress Engine (Looper & k6 RPS Runner)', () => {
 
     const result = await k6Runner.runStressTest(
       sampleApiSession,
-      { targetRps: 50, durationSeconds: 2 },
+      { targetRps: 50, durationSeconds: 2, maxVUs: 37 },
       (event) => logs.push(event.message),
       (m) => metrics.push(m)
     );
 
     expect(result.targetRps).toBe(50);
+    expect(result.maxVUs).toBe(37);
+    expect(observedMaxVUs).toBe('37');
     expect(result.actualRps).toBeGreaterThan(40);
     expect(result.p95LatencyMs).toBeGreaterThan(0);
     expect(metrics.length).toBeGreaterThan(0);
+    expect(metrics[0].maxVUs).toBe(37);
     expect(logs.some((l) => l.includes('Generated k6 load script'))).toBe(true);
   });
 });

@@ -8,7 +8,18 @@ namespace AutomatePlus.App;
 /// behind the host boundary.
 public sealed class AppShell
 {
+    public AppShell(ShellViewModel? viewModel = null)
+    {
+        ViewModel = viewModel ?? new ShellViewModel();
+    }
+
+    public ShellViewModel ViewModel { get; }
+
     public SessionLifecycleState State { get; private set; } = SessionLifecycleState.Draft;
 
-    public void SetState(SessionLifecycleState state) => State = state;
+    public void SetState(SessionLifecycleState state)
+    {
+        State = state;
+        ViewModel.SetLifecycleState(state);
+    }
 }

@@ -18,13 +18,13 @@ export const TerminalPanel: React.FC = () => {
   }, [logs]);
 
   return (
-    <div className="h-44 bg-slate-950 border-t border-slate-800 flex flex-col font-mono text-[11px] select-text">
+    <section className="terminal-panel bg-slate-950 border-t border-slate-800 flex flex-col font-mono text-[11px] select-text" aria-labelledby="terminal-title">
       {/* Header Bar */}
       <div className="h-7 bg-slate-900 px-3 flex items-center justify-between border-b border-slate-800 select-none">
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-1.5 font-bold text-slate-300">
             <TerminalIcon className="w-3.5 h-3.5 text-indigo-400" />
-            <span>Process Terminal &amp; Logs</span>
+            <span id="terminal-title">Process terminal &amp; logs</span>
           </div>
           {isRunning && (
             <span className="flex items-center gap-1 text-[10px] text-amber-400 font-bold animate-pulse">
@@ -35,11 +35,13 @@ export const TerminalPanel: React.FC = () => {
 
         <div className="flex items-center gap-2">
           {lastRunSummary && (
-            <div className="flex items-center gap-1.5 text-[10px]">
+              <div className="flex items-center gap-1.5 text-[10px]" role="status" aria-live="polite">
               {lastRunSummary.status === 'passed' ? (
                 <span className="text-emerald-400 flex items-center gap-1 font-bold">
                   <CheckCircle className="w-3 h-3" /> PASSED
                 </span>
+              ) : lastRunSummary.status === 'blocked' ? (
+                <span className="text-amber-300 flex items-center gap-1 font-bold">BLOCKED</span>
               ) : (
                 <span className="text-rose-400 flex items-center gap-1 font-bold">
                   <XCircle className="w-3 h-3" /> FAILED
@@ -52,9 +54,11 @@ export const TerminalPanel: React.FC = () => {
           )}
 
           <button
+            type="button"
             onClick={clearLogs}
             className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
             title="Clear Terminal Output"
+            aria-label="Clear terminal output"
           >
             <Trash2 className="w-3.5 h-3.5" />
           </button>
@@ -84,6 +88,6 @@ export const TerminalPanel: React.FC = () => {
         )}
         <div ref={logEndRef} />
       </div>
-    </div>
+    </section>
   );
 };

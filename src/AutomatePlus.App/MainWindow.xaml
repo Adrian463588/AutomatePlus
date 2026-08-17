@@ -4,80 +4,257 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
     xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:local="using:AutomatePlus.App"
     mc:Ignorable="d"
     Title="AutomatePlus">
-    <Grid Padding="24" RowSpacing="16" ColumnSpacing="16">
+    <Grid x:Name="ContentRoot" Padding="20" RowSpacing="12">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="240" />
-            <ColumnDefinition Width="*" />
-        </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Row="0" Grid.ColumnSpan="2" Spacing="4">
-            <TextBlock Text="AutomatePlus" FontSize="28" FontWeight="SemiBold" />
-            <TextBlock Text="Offline low-code multiplatform test automation" Opacity="0.7" />
-        </StackPanel>
-
-        <NavigationView Grid.Row="1" Grid.Column="0" IsBackButtonVisible="Collapsed" IsSettingsVisible="False">
-            <NavigationView.MenuItems>
-                <NavigationViewItem Content="Projects" />
-                <NavigationViewItem Content="Web recorder" />
-                <NavigationViewItem Content="Android recorder" />
-                <NavigationViewItem Content="API builder" />
-                <NavigationViewItem Content="Runs and reports" />
-            </NavigationView.MenuItems>
-        </NavigationView>
-
-        <Grid Grid.Row="1" Grid.Column="1" RowSpacing="12">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto" />
-                <RowDefinition Height="*" />
-                <RowDefinition Height="Auto" />
-            </Grid.RowDefinitions>
-            <StackPanel Orientation="Horizontal" Spacing="12">
-                <ComboBox Header="Platform" SelectedIndex="0" Width="150">
-                    <ComboBoxItem Content="Web" />
-                    <ComboBoxItem Content="Android" />
-                    <ComboBoxItem Content="API" />
-                </ComboBox>
-                <ComboBox Header="Framework" SelectedIndex="0" Width="180">
-                    <ComboBoxItem Content="Playwright" />
-                    <ComboBoxItem Content="Appium" />
-                    <ComboBoxItem Content="k6" />
-                </ComboBox>
-                <Button Content="Start recorder" VerticalAlignment="Bottom" />
+        <Grid Grid.Row="0" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <StackPanel Spacing="4">
+                <TextBlock Text="AutomatePlus" FontSize="28" FontWeight="SemiBold" />
+                <TextBlock Text="Offline low-code multiplatform test automation" Opacity="0.7" />
             </StackPanel>
-            <Grid Grid.Row="1" ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                </Grid.ColumnDefinitions>
-                <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1" Padding="16">
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="Action timeline" FontSize="20" />
-                        <TextBlock Text="Record an action or drag a step here to compose the session." Opacity="0.7" />
-                        <ListView>
-                            <ListViewItem Content="1. Navigate" />
-                            <ListViewItem Content="2. Click" />
-                            <ListViewItem Content="3. Assert" />
-                        </ListView>
-                    </StackPanel>
-                </Border>
-                <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="16">
-                    <StackPanel Spacing="8">
-                        <TextBlock Text="Code preview" FontSize="20" />
-                        <TextBlock Text="Generated code appears after capability validation." Opacity="0.7" TextWrapping="Wrap" />
-                        <TextBox Text="// Select a session to generate a runnable project" IsReadOnly="True" AcceptsReturn="True" Height="120" />
-                    </StackPanel>
-                </Border>
-            </Grid>
-            <InfoBar Grid.Row="2" IsOpen="True" Severity="Warning" Title="Runtime health" Message="Import a verified offline runtime pack before recording or running." />
+            <TextBlock Grid.Column="1"
+                       Text="Native acceptance requires verified local packs"
+                       VerticalAlignment="Center"
+                       TextWrapping="Wrap"
+                       MaxWidth="250"
+                       Opacity="0.7"
+                       AutomationProperties.Name="Native acceptance boundary" />
         </Grid>
 
-        <TextBlock Grid.Row="2" Grid.ColumnSpan="2" Text="State: Draft · Missing runtimes remain Blocked and never simulate a pass." Opacity="0.7" />
+        <NavigationView x:Name="MainNavigation"
+                        Grid.Row="1"
+                        IsBackButtonVisible="Collapsed"
+                        IsSettingsVisible="False"
+                        MenuItemsSource="{Binding NavigationItems}"
+                        SelectedItem="{Binding SelectedNavigationItem, Mode=TwoWay}"
+                        AutomationProperties.Name="AutomatePlus navigation">
+            <NavigationView.MenuItemTemplate>
+                <DataTemplate x:DataType="local:ShellNavigationItem">
+                    <TextBlock Text="{x:Bind DisplayName}" />
+                </DataTemplate>
+            </NavigationView.MenuItemTemplate>
+            <NavigationView.Content>
+                <ScrollViewer VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled"
+                              AutomationProperties.Name="Workspace content">
+                    <StackPanel Spacing="12" Padding="4">
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Session workspace" FontSize="20" FontWeight="SemiBold" />
+                            <ComboBox Header="Platform"
+                                      ItemsSource="{Binding Platforms}"
+                                      SelectedItem="{Binding SelectedPlatform, Mode=TwoWay}"
+                                      DisplayMemberPath="DisplayName"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="Select automation platform" />
+                            <TextBlock Text="Select a platform to load its registered capabilities."
+                                       TextWrapping="Wrap"
+                                       Opacity="0.7"
+                                       AutomationProperties.Name="Platform selection guidance" />
+                            <ComboBox Header="Framework and language"
+                                      ItemsSource="{Binding FrameworkCapabilities}"
+                                      SelectedItem="{Binding SelectedCapability, Mode=TwoWay}"
+                                      DisplayMemberPath="DisplayName"
+                                      HorizontalAlignment="Stretch"
+                                      AutomationProperties.Name="Select framework and language capability" />
+                            <TextBlock Text="Select a capability from the loaded manifest before checking runtime readiness."
+                                       TextWrapping="Wrap"
+                                       Opacity="0.7"
+                                       AutomationProperties.Name="Capability selection guidance" />
+                            <TextBlock Text="{Binding CapabilityStateMessage}"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.7"
+                                       AutomationProperties.Name="Capability state explanation" />
+                            <StackPanel x:Name="SelectionActions" Orientation="Horizontal" Spacing="8">
+                                <Button Content="Check runtime"
+                                        Command="{Binding RefreshRuntimeCommand}"
+                                        ToolTipService.ToolTip="Check the selected capability against a local verified runtime pack."
+                                        AutomationProperties.Name="Check selected runtime" />
+                                <Button Content="Start recorder"
+                                        Command="{Binding StartRecordingCommand}"
+                                        ToolTipService.ToolTip="{Binding RecorderCommandReason}"
+                                        AutomationProperties.Name="Start recorder" />
+                                <Button Content="Stop"
+                                        Command="{Binding StopCommand}"
+                                        ToolTipService.ToolTip="Cancel the active application operation."
+                                        AutomationProperties.Name="Stop active operation" />
+                            </StackPanel>
+                            <TextBlock Text="{Binding RecorderCommandReason}"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.7"
+                                       AutomationProperties.Name="Recorder command state" />
+                        </StackPanel>
+
+                        <Grid x:Name="BodyGrid" ColumnSpacing="12" RowSpacing="12">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <Border x:Name="TimelinePanel"
+                                    Grid.Row="0"
+                                    Grid.Column="0"
+                                    BorderBrush="Gray"
+                                    BorderThickness="1"
+                                    Padding="16">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Action timeline" FontSize="20" />
+                                    <TextBlock Text="{Binding TimelineStatus}"
+                                               TextWrapping="Wrap"
+                                               Opacity="0.7"
+                                               AutomationProperties.Name="Timeline state" />
+                                    <ListView ItemsSource="{Binding Timeline}"
+                                              AutomationProperties.Name="Persisted action timeline">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="local:ShellTimelineItem">
+                                                <StackPanel Spacing="2" Padding="4">
+                                                    <TextBlock Text="{x:Bind DisplayName}" FontWeight="SemiBold" />
+                                                    <TextBlock Text="{x:Bind Description}" TextWrapping="Wrap" Opacity="0.8" />
+                                                    <TextBlock Text="{x:Bind LocatorSummary}" Opacity="0.7" />
+                                                </StackPanel>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="CodePanel"
+                                    Grid.Row="0"
+                                    Grid.Column="1"
+                                    BorderBrush="Gray"
+                                    BorderThickness="1"
+                                    Padding="16">
+                                <StackPanel Spacing="8">
+                                    <TextBlock Text="Generated project preview" FontSize="20" />
+                                    <TextBlock Text="Generated output is shown only after the application generator succeeds."
+                                               TextWrapping="Wrap"
+                                               Opacity="0.7" />
+                                    <TextBox Text="{Binding GeneratedCode}"
+                                             IsReadOnly="True"
+                                             AcceptsReturn="True"
+                                             TextWrapping="NoWrap"
+                                             MinHeight="180"
+                                             ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                             AutomationProperties.Name="Generated project preview" />
+                                    <Button Content="Generate project"
+                                            Command="{Binding GenerateCommand}"
+                                            ToolTipService.ToolTip="{Binding GenerateCommandReason}"
+                                            HorizontalAlignment="Left"
+                                            AutomationProperties.Name="Generate project" />
+                                    <TextBlock Text="{Binding GenerateCommandReason}"
+                                               TextWrapping="Wrap"
+                                               Opacity="0.7"
+                                               AutomationProperties.Name="Generate command state" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <Grid ColumnSpacing="12" RowSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border Grid.Column="0" BorderBrush="Gray" BorderThickness="1" Padding="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Session" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding SessionState}" />
+                                    <TextBlock Text="{Binding SessionStateMessage}" TextWrapping="Wrap" Opacity="0.7" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="1" BorderBrush="Gray" BorderThickness="1" Padding="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Runtime" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding RuntimeState}" />
+                                    <TextBlock Text="{Binding RuntimeStateMessage}" TextWrapping="Wrap" Opacity="0.7" />
+                                </StackPanel>
+                            </Border>
+                            <Border Grid.Column="2" BorderBrush="Gray" BorderThickness="1" Padding="12">
+                                <StackPanel Spacing="4">
+                                    <TextBlock Text="Workspace" FontWeight="SemiBold" />
+                                    <TextBlock Text="{Binding WorkspaceState}" />
+                                    <TextBlock Text="{Binding WorkspaceStateMessage}" TextWrapping="Wrap" Opacity="0.7" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+
+                        <InfoBar IsOpen="True"
+                                 Severity="Warning"
+                                 Title="{Binding ActivityState}"
+                                 Message="{Binding ActivityMessage}"
+                                 AutomationProperties.Name="Live shell status"
+                                 AutomationProperties.LiveSetting="Polite" />
+
+                        <StackPanel x:Name="RunActions" Orientation="Horizontal" Spacing="8">
+                            <Button Content="Run session"
+                                    Command="{Binding RunCommand}"
+                                    ToolTipService.ToolTip="{Binding RunCommandReason}"
+                                    AutomationProperties.Name="Run current session" />
+                            <TextBlock Text="{Binding RunCommandReason}"
+                                       VerticalAlignment="Center"
+                                       TextWrapping="Wrap"
+                                       Opacity="0.7"
+                                       AutomationProperties.Name="Run command state" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </NavigationView.Content>
+        </NavigationView>
+
+        <TextBlock Grid.Row="2"
+                   Text="{Binding RuntimeStateMessage}"
+                   TextWrapping="Wrap"
+                   Opacity="0.7"
+                   AutomationProperties.Name="Native runtime acceptance status" />
+
+        <VisualStateManager.VisualStateGroups>
+            <VisualStateGroup x:Name="ResponsiveStates">
+                <VisualState x:Name="Compact">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="0" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="ContentRoot.Padding" Value="12" />
+                        <Setter Target="MainNavigation.DisplayMode" Value="Compact" />
+                        <Setter Target="SelectionActions.Orientation" Value="Vertical" />
+                        <Setter Target="RunActions.Orientation" Value="Vertical" />
+                        <Setter Target="TimelinePanel.(Grid.Column)" Value="0" />
+                        <Setter Target="TimelinePanel.(Grid.Row)" Value="0" />
+                        <Setter Target="CodePanel.(Grid.Column)" Value="0" />
+                        <Setter Target="CodePanel.(Grid.Row)" Value="1" />
+                    </VisualState.Setters>
+                </VisualState>
+                <VisualState x:Name="Expanded">
+                    <VisualState.StateTriggers>
+                        <AdaptiveTrigger MinWindowWidth="900" />
+                    </VisualState.StateTriggers>
+                    <VisualState.Setters>
+                        <Setter Target="ContentRoot.Padding" Value="20" />
+                        <Setter Target="MainNavigation.DisplayMode" Value="Expanded" />
+                        <Setter Target="SelectionActions.Orientation" Value="Horizontal" />
+                        <Setter Target="RunActions.Orientation" Value="Horizontal" />
+                        <Setter Target="TimelinePanel.(Grid.Column)" Value="0" />
+                        <Setter Target="TimelinePanel.(Grid.Row)" Value="0" />
+                        <Setter Target="CodePanel.(Grid.Column)" Value="1" />
+                        <Setter Target="CodePanel.(Grid.Row)" Value="0" />
+                    </VisualState.Setters>
+                </VisualState>
+            </VisualStateGroup>
+        </VisualStateManager.VisualStateGroups>
     </Grid>
 </Window>

@@ -1,277 +1,68 @@
-import React, { useState } from 'react';
-import { useAppStore } from '../../store/appStore.js';
-import {
-  Send,
-  Plus,
-  Trash2,
-  CheckCircle2,
-  Server,
-  ShieldCheck,
-} from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AlertCircle, CheckCircle2, Plus, Send, Server, Trash2 } from 'lucide-react';
+import { ActionIR } from '@automate-plus/ir-schema';
+import { ApiAssertionDraft, useAppStore } from '../../store/appStore.js';
+
+type HttpMethod = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'HEAD' | 'OPTIONS';
+type BuilderTab = 'body' | 'headers' | 'assertions' | 'extract';
+interface HeaderRow { key: string; value: string; }
+interface ResponseSnapshot { status: number; statusText: string; durationMs: number; headers: Record<string, string>; data: unknown; }
 
 export const ApiBuilderView: React.FC = () => {
-  const { activeSession, addStep } = useAppStore();
-
-  const [method, setMethod] = useState<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'>('POST');
-  const [url, setUrl] = useState(
-    activeSession?.ir.targetConfig.baseUrl
-      ? `${activeSession.ir.targetConfig.baseUrl}/v1/auth/login`
-      : 'http://127.0.0.1:4173/api/health'
-  );
-  const [headers, setHeaders] = useState<Array<{ key: string; value: string }>>([
-    { key: 'Content-Type', value: 'application/json' },
-  ]);
-  const [bodyContent, setBodyContent] = useState(
-    JSON.stringify({ email: 'user@example.test', password: '{{API_PASSWORD}}' }, null, 2)
-  );
-  const [activeTab, setActiveTab] = useState<'body' | 'headers' | 'assertions' | 'extract'>('body');
-  const [lastResponse, setLastResponse] = useState<any>(null);
-  const [requestError, setRequestError] = useState<string | undefined>();
+  const { activeSession, saveApiRequest, setFeedback } = useAppStore();
+  const [method, setMethod] = useState<HttpMethod>('GET');
+  const [url, setUrl] = useState('');
+  const [headers, setHeaders] = useState<HeaderRow[]>([]);
+  const [bodyContent, setBodyContent] = useState('');
+  const [activeTab, setActiveTab] = useState<BuilderTab>('body');
+  const [assertions, setAssertions] = useState<ApiAssertionDraft[]>([]);
+  const [extractions, setExtractions] = useState<Array<{ variableName: string; jsonPath: string }>>([]);
+  const [lastResponse, setLastResponse] = useState<ResponseSnapshot>();
+  const [requestError, setRequestError] = useState<string>();
   const [isSending, setIsSending] = useState(false);
 
-  const handleAddHeader = () => {
-    setHeaders([...headers, { key: '', value: '' }]);
-  };
+  useEffect(() => {
+    const request = [...(activeSession?.ir.steps ?? [])].reverse().find((step) => step.action === 'httpRequest' && step.apiPayload);
+    if (!request?.apiPayload) { setMethod('GET'); setUrl(''); setHeaders([]); setBodyContent(''); setExtractions([]); setAssertions([]); return; }
+    setMethod(request.apiPayload.method as HttpMethod); setUrl(request.apiPayload.url); setHeaders(Object.entries(request.apiPayload.headers).map(([key, value]) => ({ key, value: typeof value === 'string' ? value : '' }))); setBodyContent(typeof request.apiPayload.bodyContent === 'string' ? request.apiPayload.bodyContent : ''); setExtractions(request.apiPayload.extractedVariables);
+    setAssertions((activeSession?.ir.steps ?? []).filter((step) => step.action.startsWith('assert') && ['assertStatusCode', 'assertJsonPath', 'assertHeader', 'assertResponseTime'].includes(step.action)).map((step) => ({ action: step.action as ApiAssertionDraft['action'], expectedValue: step.expectedValue ?? '', attributeName: step.attributeName ?? step.assertion?.jsonPath ?? step.assertion?.headerName })));
+  }, [activeSession?.id, activeSession?.ir.updatedAt]);
 
-  const handleRemoveHeader = (index: number) => {
-    setHeaders(headers.filter((_, i) => i !== index));
-  };
+  const updateHeader = (index: number, field: keyof HeaderRow, value: string) => setHeaders((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, [field]: value } : item));
+  const addAssertion = (action: ApiAssertionDraft['action']) => setAssertions((items) => [...items, { action, expectedValue: '', attributeName: action === 'assertJsonPath' || action === 'assertHeader' ? '' : undefined }]);
+  const addExtraction = () => setExtractions((items) => [...items, { variableName: '', jsonPath: '' }]);
 
-  const handleSendAndRecord = async () => {
-    setIsSending(true);
-    setRequestError(undefined);
+  const handleSend = async () => {
+    if (!activeSession || activeSession.platform !== 'api') { setFeedback({ kind: 'blocked', message: 'Create and select an API session first.' }); return; }
+    if (!url.trim()) { setRequestError('A user-provided request URL is required.'); setFeedback({ kind: 'blocked', message: 'Request blocked: enter a URL.' }); return; }
+    let parsedUrl: URL;
+    try { parsedUrl = new URL(url.trim()); } catch { setRequestError('The request URL is not valid.'); setFeedback({ kind: 'error', message: 'Request blocked: invalid URL.' }); return; }
+    const cleanHeaders = Object.fromEntries(headers.filter((header) => header.key.trim()).map((header) => [header.key.trim(), header.value]));
+    const body = bodyContent.trim();
+    const methodAllowsBody = !['GET', 'HEAD', 'OPTIONS'].includes(method);
+    if (body && !methodAllowsBody) { setRequestError(`${method} requests do not accept a request body.`); setFeedback({ kind: 'blocked', message: `Request blocked: ${method} does not accept a body.` }); return; }
+    if (body && methodAllowsBody) { try { JSON.parse(body); } catch { setRequestError('The JSON body is invalid.'); setFeedback({ kind: 'error', message: 'Request blocked: invalid JSON body.' }); return; } }
+    const validAssertions = assertions.filter((assertion) => assertion.expectedValue.trim() && (assertion.action === 'assertStatusCode' || assertion.action === 'assertResponseTime' || assertion.attributeName?.trim()));
+    const request: ActionIR = { id: crypto.randomUUID(), schemaVersion: 2, stepNumber: activeSession.ir.steps.length + 1, platform: 'api', action: 'httpRequest', apiPayload: { method, url: parsedUrl.toString(), headers: cleanHeaders, queryParams: {}, bodyType: body ? 'json' : 'none', ...(body ? { bodyContent: body } : {}), extractedVariables: extractions.filter((item) => item.variableName.trim() && item.jsonPath.trim()).map((item) => ({ variableName: item.variableName.trim(), jsonPath: item.jsonPath.trim() })) }, timeoutMs: 5000, timestamp: Date.now(), optional: false };
+    setIsSending(true); setRequestError(undefined); setLastResponse(undefined); setFeedback({ kind: 'pending', message: 'Sending the explicitly requested API request…' });
+    await saveApiRequest(request, validAssertions);
     const startedAt = performance.now();
     try {
-      const headersMap: Record<string, string> = {};
-      headers.forEach((h) => {
-        if (h.key.trim()) headersMap[h.key.trim()] = h.value;
-      });
-      const hasBody = !['GET', 'HEAD'].includes(method) && bodyContent.trim().length > 0;
-      const response = await fetch(url, {
-        method,
-        headers: headersMap,
-        body: hasBody ? bodyContent : undefined,
-      });
-      const responseText = await response.text();
-      let data: unknown = responseText;
-      try {
-        data = responseText ? JSON.parse(responseText) : null;
-      } catch {
-        // Non-JSON responses remain visible as text.
-      }
-      const durationMs = Math.round(performance.now() - startedAt);
-      setLastResponse({
-        status: response.status,
-        statusText: response.statusText,
-        durationMs,
-        headers: Object.fromEntries(response.headers.entries()),
-        data,
-      });
-
-      addStep({
-        id: crypto.randomUUID(),
-        schemaVersion: 2,
-        stepNumber: (activeSession?.ir.steps.length ?? 0) + 1,
-        platform: 'api',
-        action: 'httpRequest',
-        apiPayload: {
-          method,
-          url,
-          headers: headersMap,
-          queryParams: {},
-          bodyType: hasBody ? 'json' : 'none',
-          ...(hasBody ? { bodyContent } : {}),
-          extractedVariables: [],
-        },
-        timeoutMs: 5000,
-        timestamp: Date.now(),
-        optional: false,
-      });
-    } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      setRequestError(`Request failed: ${message}`);
-    } finally {
-      setIsSending(false);
-    }
+      const response = await fetch(parsedUrl, { method, headers: cleanHeaders, body: body && methodAllowsBody ? body : undefined });
+      const raw = await response.text(); let data: unknown = raw;
+      try { data = raw ? JSON.parse(raw) : null; } catch { /* Preserve a non-JSON response as text. */ }
+      const snapshot = { status: response.status, statusText: response.statusText, durationMs: Math.round(performance.now() - startedAt), headers: Object.fromEntries(response.headers.entries()), data };
+      setLastResponse(snapshot);
+      setFeedback({ kind: response.ok ? 'success' : 'error', message: response.ok ? `Response received: ${response.status}.` : `Response received with HTTP error status ${response.status}.` });
+    } catch (error) { const message = error instanceof Error ? error.message : String(error); setRequestError(`Transport error: ${message}`); setFeedback({ kind: 'error', message: `Request failed: ${message}` }); }
+    finally { setIsSending(false); }
   };
 
-  return (
-    <div className="flex-1 flex flex-col h-full bg-slate-950/60 text-xs overflow-hidden select-none border-r border-slate-800">
-      {/* Top Request Bar */}
-      <div className="h-14 bg-slate-900 border-b border-slate-800 px-4 flex items-center gap-3">
-        <div className="flex items-center gap-1 bg-slate-950 border border-slate-700 rounded-md p-1">
-          <select
-            value={method}
-            onChange={(e) => setMethod(e.target.value as any)}
-            className="bg-transparent font-bold text-xs text-amber-400 focus:outline-none px-2 cursor-pointer"
-          >
-            <option value="GET">GET</option>
-            <option value="POST">POST</option>
-            <option value="PUT">PUT</option>
-            <option value="PATCH">PATCH</option>
-            <option value="DELETE">DELETE</option>
-          </select>
-        </div>
-
-        <input
-          type="text"
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          className="flex-1 bg-slate-950 border border-slate-700 rounded-md px-3 py-1.5 font-mono text-xs text-white focus:outline-none focus:border-indigo-500"
-          placeholder="http://127.0.0.1:4173/api/..."
-        />
-
-        <button
-          onClick={handleSendAndRecord}
-          disabled={isSending}
-          className="flex items-center gap-2 px-4 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-bold text-xs rounded-md shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50"
-        >
-          <Send className="w-3.5 h-3.5" />
-          <span>{isSending ? 'Sending...' : 'Send & Record'}</span>
-        </button>
-      </div>
-
-      {/* Main Split: Builder Tabs (Left) + Response Viewer (Right) */}
-      <div className="flex-1 flex min-h-0">
-        {/* Request Configuration Section */}
-        <div className="flex-1 flex flex-col border-r border-slate-800">
-          {/* Subtabs */}
-          <div className="h-9 bg-slate-900/80 border-b border-slate-800 px-3 flex items-center gap-1">
-            <button
-              onClick={() => setActiveTab('body')}
-              className={`px-3 py-1 text-xs font-medium rounded transition-all ${
-                activeTab === 'body' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Body (JSON)
-            </button>
-            <button
-              onClick={() => setActiveTab('headers')}
-              className={`px-3 py-1 text-xs font-medium rounded transition-all ${
-                activeTab === 'headers' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Headers ({headers.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('assertions')}
-              className={`px-3 py-1 text-xs font-medium rounded transition-all ${
-                activeTab === 'assertions' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-              }`}
-            >
-              Assertions
-            </button>
-          </div>
-
-          {/* Subtab Content */}
-          <div className="flex-1 p-3 overflow-auto bg-slate-950">
-            {activeTab === 'body' && (
-              <textarea
-                value={bodyContent}
-                onChange={(e) => setBodyContent(e.target.value)}
-                className="w-full h-full bg-slate-900 text-slate-200 font-mono text-[11px] p-3 rounded border border-slate-800 focus:outline-none focus:border-indigo-500 resize-none"
-              />
-            )}
-
-            {activeTab === 'headers' && (
-              <div className="space-y-2">
-                {headers.map((header, index) => (
-                  <div key={index} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Header Name (e.g. Authorization)"
-                      value={header.key}
-                      onChange={(e) => {
-                        const newHeaders = [...headers];
-                        newHeaders[index].key = e.target.value;
-                        setHeaders(newHeaders);
-                      }}
-                      className="flex-1 bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white font-mono"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Header Value"
-                      value={header.value}
-                      onChange={(e) => {
-                        const newHeaders = [...headers];
-                        newHeaders[index].value = e.target.value;
-                        setHeaders(newHeaders);
-                      }}
-                      className="flex-1 bg-slate-900 border border-slate-800 rounded px-2.5 py-1 text-xs text-white font-mono"
-                    />
-                    <button
-                      onClick={() => handleRemoveHeader(index)}
-                      className="p-1 text-slate-500 hover:text-rose-400 rounded"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                ))}
-                <button
-                  onClick={handleAddHeader}
-                  className="flex items-center gap-1.5 px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded text-xs"
-                >
-                  <Plus className="w-3.5 h-3.5" /> Add Header
-                </button>
-              </div>
-            )}
-
-            {activeTab === 'assertions' && (
-              <div className="space-y-2">
-                <div className="p-2.5 bg-slate-900 border border-slate-800 rounded flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-emerald-400" />
-                    <span className="font-semibold text-white">Status Code is 200 OK</span>
-                  </div>
-                  <span className="text-[10px] bg-emerald-950 text-emerald-400 px-1.5 py-0.5 rounded font-mono">
-                    200
-                  </span>
-                </div>
-                <div className="p-2.5 bg-slate-900 border border-slate-800 rounded flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-indigo-400" />
-                    <span className="font-semibold text-white">JSONPath: $.token exists</span>
-                  </div>
-                  <span className="text-[10px] bg-indigo-950 text-indigo-400 px-1.5 py-0.5 rounded font-mono">
-                    String
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Response Viewer Section */}
-        <div className="w-1/2 flex flex-col bg-slate-950">
-          <div className="h-9 bg-slate-900/80 border-b border-slate-800 px-4 flex items-center justify-between">
-            <span className="font-semibold text-slate-300">Live Response</span>
-            {lastResponse && (
-              <div className="flex items-center gap-3 font-mono text-[11px]">
-                <span className="text-emerald-400 font-bold flex items-center gap-1">
-                  <CheckCircle2 className="w-3.5 h-3.5" /> {lastResponse.status} {lastResponse.statusText}
-                </span>
-                <span className="text-slate-400">{lastResponse.durationMs}ms</span>
-              </div>
-            )}
-          </div>
-          {requestError && (
-            <div className="border-b border-rose-900/60 bg-rose-950/40 px-4 py-2 text-rose-300">{requestError}</div>
-          )}
-
-          <div className="flex-1 p-3 overflow-auto font-mono text-[11px] text-slate-200">
-            {lastResponse ? (
-              <pre className="m-0 bg-slate-900 p-3 rounded border border-slate-800 overflow-auto">
-                <code>{JSON.stringify(lastResponse.data, null, 2)}</code>
-              </pre>
-            ) : (
-              <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-1">
-                <Server className="w-6 h-6 text-slate-700" />
-                <p>No response yet. Click &quot;Send &amp; Record&quot; to test endpoint.</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+  const responseIsError = Boolean(lastResponse && (lastResponse.status < 200 || lastResponse.status >= 300));
+  return <div className="api-panel flex-1 flex flex-col min-w-0 min-h-0 bg-slate-950/60 text-xs overflow-hidden border-r border-slate-800">
+    <div className="api-request-bar bg-slate-900 border-b border-slate-800 px-4 py-2 flex items-center gap-2"><label className="field-inline shrink-0"><span className="sr-only">HTTP method</span><select value={method} onChange={(event) => setMethod(event.target.value as HttpMethod)}><option>GET</option><option>POST</option><option>PUT</option><option>PATCH</option><option>DELETE</option><option>HEAD</option><option>OPTIONS</option></select></label><label className="flex-1 min-w-0"><span className="sr-only">Request URL</span><input type="url" value={url} onChange={(event) => setUrl(event.target.value)} className="field w-full font-mono" /></label><button type="button" onClick={() => void handleSend()} disabled={isSending || activeSession?.platform !== 'api'} title={activeSession?.platform === 'api' ? 'Send the user-provided request and persist its IR' : 'Select an API session first'} className="button-execute bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50"><Send className="w-3.5 h-3.5" />{isSending ? 'Sending…' : 'Send request'}</button></div>
+    <div className="api-builder-content flex-1 flex min-h-0"><div className="api-config flex-1 flex flex-col border-r border-slate-800 min-w-0"><div className="flex flex-wrap items-center gap-1 bg-slate-900/80 border-b border-slate-800 p-2">{(['body', 'headers', 'assertions', 'extract'] as BuilderTab[]).map((tab) => <button key={tab} type="button" onClick={() => setActiveTab(tab)} aria-pressed={activeTab === tab} className={`px-3 py-1.5 text-xs font-medium rounded ${activeTab === tab ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'}`}>{tab === 'headers' ? `Headers (${headers.length})` : tab === 'assertions' ? `Assertions (${assertions.length})` : tab === 'extract' ? `Extract (${extractions.length})` : 'Body'}</button>)}</div><div className="flex-1 p-3 overflow-auto bg-slate-950">{activeTab === 'body' && <label className="block h-full text-slate-400">JSON body<textarea value={bodyContent} onChange={(event) => setBodyContent(event.target.value)} className="field mt-1 w-full h-[calc(100%-1.5rem)] min-h-36 font-mono resize-none" /></label>}{activeTab === 'headers' && <div className="space-y-2">{headers.map((header, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2"><label><span className="sr-only">Header name</span><input value={header.key} onChange={(event) => updateHeader(index, 'key', event.target.value)} className="field w-full font-mono" /></label><label><span className="sr-only">Header value</span><input value={header.value} onChange={(event) => updateHeader(index, 'value', event.target.value)} className="field w-full font-mono" /></label><button type="button" onClick={() => setHeaders((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="button-small bg-slate-800 hover:bg-rose-950 text-slate-400" aria-label="Remove header"><Trash2 className="w-3.5 h-3.5" /></button></div>)}<button type="button" onClick={() => setHeaders((items) => [...items, { key: '', value: '' }])} className="button-small bg-slate-800 hover:bg-slate-700"><Plus className="w-3.5 h-3.5" />Add header</button></div>}{activeTab === 'assertions' && <div className="space-y-2"><p className="text-slate-500">Assertions are saved as API assertion actions when the request is sent.</p>{assertions.map((assertion, index) => <div key={index} className="grid grid-cols-[auto_1fr_1fr_auto] gap-2 items-center"><select value={assertion.action} onChange={(event) => setAssertions((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, action: event.target.value as ApiAssertionDraft['action'] } : item))} className="field"><option value="assertStatusCode">status</option><option value="assertJsonPath">JSONPath</option><option value="assertHeader">header</option><option value="assertResponseTime">duration</option></select>{(assertion.action === 'assertJsonPath' || assertion.action === 'assertHeader') && <input value={assertion.attributeName ?? ''} onChange={(event) => setAssertions((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, attributeName: event.target.value } : item))} className="field font-mono" aria-label="Assertion path or header" />}<input value={assertion.expectedValue} onChange={(event) => setAssertions((items) => items.map((item, itemIndex) => itemIndex === index ? { ...item, expectedValue: event.target.value } : item))} className="field font-mono" aria-label="Assertion expected value" /><button type="button" onClick={() => setAssertions((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="button-small bg-slate-800" aria-label="Remove assertion"><Trash2 className="w-3.5 h-3.5" /></button></div>)}<div className="flex flex-wrap gap-2"><button type="button" onClick={() => addAssertion('assertStatusCode')} className="button-small bg-slate-800"><Plus className="w-3.5 h-3.5" />Status</button><button type="button" onClick={() => addAssertion('assertJsonPath')} className="button-small bg-slate-800"><Plus className="w-3.5 h-3.5" />JSONPath</button><button type="button" onClick={() => addAssertion('assertHeader')} className="button-small bg-slate-800"><Plus className="w-3.5 h-3.5" />Header</button><button type="button" onClick={() => addAssertion('assertResponseTime')} className="button-small bg-slate-800"><Plus className="w-3.5 h-3.5" />Duration</button></div></div>}{activeTab === 'extract' && <div className="space-y-2"><p className="text-slate-500">Extraction variables are stored in the request ActionIR and used by later steps.</p>{extractions.map((item, index) => <div key={index} className="grid grid-cols-[1fr_1fr_auto] gap-2"><input value={item.variableName} onChange={(event) => setExtractions((items) => items.map((entry, entryIndex) => entryIndex === index ? { ...entry, variableName: event.target.value } : entry))} className="field font-mono" aria-label="Extraction variable name" /><input value={item.jsonPath} onChange={(event) => setExtractions((items) => items.map((entry, entryIndex) => entryIndex === index ? { ...entry, jsonPath: event.target.value } : entry))} className="field font-mono" aria-label="Extraction JSONPath" /><button type="button" onClick={() => setExtractions((items) => items.filter((_, itemIndex) => itemIndex !== index))} className="button-small bg-slate-800" aria-label="Remove extraction"><Trash2 className="w-3.5 h-3.5" /></button></div>)}<button type="button" onClick={addExtraction} className="button-small bg-slate-800"><Plus className="w-3.5 h-3.5" />Add extraction</button></div>}</div></div>
+      <section className="api-response flex-1 min-w-0 flex flex-col bg-slate-950" aria-labelledby="api-response-title"><div className="h-10 bg-slate-900/80 border-b border-slate-800 px-4 flex items-center justify-between gap-2"><h2 id="api-response-title" className="font-semibold text-slate-300">Live response</h2>{lastResponse && <div className={`flex items-center gap-2 font-mono text-[11px] ${responseIsError ? 'text-rose-300' : 'text-emerald-300'}`}>{responseIsError ? <AlertCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}{lastResponse.status} {lastResponse.statusText}<span className="text-slate-400">{lastResponse.durationMs}ms</span></div>}</div>{requestError && <div className="border-b border-rose-900/60 bg-rose-950/40 px-4 py-2 text-rose-300" role="alert">{requestError}</div>}<div className="flex-1 p-3 overflow-auto font-mono text-[11px] text-slate-200">{lastResponse ? <pre className={`m-0 p-3 rounded border overflow-auto ${responseIsError ? 'bg-rose-950/30 border-rose-900 text-rose-200' : 'bg-slate-900 border-slate-800'}`}><code>{JSON.stringify(lastResponse.data, null, 2)}</code></pre> : <div className="h-full flex flex-col items-center justify-center text-slate-600 space-y-1"><Server className="w-6 h-6 text-slate-700" /><p>No response has been requested.</p></div>}</div></section>
     </div>
-  );
+  </div>;
 };

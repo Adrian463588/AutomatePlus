@@ -72,7 +72,7 @@ export const ActionTimeline: React.FC = () => {
           <span>Recorded Action Sequence ({steps.length} steps)</span>
         </div>
         <span className="text-[10px] text-slate-500 font-mono">
-          Drag / Click Arrows to Reorder
+          Use the arrow controls to reorder
         </span>
       </div>
 
@@ -82,8 +82,8 @@ export const ActionTimeline: React.FC = () => {
           <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
             <Sparkles className="w-8 h-8 text-slate-600 animate-bounce" />
             <p className="text-xs">No actions recorded yet.</p>
-            <p className="text-[11px] text-slate-600">
-              Click &quot;Record Actions&quot; above or click interactive canvas elements.
+            <p className="text-[11px] text-slate-600 text-center max-w-sm">
+              Start the native recorder after target preflight is ready, or add an explicit request and assertion in the API builder.
             </p>
           </div>
         ) : (
@@ -140,7 +140,7 @@ export const ActionTimeline: React.FC = () => {
                         updateStep(index, { ...step, value: e.target.value })
                       }
                       className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-full focus:outline-none focus:border-indigo-500 disabled:opacity-60"
-                      placeholder="Value / Parameter..."
+                      aria-label={`Value for ${step.action}`}
                     />
                   )}
                   {step.expectedValue !== undefined && (
@@ -151,7 +151,7 @@ export const ActionTimeline: React.FC = () => {
                         updateStep(index, { ...step, expectedValue: e.target.value })
                       }
                       className="bg-slate-950 border border-rose-950 text-rose-300 rounded px-2 py-1 text-xs font-mono w-full focus:outline-none focus:border-rose-500"
-                      placeholder="Expected Value..."
+                      aria-label={`Expected value for ${step.action}`}
                     />
                   )}
                 </div>
@@ -159,25 +159,31 @@ export const ActionTimeline: React.FC = () => {
                 {/* Actions & Reordering */}
                 <div className="flex items-center gap-1 shrink-0">
                   <button
+                    type="button"
                     disabled={index === 0}
-                    onClick={() => reorderSteps(index, index - 1)}
+                    onClick={() => void reorderSteps(index, index - 1)}
                     className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30"
                     title="Move Step Up"
+                    aria-label={`Move step ${step.stepNumber} up`}
                   >
                     <ChevronUp className="w-3.5 h-3.5" />
                   </button>
                   <button
+                    type="button"
                     disabled={index === steps.length - 1}
-                    onClick={() => reorderSteps(index, index + 1)}
+                    onClick={() => void reorderSteps(index, index + 1)}
                     className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30"
                     title="Move Step Down"
+                    aria-label={`Move step ${step.stepNumber} down`}
                   >
                     <ChevronDown className="w-3.5 h-3.5" />
                   </button>
                   <button
-                    onClick={() => deleteStep(index)}
+                    type="button"
+                    onClick={() => void deleteStep(index)}
                     className="p-1 hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 rounded transition-colors ml-1"
                     title="Delete Step"
+                    aria-label={`Delete step ${step.stepNumber}`}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>

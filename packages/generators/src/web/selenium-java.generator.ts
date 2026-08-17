@@ -105,7 +105,7 @@ export class SeleniumJavaGenerator extends BaseCodeGenerator {
         return `        assertTrue(driver.getCurrentUrl().contains(${expected}));`;
 
       default:
-        return `        // Action: ${action.action}`;
+        return this.unsupportedAction(action);
     }
   }
 
@@ -129,8 +129,9 @@ export class SeleniumJavaGenerator extends BaseCodeGenerator {
       case 'text':
         return `By.xpath("//*[text()='${loc.value}']")`;
       case 'css':
-      default:
         return `By.cssSelector("${loc.value}")`;
+      default:
+        return this.unsupportedLocator(loc);
     }
   }
 
