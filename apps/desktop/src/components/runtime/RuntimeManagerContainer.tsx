@@ -12,6 +12,21 @@ import {
 import { bridge } from '../../services/desktopBridge.js';
 
 const TERMINAL_JOB_STATUSES = new Set(['Installed', 'Cancelled', 'Failed', 'Blocked', 'NeedsReview', 'Ready']);
+const PICKER_BLOCKED_REASON = 'Native directory and archive picker callbacks are unavailable.';
+
+export interface RuntimeNativePickerCallbacks {
+  chooseInstallPath: () => Promise<string | null>;
+  chooseArchivePath: () => Promise<string | null>;
+}
+
+export interface RuntimeManagerContainerProps {
+  nativePickers?: RuntimeNativePickerCallbacks;
+}
+
+type RuntimeHealthEvidence = {
+  status: 'ready' | 'failed' | 'unknown';
+  reason?: string;
+};
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
@@ -21,12 +36,13 @@ function wait(milliseconds: number): Promise<void> {
   return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
 }
 
-export const RuntimeManagerContainer: React.FC = () => {
+export const RuntimeManagerContainer: React.FC<RuntimeManagerContainerProps> = ({ nativePickers }) => {
   const [host, setHost] = useState<RuntimeManagerHostState>(() => bridge.getRuntimeHostState());
   const [entries, setEntries] = useState<RuntimeCatalogEntry[]>([]);
   const [roots, setRoots] = useState<RuntimeRootSnapshot[]>([]);
   const [activeRoot, setActiveRoot] = useState<RuntimeRootSnapshot>();
   const [activeJob, setActiveJob] = useState<RuntimeJobState>();
+  const [healthEvidence, setHealthEvidence] = useState<Record<string, RuntimeHealthEvidence>>({});
   const [busy, setBusy] = useState(false);
   const [statusMessage, setStatusMessage] = useState('Runtime Manager has not scanned the local roots yet.');
   const managerRef = useRef(bridge.getRuntimeManager());
@@ -36,8 +52,21 @@ export const RuntimeManagerContainer: React.FC = () => {
     [roots],
   );
   const packs = useMemo<RuntimePackView[]>(
-    () => buildRuntimePackViews(entries, installedPacks, activeJob ? [activeJob] : []),
-    [entries, installedPacks, activeJob],
+    () => buildRuntimePackViews(entries, installedPacks, activeJob ? [activeJob] : []).map((pack) => {
+      const health = healthEvidence[pack.entry.id];
+      if (!health || activeJob?.packIds.includes(pack.entry.id)) return pack;
+      if (health.status === 'failed') {
+        return { ...pack, status: 'Failed' as const, reason: health.reason ?? 'Native runtime health check failed.' };
+      }
+      if (health.status === 'unknown') {
+        return { ...pack, status: 'NeedsReview' as const, reason: health.reason ?? 'Native runtime health is unknown.' };
+      }
+      if (pack.status === 'Ready' || pack.status === 'Installed') {
+        return { ...pack, status: 'Ready' as const, reason: 'Native runtime health check passed.' };
+      }
+      return pack;
+    }),
+    [entries, installedPacks, activeJob, healthEvidence],
   );
 
   const applyRoots = useCallback((response: { roots: readonly RuntimeRootSnapshot[]; activeRoot?: RuntimeRootSnapshot }) => {
@@ -48,6 +77,7 @@ export const RuntimeManagerContainer: React.FC = () => {
 
   const scanLocal = useCallback(async () => {
     setBusy(true);
+    setHealthEvidence({});
     setStatusMessage('Scanning configured, workspace, local-app-data, program-data, and bundled roots…');
     try {
       const response = await managerRef.current.scanRoots();
@@ -61,8 +91,9 @@ export const RuntimeManagerContainer: React.FC = () => {
   }, [applyRoots]);
 
   const loadCatalog = useCallback(async () => {
-    setHost(bridge.getRuntimeHostState());
-    if (bridge.getRuntimeHostState().mode !== 'native') return;
+    const currentHost = bridge.getRuntimeHostState();
+    setHost(currentHost);
+    if (currentHost.mode !== 'native') return;
     try {
       const response = await managerRef.current.catalogList();
       setEntries([...response.entries]);
@@ -100,7 +131,11 @@ export const RuntimeManagerContainer: React.FC = () => {
   }, [scanLocal, waitForJob]);
 
   const chooseInstallPath = useCallback(async () => {
-    const path = window.prompt('Enter a writable local runtime-pack directory. No network action occurs here.');
+    if (!nativePickers) {
+      setStatusMessage(`Install path selection blocked: ${PICKER_BLOCKED_REASON}`);
+      return;
+    }
+    const path = await nativePickers.chooseInstallPath();
     if (!path?.trim()) {
       setStatusMessage('Install path selection cancelled; existing roots were not changed.');
       return;
@@ -113,10 +148,14 @@ export const RuntimeManagerContainer: React.FC = () => {
     } finally {
       setBusy(false);
     }
-  }, [applyRoots]);
+  }, [applyRoots, nativePickers]);
 
   const importArchive = useCallback(async () => {
-    const archivePath = window.prompt('Enter the full path to a local runtime archive or manifest package.');
+    if (!nativePickers) {
+      setStatusMessage(`Archive import blocked: ${PICKER_BLOCKED_REASON}`);
+      return;
+    }
+    const archivePath = await nativePickers.chooseArchivePath();
     if (!archivePath?.trim()) {
       setStatusMessage('Archive import cancelled; no local file was changed.');
       return;
@@ -129,7 +168,7 @@ export const RuntimeManagerContainer: React.FC = () => {
     } finally {
       setBusy(false);
     }
-  }, [scanLocal]);
+  }, [nativePickers, scanLocal]);
 
   const verifyAll = useCallback(async () => {
     setBusy(true);
@@ -141,6 +180,26 @@ export const RuntimeManagerContainer: React.FC = () => {
       setBusy(false);
     }
   }, [scanLocal]);
+
+  const checkRuntime = useCallback(async () => {
+    setBusy(true);
+    setStatusMessage('Checking installed runtime health with native evidence…');
+    try {
+      const catalog = await managerRef.current.catalogList();
+      const rootsResponse = await managerRef.current.scanRoots();
+      const verification = await managerRef.current.verifyAll();
+      const response = await managerRef.current.health();
+      setEntries([...catalog.entries]);
+      applyRoots(rootsResponse);
+      const nextEvidence = Object.fromEntries(response.packs.map((pack) => [pack.id, { status: pack.status, reason: pack.reason }]));
+      setHealthEvidence(nextEvidence);
+      const readyCount = response.packs.filter((pack) => pack.status === 'ready').length;
+      const attentionCount = response.packs.length - readyCount;
+      setStatusMessage(`Runtime check completed from native evidence: ${catalog.entries.length} catalog entries, ${verification.packs.length} local records, ${readyCount} ready, ${attentionCount} need attention.`);
+    } finally {
+      setBusy(false);
+    }
+  }, [applyRoots]);
 
   const retryFailed = useCallback(async (packIds: readonly string[]) => startInstall(packIds), [startInstall]);
 
@@ -168,11 +227,14 @@ export const RuntimeManagerContainer: React.FC = () => {
       activeJob={activeJob}
       busy={busy}
       statusMessage={statusMessage}
+      pickerReady={Boolean(nativePickers)}
+      pickerBlockedReason={PICKER_BLOCKED_REASON}
       onScanLocal={scanLocal}
       onChooseInstallPath={chooseInstallPath}
       onDownloadMissing={(packIds) => startInstall(packIds)}
       onImportArchive={importArchive}
       onVerifyAll={() => verifyAll()}
+      onCheckRuntime={() => checkRuntime()}
       onRetryFailed={retryFailed}
       onCancel={cancel}
       onOpenFolder={openFolder}

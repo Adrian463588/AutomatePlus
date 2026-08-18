@@ -8,7 +8,11 @@ import { DeviceFarmView } from './components/farm/DeviceFarmView.js';
 import { MonacoView } from './components/editor/MonacoView.js';
 import { TerminalPanel } from './components/terminal/TerminalPanel.js';
 import { StressModal } from './components/stress/StressModal.js';
-import { RuntimeManagerContainer } from './components/runtime/RuntimeManagerContainer.js';
+import {
+  RuntimeManagerContainer,
+  type RuntimeNativePickerCallbacks,
+} from './components/runtime/RuntimeManagerContainer.js';
+import { bridge } from './services/desktopBridge.js';
 
 export const App: React.FC = () => {
   const { loadInitialData, activeTab } = useAppStore();
@@ -18,6 +22,27 @@ export const App: React.FC = () => {
     loadInitialData();
   }, [loadInitialData]);
 
+  const runtimeNativePickers = React.useMemo<RuntimeNativePickerCallbacks | undefined>(() => {
+    if (!bridge.hasNativeBridge()) return undefined;
+    return {
+      chooseInstallPath: async () => {
+        const result = await bridge.pickDialog({
+          mode: 'folder',
+          title: 'Choose AutomatePlus runtime-pack install folder',
+        });
+        return result.cancelled ? null : result.selectedPath;
+      },
+      chooseArchivePath: async () => {
+        const result = await bridge.pickDialog({
+          mode: 'file',
+          title: 'Import AutomatePlus runtime archive',
+          filters: [{ name: 'AutomatePlus Runtime ZIP', extensions: ['zip'] }],
+        });
+        return result.cancelled ? null : result.selectedPath;
+      },
+    };
+  }, []);
+
   const renderCenterView = () => {
     switch (activeTab) {
       case 'api_builder':
@@ -25,12 +50,14 @@ export const App: React.FC = () => {
       case 'device_farm':
         return <DeviceFarmView />;
       case 'runtime':
-        return <RuntimeManagerContainer />;
+        return <RuntimeManagerContainer nativePickers={runtimeNativePickers} />;
       case 'visual':
       default:
         return <VisualCanvas />;
     }
   };
+
+  const showsGeneratedCode = activeTab === 'visual' || activeTab === 'api_builder';
 
   return (
     <div className="app-shell flex flex-col min-h-screen w-full bg-slate-950 text-slate-100 font-sans">
@@ -38,7 +65,7 @@ export const App: React.FC = () => {
       <div className="workspace-layout flex-1 min-h-0">
         <Sidebar />
         {renderCenterView()}
-        <MonacoView />
+        {showsGeneratedCode ? <MonacoView /> : null}
       </div>
       <TerminalPanel />
       <StressModal

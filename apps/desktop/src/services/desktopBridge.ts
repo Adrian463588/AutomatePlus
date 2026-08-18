@@ -21,6 +21,7 @@ import type {
   MultiDeviceRunSummary,
   RunLogCallback,
   RunSummary,
+  SerializedAutomationError,
 } from '@automate-plus/contracts';
 import { createRequest, createRuntimeId } from '@automate-plus/contracts';
 import type { IpcResponse } from '@automate-plus/contracts';
@@ -41,11 +42,64 @@ type NativeCommand = (command: string, args?: Record<string, unknown>) => Promis
 
 export interface NativeHostStatus {
   available: boolean;
+  state: NativeHealth['state'];
   deviceDiscovery: boolean;
   androidRecording: boolean;
   farmReplay: boolean;
   nativeExecution: boolean;
   reason: string;
+  missingPrerequisites: readonly string[];
+}
+
+export type NativeDialogPickMode = 'folder' | 'file';
+
+export interface NativeDialogFilter {
+  name: string;
+  extensions: readonly string[];
+}
+
+export interface NativeDialogPickRequest {
+  mode: NativeDialogPickMode;
+  title: string;
+  initialPath?: string;
+  filters?: readonly NativeDialogFilter[];
+}
+
+export type NativeDialogPickResponse =
+  | { protocolVersion: '1.0'; selectedPath: string; cancelled: false }
+  | { protocolVersion: '1.0'; selectedPath: null; cancelled: true };
+
+export type RuntimePreflightStatus = 'ready' | 'blocked' | 'error' | 'cancelled';
+
+export interface RuntimePreflightSummary {
+  status: RuntimePreflightStatus;
+  checkedAt: number;
+  reason: string;
+  missingPrerequisites: readonly string[];
+  catalogEntryCount?: number;
+  rootCount?: number;
+  writableRootCount?: number;
+  installedPackCount?: number;
+  healthyPackCount?: number;
+  healthIssueCount?: number;
+  catalogNeedsReviewCount?: number;
+}
+
+export class NativeIpcError extends Error {
+  public readonly code: SerializedAutomationError['code'] | string;
+  public readonly details: Record<string, unknown>;
+
+  constructor(
+    code: SerializedAutomationError['code'] | string,
+    message: string,
+    details: Record<string, unknown> = {},
+    name = 'NativeIpcError',
+  ) {
+    super(message);
+    this.name = name;
+    this.code = code;
+    this.details = details;
+  }
 }
 
 interface NativeBridgeObject {
@@ -53,6 +107,8 @@ interface NativeBridgeObject {
 }
 
 const BROWSER_BLOCKED_REASON = 'Native Android host is unavailable. Connect the offline desktop host to use Android features.';
+const BROWSER_DIALOG_BLOCKED_REASON = 'Native folder selection is blocked in browser mode. Run the offline desktop host to choose a local folder.';
+const NATIVE_PREFLIGHT_PENDING_REASON = 'Native host preflight has not completed. Check the native host before using runtime actions.';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -60,6 +116,41 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 
 function asNonEmptyString(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0;
+}
+
+function unavailableNativeStatus(reason: string, missingPrerequisites: readonly string[] = []): NativeHostStatus {
+  return {
+    available: false,
+    state: 'blocked',
+    deviceDiscovery: false,
+    androidRecording: false,
+    farmReplay: false,
+    nativeExecution: false,
+    reason,
+    missingPrerequisites: [...missingPrerequisites],
+  };
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isBlockedNativeError(error: unknown): boolean {
+  if (!(error instanceof NativeIpcError)) return false;
+  return ['CAPABILITY_ERROR', 'RUNTIME_MISSING', 'PATH_DENIED', 'PROJECT_PREREQUISITE_MISSING'].includes(error.code);
+}
+
+function parseNativeDialogPickResponse(value: unknown): NativeDialogPickResponse {
+  if (!isRecord(value) || value.protocolVersion !== '1.0') {
+    throw new NativeIpcError('PROTOCOL_ERROR', 'Native dialog returned an invalid versioned response.');
+  }
+  if (value.cancelled === true && value.selectedPath === null) {
+    return { protocolVersion: '1.0', selectedPath: null, cancelled: true };
+  }
+  if (value.cancelled === false && asNonEmptyString(value.selectedPath)) {
+    return { protocolVersion: '1.0', selectedPath: value.selectedPath.trim(), cancelled: false };
+  }
+  throw new NativeIpcError('PROTOCOL_ERROR', 'Native dialog returned neither a selected path nor a cancellation state.');
 }
 
 function isDeviceProfile(value: unknown): value is DeviceProfile {
@@ -139,14 +230,8 @@ function createBlockedFarmSummary(sessionId: string, spec: FarmRunSpec, error: s
 }
 
 class NativeCapabilityAdapter {
-  private status: NativeHostStatus = {
-    available: false,
-    deviceDiscovery: false,
-    androidRecording: false,
-    farmReplay: false,
-    nativeExecution: false,
-    reason: BROWSER_BLOCKED_REASON,
-  };
+  private status: NativeHostStatus = unavailableNativeStatus(BROWSER_BLOCKED_REASON);
+  private preflightChecked = false;
 
   public getStatus(): NativeHostStatus {
     return this.status;
@@ -160,7 +245,9 @@ class NativeCapabilityAdapter {
     if (!this.hasBridge()) {
       return { mode: 'browser', status: 'blocked', reason: BROWSER_RUNTIME_BLOCKED_REASON };
     }
-    return { mode: 'native', status: 'ready', reason: this.status.reason };
+    return { mode: 'native', status: 'ready', reason: this.preflightChecked
+      ? this.status.reason
+      : NATIVE_PREFLIGHT_PENDING_REASON };
   }
 
   public runtimeInvoke: RuntimeManagerInvoke = async <M extends RuntimeMethod>(
@@ -170,27 +257,44 @@ class NativeCapabilityAdapter {
 
   public async probe(): Promise<NativeHostStatus> {
     const bridge = this.resolveBridge();
-    if (!bridge) return this.status;
+    this.preflightChecked = true;
+    if (!bridge) {
+      this.status = unavailableNativeStatus(BROWSER_BLOCKED_REASON);
+      return this.status;
+    }
 
     try {
       const health = await this.request<NativeHealth>('native.health', {});
       const capabilities = health.capabilities;
-      const available = health.state === 'ready' && health.host === 'tauri-rust';
-      const healthReason = health.status === 'blocked'
-        ? health.reason || 'Native host runtime prerequisites are blocked.'
-        : 'Native Tauri desktop host is connected.';
+      const healthStatus = health.status ?? health.state;
+      const available = health.state === 'ready'
+        && health.host === 'tauri-rust'
+        && healthStatus !== 'blocked'
+        && health.available !== false;
+      const healthReason = health.reason
+        || (available ? 'Native Tauri desktop host is ready.' : 'Native host runtime prerequisites are blocked.');
       this.status = {
         available,
-        deviceDiscovery: capabilities.deviceDiscovery === true,
+        state: health.state,
+        deviceDiscovery: available && capabilities.deviceDiscovery === true,
         androidRecording: available && capabilities.androidRecording === true,
         farmReplay: available && capabilities.farmReplay === true,
         nativeExecution: available && capabilities.nativeExecution === true,
-        reason: available ? healthReason : health.reason || BROWSER_BLOCKED_REASON,
+        reason: healthReason,
+        missingPrerequisites: health.missingPrerequisites.filter(asNonEmptyString),
       };
     } catch (error) {
-      this.status = { ...this.status, reason: error instanceof Error ? error.message : BROWSER_BLOCKED_REASON };
+      this.status = unavailableNativeStatus(`Native host health check failed: ${errorMessage(error)}`);
     }
     return this.status;
+  }
+
+  public async pickDialog(pickRequest: NativeDialogPickRequest): Promise<NativeDialogPickResponse> {
+    if (!this.hasBridge()) {
+      throw new NativeIpcError('CAPABILITY_ERROR', BROWSER_DIALOG_BLOCKED_REASON, { mode: 'browser' });
+    }
+    const response = await this.request<unknown>('native.dialog.pick', pickRequest);
+    return parseNativeDialogPickResponse(response);
   }
 
   public async listDeviceProfiles(): Promise<DeviceProfile[]> {
@@ -281,7 +385,9 @@ class NativeCapabilityAdapter {
 
   private async request<T>(method: string, payload: unknown): Promise<T> {
     const bridge = this.resolveBridge();
-    if (!bridge?.invoke) throw new Error(BROWSER_BLOCKED_REASON);
+    if (!bridge?.invoke) {
+      throw new NativeIpcError('CAPABILITY_ERROR', BROWSER_RUNTIME_BLOCKED_REASON, { method, mode: 'browser' });
+    }
     const request = createRequest(method, payload);
     const raw = await bridge.invoke('automate_plus_dispatch', { request });
     if (!isRecord(raw) || raw.protocolVersion !== '1.0' || raw.kind !== 'response' || !isRecord(raw.payload)) {
@@ -289,7 +395,8 @@ class NativeCapabilityAdapter {
     }
     const response = raw as unknown as IpcResponse<T>;
     if (!response.payload.ok) {
-      throw new Error(response.payload.error.message);
+      const failure = response.payload.error;
+      throw new NativeIpcError(failure.code, failure.message, failure.details, failure.name);
     }
     return response.payload.data;
   }
@@ -360,6 +467,18 @@ export class DesktopBridgeService {
     return this.native.getStatus();
   }
 
+  public hasNativeBridge(): boolean {
+    return this.native.hasBridge();
+  }
+
+  public pickDialog(request: NativeDialogPickRequest): Promise<NativeDialogPickResponse> {
+    return this.native.pickDialog(request);
+  }
+
+  public pickDirectory(): Promise<NativeDialogPickResponse> {
+    return this.pickDialog({ mode: 'folder', title: 'Choose AutomatePlus workspace folder' });
+  }
+
   public getRuntimeHostState(): RuntimeManagerHostState {
     return this.native.runtimeHostState();
   }
@@ -370,6 +489,73 @@ export class DesktopBridgeService {
 
   public probeNativeHost(): Promise<NativeHostStatus> {
     return this.native.probe();
+  }
+
+  public async checkRuntimePreflight(): Promise<RuntimePreflightSummary> {
+    const checkedAt = Date.now();
+    const nativeHostStatus = await this.native.probe();
+    const host = this.native.runtimeHostState();
+    const base = {
+      checkedAt,
+      missingPrerequisites: nativeHostStatus.missingPrerequisites,
+    };
+
+    if (host.mode !== 'native' || !this.hasNativeBridge()) {
+      return {
+        ...base,
+        status: 'blocked',
+        reason: host.reason || nativeHostStatus.reason,
+      };
+    }
+
+    try {
+      const manager = this.getRuntimeManager();
+      const catalog = await manager.catalogList();
+      const roots = await manager.scanRoots();
+      const verification = await manager.verifyAll();
+      const health = await manager.health();
+      if (!Array.isArray(catalog.entries) || !Array.isArray(roots.roots) || !Array.isArray(verification.packs) || !Array.isArray(health.packs)) {
+        throw new NativeIpcError('PROTOCOL_ERROR', 'Runtime preflight returned an invalid catalog, verification, roots, or health response.');
+      }
+
+      const installedPacks = roots.roots.flatMap((root) => {
+        if (!Array.isArray(root.installedPacks)) {
+          throw new NativeIpcError('PROTOCOL_ERROR', 'Runtime preflight returned an invalid installed-pack list.');
+        }
+        return root.installedPacks;
+      });
+      const catalogNeedsReviewCount = catalog.entries.filter((entry) => entry.status === 'NeedsReview').length;
+      const healthyPackCount = health.packs.filter((pack) => pack.status === 'ready').length;
+      const healthIssueCount = health.packs.filter((pack) => pack.status !== 'ready').length;
+      const status: RuntimePreflightStatus = catalogNeedsReviewCount > 0 || healthIssueCount > 0
+        ? 'blocked'
+        : 'ready';
+      const reason = catalogNeedsReviewCount > 0
+        ? `Runtime catalog requires review for ${catalogNeedsReviewCount} pack(s).`
+        : healthIssueCount > 0
+          ? `${healthIssueCount} runtime pack health check(s) are not ready.`
+          : 'Native runtime catalog, local roots, and health checks completed.';
+      return {
+        ...base,
+        status,
+        reason,
+        catalogEntryCount: catalog.entries.length,
+        catalogNeedsReviewCount,
+        rootCount: roots.roots.length,
+        writableRootCount: roots.roots.filter((root) => root.writable).length,
+        installedPackCount: installedPacks.length,
+        healthyPackCount,
+        healthIssueCount,
+      };
+    } catch (error) {
+      return {
+        ...base,
+        status: error instanceof NativeIpcError && error.code === 'CANCELLED'
+          ? 'cancelled'
+          : isBlockedNativeError(error) ? 'blocked' : 'error',
+        reason: errorMessage(error),
+      };
+    }
   }
 
   public async listAndroidDevices(): Promise<AndroidDeviceInfo[]> {

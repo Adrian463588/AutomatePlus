@@ -97,16 +97,33 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   border-radius: .375rem;
   background: #020617;
   color: #e2e8f0;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+  transition: border-color 150ms ease;
 }
 .field:focus, .field-inline:focus-within {
   border-color: #6366f1;
-  box-shadow: 0 0 0 1px #6366f1;
 }
 .field { padding: .45rem .6rem; }
 .field-inline { display: inline-flex; align-items: center; gap: .4rem; padding: .35rem .55rem; min-width: 0; }
 .field-inline input, .field-inline select { min-width: 0; background: transparent; border: 0; color: #e2e8f0; outline: none; }
 .field-inline input { width: 15rem; }
+select {
+  color-scheme: dark;
+}
+select option,
+select optgroup {
+  background-color: #0f172a;
+  color: #f8fafc;
+}
+select option:checked,
+select option:focus,
+select option:hover {
+  background-color: #3730a3;
+  color: #ffffff;
+}
+select:disabled {
+  background-color: #1e293b;
+  color: #cbd5e1;
+}
 .dialog-backdrop { position: fixed; inset: 0; z-index: 50; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgb(0 0 0 / .78); }
 .dialog-card { width: min(100%, 28rem); max-height: calc(100dvh - 2rem); overflow: auto; padding: 1.25rem; border: 1px solid #475569; border-radius: .75rem; background: #0f172a; box-shadow: 0 1.5rem 4rem rgb(0 0 0 / .45); }
 .api-request-bar { min-height: 3.5rem; }
@@ -183,9 +200,16 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; scroll-behavior: auto !important; transition-duration: .01ms !important; }
 }
 
+@media (prefers-contrast: more) {
+  select, select option { border-color: #ffffff; }
+  select option { background-color: #000000; color: #ffffff; }
+  select option:checked, select option:focus, select option:hover { background-color: #4f46e5; color: #ffffff; }
+}
+
 @media (forced-colors: active) {
   *, *::before, *::after { forced-color-adjust: auto; }
   button, input, select, textarea { border: 1px solid ButtonText; }
   button:disabled, input:disabled, select:disabled, textarea:disabled { border-color: GrayText; color: GrayText; }
+  select, select option { background-color: Canvas; color: CanvasText; }
   .farm-device-card, .dialog-card, .field, .field-inline, .farm-observation-summary { border-color: ButtonText; background: Canvas; color: CanvasText; }
 }

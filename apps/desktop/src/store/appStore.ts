@@ -11,7 +11,11 @@ import {
   RunLogEvent,
   RunSummary,
 } from '@automate-plus/contracts';
-import { bridge } from '../services/desktopBridge.js';
+import {
+  bridge,
+  NativeIpcError,
+  type RuntimePreflightSummary,
+} from '../services/desktopBridge.js';
 
 export type ActiveTab = 'visual' | 'api_builder' | 'device_farm' | 'runtime';
 export type FeedbackKind = 'idle' | 'pending' | 'success' | 'error' | 'blocked' | 'cancelled';
@@ -19,6 +23,23 @@ export type FeedbackKind = 'idle' | 'pending' | 'success' | 'error' | 'blocked' 
 export interface UiFeedback {
   kind: FeedbackKind;
   message: string;
+}
+
+export type WorkspaceBrowseStatus = 'idle' | 'busy' | 'selected' | 'cancelled' | 'blocked' | 'error';
+
+export interface WorkspaceBrowseState {
+  status: WorkspaceBrowseStatus;
+  canBrowse: boolean;
+  message?: string;
+}
+
+export type RuntimePreflightUiStatus = 'idle' | 'busy' | RuntimePreflightSummary['status'];
+
+export interface RuntimePreflightState {
+  status: RuntimePreflightUiStatus;
+  canCheck: boolean;
+  message: string;
+  summary?: RuntimePreflightSummary;
 }
 
 export interface ApiAssertionDraft {
@@ -48,6 +69,8 @@ interface AppState {
   deviceDiscoveryMessage: string;
   nativeHostAvailable: boolean;
   nativeHostMessage: string;
+  workspaceBrowse: WorkspaceBrowseState;
+  runtimePreflight: RuntimePreflightState;
   activeDevice?: string;
   logs: RunLogEvent[];
   isRunning: boolean;
@@ -64,7 +87,9 @@ interface AppState {
   setPrimaryDevice: (deviceId: string) => void;
   createDeviceGroup: (name: string, deviceIds: string[], primaryDeviceId?: string) => Promise<void>;
   deleteDeviceGroup: (groupId: string) => Promise<void>;
-  createProject: (name: string, workspacePath: string) => Promise<void>;
+  createProject: (name: string, workspacePath: string) => Promise<boolean>;
+  browseWorkspaceFolder: () => Promise<string | undefined>;
+  checkRuntimePreflight: () => Promise<void>;
   createSession: (name: string, platform: 'web' | 'android' | 'api') => Promise<void>;
   selectProject: (projectId: string) => Promise<void>;
   selectSession: (sessionId: string) => Promise<void>;
@@ -93,6 +118,22 @@ interface AppState {
 
 const emptyFeedback: UiFeedback = { kind: 'idle', message: 'Waiting for a user action.' };
 
+const initialRuntimeHostState = bridge.getRuntimeHostState();
+const initialWorkspaceBrowse: WorkspaceBrowseState = {
+  status: initialRuntimeHostState.mode === 'native' ? 'idle' : 'blocked',
+  canBrowse: initialRuntimeHostState.mode === 'native',
+  message: initialRuntimeHostState.mode === 'native'
+    ? undefined
+    : initialRuntimeHostState.reason,
+};
+const initialRuntimePreflight: RuntimePreflightState = {
+  status: initialRuntimeHostState.mode === 'native' ? 'idle' : 'blocked',
+  canCheck: initialRuntimeHostState.mode === 'native',
+  message: initialRuntimeHostState.mode === 'native'
+    ? 'Runtime preflight has not been checked.'
+    : initialRuntimeHostState.reason ?? 'Runtime preflight is blocked in browser mode.',
+};
+
 function nextSteps(steps: ActionIR[]): ActionIR[] {
   return steps.map((step, index) => ({ ...step, stepNumber: index + 1 }));
 }
@@ -106,6 +147,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   deviceDiscoveryMessage: 'Android discovery requires the native desktop host.',
   nativeHostAvailable: false,
   nativeHostMessage: 'Native Android host is unavailable. Browser mode does not fabricate devices.',
+  workspaceBrowse: initialWorkspaceBrowse,
+  runtimePreflight: initialRuntimePreflight,
   activeDevice: undefined,
   logs: [], isRunning: false, lastRunSummary: undefined, feedback: emptyFeedback, activeTab: 'visual',
 
@@ -141,6 +184,23 @@ export const useAppStore = create<AppState>((set, get) => ({
         deviceDiscoveryMessage: nativeHostStatus.deviceDiscovery
           ? `${devices.length} Android device(s) discovered by the native host.`
           : nativeHostStatus.reason,
+        runtimePreflight: nativeHostStatus.available
+          ? {
+              status: 'idle',
+              canCheck: true,
+              message: 'Native host is ready. Check the installed runtime packs.',
+            }
+          : {
+              status: 'blocked',
+              canCheck: bridge.getRuntimeHostState().mode === 'native',
+              message: bridge.getRuntimeHostState().reason ?? nativeHostStatus.reason,
+              summary: {
+                status: 'blocked',
+                checkedAt: Date.now(),
+                reason: bridge.getRuntimeHostState().reason ?? nativeHostStatus.reason,
+                missingPrerequisites: nativeHostStatus.missingPrerequisites,
+              },
+            },
         activeTab: activeSession?.platform === 'api' ? 'api_builder' : 'visual',
         feedback: projects.length === 0
           ? { kind: 'blocked', message: 'Create a project to begin. No project or target is preloaded.' }
@@ -227,18 +287,88 @@ export const useAppStore = create<AppState>((set, get) => ({
     }
   },
 
+  browseWorkspaceFolder: async () => {
+    if (get().workspaceBrowse.status === 'busy') return undefined;
+    if (!bridge.hasNativeBridge()) {
+      const message = 'Native folder selection is blocked in browser mode. Run the offline desktop host to choose a local folder.';
+      set({ workspaceBrowse: { status: 'blocked', canBrowse: false, message } });
+      return undefined;
+    }
+
+    set({ workspaceBrowse: { status: 'busy', canBrowse: true, message: 'Opening the native folder picker…' } });
+    try {
+      const result = await bridge.pickDirectory();
+      if (result.cancelled) {
+        set({ workspaceBrowse: { status: 'cancelled', canBrowse: true, message: 'Folder selection cancelled.' } });
+        return undefined;
+      }
+      set({ workspaceBrowse: { status: 'selected', canBrowse: true, message: 'Workspace folder selected.' } });
+      return result.selectedPath;
+    } catch (error) {
+      const blocked = !bridge.hasNativeBridge()
+        || (error instanceof NativeIpcError && ['CAPABILITY_ERROR', 'RUNTIME_MISSING'].includes(error.code));
+      set({ workspaceBrowse: {
+        status: blocked ? 'blocked' : 'error',
+        canBrowse: bridge.hasNativeBridge(),
+        message: error instanceof Error ? error.message : String(error),
+      } });
+      return undefined;
+    }
+  },
+
+  checkRuntimePreflight: async () => {
+    if (get().runtimePreflight.status === 'busy') return;
+    if (bridge.getRuntimeHostState().mode === 'browser') {
+      const message = 'Runtime preflight is blocked in browser mode. Run the offline native desktop host.';
+      set({ runtimePreflight: { status: 'blocked', canCheck: false, message }, feedback: { kind: 'blocked', message } });
+      return;
+    }
+
+    set({ runtimePreflight: { status: 'busy', canCheck: true, message: 'Checking native runtime catalog, roots, and health…' } });
+    try {
+      const summary = await bridge.checkRuntimePreflight();
+      const feedbackKind: FeedbackKind = summary.status === 'ready'
+        ? 'success'
+        : summary.status === 'blocked'
+          ? 'blocked'
+          : summary.status === 'cancelled' ? 'cancelled' : 'error';
+      set({
+        runtimePreflight: {
+          status: summary.status,
+          canCheck: bridge.hasNativeBridge(),
+          message: summary.reason,
+          summary,
+        },
+        feedback: { kind: feedbackKind, message: summary.reason },
+      });
+    } catch (error) {
+      const message = `Runtime preflight failed: ${error instanceof Error ? error.message : String(error)}`;
+      set({
+        runtimePreflight: { status: 'error', canCheck: bridge.hasNativeBridge(), message },
+        feedback: { kind: 'error', message },
+      });
+    }
+  },
+
   createProject: async (name, workspacePath) => {
     const trimmedName = name.trim();
     const trimmedWorkspace = workspacePath.trim();
     if (!trimmedName || !trimmedWorkspace) {
-      set({ feedback: { kind: 'error', message: 'Project name and workspace path are required.' } }); return;
+      set({ feedback: { kind: 'error', message: 'Project name and workspace path are required.' } }); return false;
     }
     const now = Date.now();
     const project: ProjectRecord = { id: crypto.randomUUID(), name: trimmedName, workspacePath: trimmedWorkspace,
       defaultFramework: '', defaultLanguage: '', createdAt: now, updatedAt: now };
-    await bridge.projectRepo.save(project);
-    set({ projects: [...get().projects, project], activeProject: project, sessions: [], activeSession: undefined,
-      selectedFramework: '', selectedLanguage: '', generatedCode: '', feedback: { kind: 'success', message: `Project “${project.name}” created.` } });
+    set({ feedback: { kind: 'pending', message: 'Saving project metadata locally…' } });
+    try {
+      await bridge.projectRepo.save(project);
+      set({ projects: [...get().projects, project], activeProject: project, sessions: [], activeSession: undefined,
+        selectedFramework: '', selectedLanguage: '', generatedCode: '', feedback: { kind: 'success', message: `Project “${project.name}” created.` } });
+      return true;
+    } catch (error) {
+      set({ feedback: { kind: 'error', message: `Project could not be saved: ${error instanceof Error ? error.message : String(error)}` } });
+      return false;
+    }
   },
 
   createSession: async (name, platform) => {

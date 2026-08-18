@@ -1,6 +1,7 @@
 mod adb;
 mod contracts;
 mod farm;
+mod native_dialog;
 mod persistence;
 mod ports;
 mod preflight;
@@ -9,9 +10,9 @@ mod runtime;
 mod runtime_catalog;
 
 use contracts::{
-    DeviceGroupCommandArgs, DeviceGroupDeleteArgs, FarmCommandArgs, NativeRequest, NativeResponse,
-    NativeRunArgs, PortAllocateArgs, PortReleaseArgs, PortValidateArgs, ProcessStartArgs,
-    ProcessStopArgs, RecordingCommandArgs, RecordingPlan,
+    DeviceGroupCommandArgs, DeviceGroupDeleteArgs, FarmCommandArgs, NativeDialogPickArgs,
+    NativeRequest, NativeResponse, NativeRunArgs, PortAllocateArgs, PortReleaseArgs,
+    PortValidateArgs, ProcessStartArgs, ProcessStopArgs, RecordingCommandArgs, RecordingPlan,
 };
 use persistence::Database;
 use ports::PortLeaseManager;
@@ -369,6 +370,31 @@ impl AppState {
                     }),
                 )
             }
+            "native.dialog.pick" => {
+                let args = match request.decode_payload::<NativeDialogPickArgs>() {
+                    Ok(args) => args,
+                    Err(message) => {
+                        return NativeResponse::failure(
+                            request,
+                            "PROTOCOL_ERROR",
+                            message,
+                            json!({}),
+                        )
+                    }
+                };
+                if let Err(message) = args.validate() {
+                    return NativeResponse::failure(request, "PROTOCOL_ERROR", message, json!({}));
+                }
+                match native_dialog::pick(args) {
+                    Ok(data) => NativeResponse::success(request, data),
+                    Err(message) => NativeResponse::failure(
+                        request,
+                        "DIALOG_ERROR",
+                        message,
+                        json!({ "state": "blocked" }),
+                    ),
+                }
+            }
             _ => NativeResponse::failure(
                 request,
                 "PROTOCOL_ERROR",
@@ -647,7 +673,7 @@ pub fn run() -> tauri::Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::contracts::NativeRequest;
+    use super::contracts::{NativeDialogPickArgs, NativeRequest};
     use serde_json::json;
 
     #[test]
@@ -660,5 +686,41 @@ mod tests {
             payload: json!({}),
         };
         assert!(request.validate().is_err());
+    }
+
+    #[test]
+    fn validates_native_dialog_pick_contract() {
+        let request = NativeRequest {
+            protocol_version: "1.0".to_owned(),
+            kind: "request".to_owned(),
+            correlation_id: "550e8400-e29b-41d4-a716-446655440000".to_owned(),
+            method: "native.dialog.pick".to_owned(),
+            payload: json!({
+                "mode": "file",
+                "title": "Import runtime archive",
+                "filters": [{ "name": "AutomatePlus Runtime ZIP", "extensions": ["zip"] }]
+            }),
+        };
+        assert!(request.validate().is_ok());
+        let args: NativeDialogPickArgs = request.decode_payload().expect("valid dialog payload");
+        assert!(args.validate().is_ok());
+    }
+
+    #[test]
+    fn rejects_filters_for_folder_picker() {
+        let request = NativeRequest {
+            protocol_version: "1.0".to_owned(),
+            kind: "request".to_owned(),
+            correlation_id: "550e8400-e29b-41d4-a716-446655440000".to_owned(),
+            method: "native.dialog.pick".to_owned(),
+            payload: json!({
+                "mode": "folder",
+                "title": "Choose workspace",
+                "filters": [{ "name": "ZIP", "extensions": ["zip"] }]
+            }),
+        };
+        let args: NativeDialogPickArgs =
+            request.decode_payload().expect("decodable dialog payload");
+        assert!(args.validate().is_err());
     }
 }

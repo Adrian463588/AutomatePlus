@@ -16,11 +16,12 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::sync::{Arc, Mutex};
 use std::thread;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use zip::ZipArchive;
 
 const PROTOCOL_VERSION: &str = "1.0";
 const MAX_DOWNLOAD_BYTES: u64 = 20 * 1024 * 1024 * 1024;
+const HEALTH_COMMAND_TIMEOUT_SECONDS: u64 = 10;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -54,6 +55,25 @@ pub struct RuntimeInstalledPack {
     pub verified: bool,
     pub license_accepted: bool,
     pub health: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct HealthCommandEvidence {
+    executed: bool,
+    root_path: Option<String>,
+    command: Vec<String>,
+    duration_ms: u64,
+    exit_code: Option<i32>,
+    timed_out: bool,
+    error: Option<String>,
+}
+
+#[derive(Debug)]
+struct HealthCommandResult {
+    passed: bool,
+    reason: Option<String>,
+    evidence: HealthCommandEvidence,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -553,16 +573,28 @@ impl RuntimeManager {
         fs::rename(&extract_root, &install_root)
             .map_err(|error| format!("Atomic runtime install failed: {error}"))?;
         let installed_executable = install_root.join(executable_relative);
-        let health = run_health_command(
+        let health = match run_health_command(
             &install_root,
             &entry.health_command,
             &entry.archive.executable_paths,
-        )?;
-        if !health {
+        ) {
+            Ok(result) => result,
+            Err(error) => {
+                let _ = fs::remove_dir_all(&install_root);
+                return Err(format!(
+                    "Pack '{}' health command could not run; installation rolled back: {}",
+                    entry.id, error
+                ));
+            }
+        };
+        if !health.passed {
             let _ = fs::remove_dir_all(&install_root);
             return Err(format!(
-                "Pack '{}' health command failed; installation rolled back.",
-                entry.id
+                "Pack '{}' health command failed; installation rolled back: {}",
+                entry.id,
+                health
+                    .reason
+                    .unwrap_or_else(|| "the process did not report success.".to_owned())
             ));
         }
         append_manifest_pack(
@@ -821,22 +853,142 @@ impl RuntimeManager {
             .entries
             .iter()
             .map(|entry| {
-                let installed = report
-                    .get("roots")
-                    .and_then(Value::as_array)
-                    .into_iter()
-                    .flatten()
-                    .flat_map(|root| {
-                        root.get("installedPacks")
-                            .and_then(Value::as_array)
-                            .cloned()
-                            .unwrap_or_default()
-                    })
-                    .find(|pack| pack.get("id").and_then(Value::as_str) == Some(entry.id.as_str()));
-                let status = installed
-                    .and_then(|pack| pack.get("health").and_then(Value::as_str))
-                    .unwrap_or("unknown");
-                json!({"id": entry.id, "status": status})
+                if entry.status.as_deref() != Some("Ready") {
+                    let reason = entry
+                        .review_reason
+                        .clone()
+                        .unwrap_or_else(|| "Runtime catalog metadata is unresolved.".to_owned());
+                    return json!({
+                        "id": entry.id,
+                        "status": "unknown",
+                        "reason": reason.clone(),
+                        "evidence": skipped_health_evidence(&entry.health_command, None, reason),
+                    });
+                }
+
+                let Some(installed) = find_installed_pack(&report, entry) else {
+                    let reason =
+                        "No exact installed pack matches this Ready catalog entry.".to_owned();
+                    return json!({
+                        "id": entry.id,
+                        "status": "unknown",
+                        "reason": reason.clone(),
+                        "evidence": skipped_health_evidence(&entry.health_command, None, reason),
+                    });
+                };
+                let root_path = installed
+                    .get("rootPath")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned);
+                let metadata_verified = installed.get("verified").and_then(Value::as_bool)
+                    == Some(true)
+                    && installed
+                        .get("licenseAccepted")
+                        .and_then(Value::as_bool)
+                        == Some(true);
+                if !metadata_verified {
+                    let reason =
+                        "Installed pack metadata is not verified; health command was not executed."
+                            .to_owned();
+                    return json!({
+                        "id": entry.id,
+                        "status": "unknown",
+                        "reason": reason.clone(),
+                        "evidence": skipped_health_evidence(
+                            &entry.health_command,
+                            root_path.clone(),
+                            reason,
+                        ),
+                    });
+                }
+
+                let Some(root_path) = root_path.as_deref() else {
+                    let reason =
+                        "Verified runtime pack has no local root path; health command was not executed."
+                            .to_owned();
+                    return json!({
+                        "id": entry.id,
+                        "status": "unknown",
+                        "reason": reason.clone(),
+                        "evidence": skipped_health_evidence(&entry.health_command, None, reason),
+                    });
+                };
+                let Some(version) = entry.version.as_deref() else {
+                    let reason =
+                        "Ready runtime catalog entry has no pinned version; health command was not executed."
+                            .to_owned();
+                    return json!({
+                        "id": entry.id,
+                        "status": "unknown",
+                        "reason": reason.clone(),
+                        "evidence": skipped_health_evidence(
+                            &entry.health_command,
+                            Some(root_path.to_owned()),
+                            reason,
+                        ),
+                    });
+                };
+                if !is_safe_relative_path(&entry.id) || !is_safe_relative_path(version) {
+                    let reason =
+                        "Ready runtime pack has an unsafe installation path; health command was not executed."
+                            .to_owned();
+                    return json!({
+                        "id": entry.id,
+                        "status": "unknown",
+                        "reason": reason.clone(),
+                        "evidence": skipped_health_evidence(
+                            &entry.health_command,
+                            Some(root_path.to_owned()),
+                            reason,
+                        ),
+                    });
+                }
+                let install_root = Path::new(root_path).join(&entry.id).join(version);
+                if !is_inside(Path::new(root_path), &install_root) || !install_root.is_dir() {
+                    let reason =
+                        "Verified runtime pack installation directory is unavailable; health command was not executed."
+                            .to_owned();
+                    return json!({
+                        "id": entry.id,
+                        "status": "unknown",
+                        "reason": reason.clone(),
+                        "evidence": skipped_health_evidence(
+                            &entry.health_command,
+                            Some(install_root.to_string_lossy().into_owned()),
+                            reason,
+                        ),
+                    });
+                }
+
+                match run_health_command(
+                    &install_root,
+                    &entry.health_command,
+                    &entry.archive.executable_paths,
+                ) {
+                    Ok(result) => {
+                        let HealthCommandResult {
+                            passed,
+                            reason,
+                            evidence,
+                        } = result;
+                        json!({
+                            "id": entry.id,
+                            "status": if passed { "ready" } else { "failed" },
+                            "reason": reason,
+                            "evidence": evidence,
+                        })
+                    }
+                    Err(error) => json!({
+                        "id": entry.id,
+                        "status": "failed",
+                        "reason": error.clone(),
+                        "evidence": skipped_health_evidence(
+                            &entry.health_command,
+                            Some(install_root.to_string_lossy().into_owned()),
+                            error,
+                        ),
+                    }),
+                }
             })
             .collect::<Vec<_>>();
         Ok(json!({"protocolVersion": PROTOCOL_VERSION, "packs": statuses}))
@@ -1046,6 +1198,26 @@ fn load_selected_root(workspace: &Path) -> Option<PathBuf> {
         .map(PathBuf::from)
 }
 
+fn find_installed_pack<'a>(report: &'a Value, entry: &RuntimeCatalogEntry) -> Option<&'a Value> {
+    let roots = report.get("roots").and_then(Value::as_array)?;
+    roots.iter().find_map(|root| {
+        root.get("installedPacks")
+            .and_then(Value::as_array)
+            .and_then(|packs| {
+                packs
+                    .iter()
+                    .find(|pack| installed_pack_matches(pack, entry))
+            })
+    })
+}
+
+fn installed_pack_matches(pack: &Value, entry: &RuntimeCatalogEntry) -> bool {
+    pack.get("id").and_then(Value::as_str) == Some(entry.id.as_str())
+        && pack.get("version").and_then(Value::as_str) == entry.version.as_deref()
+        && pack.get("architecture").and_then(Value::as_str) == Some(TARGET_ARCHITECTURE)
+        && pack.get("sourceSha256").and_then(Value::as_str) == entry.source.sha256.as_deref()
+}
+
 fn inspect_manifest_pack(
     root: &Path,
     pack: &Value,
@@ -1240,32 +1412,93 @@ fn run_health_command(
     root: &Path,
     command: &[String],
     executable_allowlist: &[String],
-) -> Result<bool, String> {
+) -> Result<HealthCommandResult, String> {
     let (program, args) = command
         .split_first()
         .ok_or_else(|| "health command is empty.".to_owned())?;
     if !is_safe_relative_path(program) || !executable_allowlist.iter().any(|path| path == program) {
         return Err("health command executable is not in the catalog allowlist.".to_owned());
     }
+    if args
+        .iter()
+        .any(|argument| argument.chars().any(char::is_control))
+    {
+        return Err("health command arguments contain control characters.".to_owned());
+    }
     let executable = root.join(program);
     if !is_inside(root, &executable) || !executable.is_file() {
         return Err("health command executable is missing from the installed pack.".to_owned());
     }
+    let started = Instant::now();
     let mut child = Command::new(&executable)
         .args(args)
+        .current_dir(root)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
         .map_err(|error| error.to_string())?;
-    for _ in 0..100 {
+    loop {
         if let Some(status) = child.try_wait().map_err(|error| error.to_string())? {
-            return Ok(status.success());
+            let passed = status.success();
+            return Ok(HealthCommandResult {
+                passed,
+                reason: (!passed).then(|| {
+                    status
+                        .code()
+                        .map(|code| format!("Health command exited with code {code}."))
+                        .unwrap_or_else(|| {
+                            "Health command terminated without an exit code.".to_owned()
+                        })
+                }),
+                evidence: HealthCommandEvidence {
+                    executed: true,
+                    root_path: Some(root.to_string_lossy().into_owned()),
+                    command: command.to_vec(),
+                    duration_ms: started.elapsed().as_millis() as u64,
+                    exit_code: status.code(),
+                    timed_out: false,
+                    error: None,
+                },
+            });
         }
-        thread::sleep(Duration::from_millis(100));
+        if started.elapsed() >= Duration::from_secs(HEALTH_COMMAND_TIMEOUT_SECONDS) {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Ok(HealthCommandResult {
+                passed: false,
+                reason: Some(format!(
+                    "Health command timed out after {HEALTH_COMMAND_TIMEOUT_SECONDS} seconds."
+                )),
+                evidence: HealthCommandEvidence {
+                    executed: true,
+                    root_path: Some(root.to_string_lossy().into_owned()),
+                    command: command.to_vec(),
+                    duration_ms: started.elapsed().as_millis() as u64,
+                    exit_code: None,
+                    timed_out: true,
+                    error: None,
+                },
+            });
+        }
+        thread::sleep(Duration::from_millis(50));
     }
-    let _ = child.kill();
-    Ok(false)
+}
+
+fn skipped_health_evidence(
+    command: &[String],
+    root_path: Option<String>,
+    error: String,
+) -> HealthCommandEvidence {
+    HealthCommandEvidence {
+        executed: false,
+        root_path,
+        command: command.to_vec(),
+        duration_ms: 0,
+        exit_code: None,
+        timed_out: false,
+        error: Some(error),
+    }
 }
 
 fn pack_id(pack: &Value) -> Option<String> {

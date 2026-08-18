@@ -35,6 +35,9 @@ export interface RuntimeManagerPanelProps extends RuntimeManagerCallbacks {
   activeJob?: RuntimeJobState;
   busy?: boolean;
   statusMessage?: string;
+  onCheckRuntime?: (packIds: readonly string[]) => void | Promise<void>;
+  pickerReady?: boolean;
+  pickerBlockedReason?: string;
 }
 
 export type RuntimeManagerPanelInput = Partial<RuntimeManagerPanelProps>;
@@ -155,6 +158,9 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
   activeJob,
   busy = false,
   statusMessage,
+  onCheckRuntime,
+  pickerReady = false,
+  pickerBlockedReason = 'Native directory and archive picker callbacks are unavailable.',
   onScanLocal = DEFAULT_CALLBACKS.onScanLocal,
   onChooseInstallPath = DEFAULT_CALLBACKS.onChooseInstallPath,
   onDownloadMissing = DEFAULT_CALLBACKS.onDownloadMissing,
@@ -180,6 +186,16 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
     ? host.reason || BROWSER_RUNTIME_BLOCKED_REASON
     : host.reason || 'Tauri/Rust host is not ready.';
   const operationBusy = busy || (activeJob !== undefined && ACTIVE_JOB_STATUSES.includes(activeJob.status));
+  const callbackConnected = {
+    onScanLocal: onScanLocal !== DEFAULT_CALLBACKS.onScanLocal,
+    onChooseInstallPath: onChooseInstallPath !== DEFAULT_CALLBACKS.onChooseInstallPath,
+    onDownloadMissing: onDownloadMissing !== DEFAULT_CALLBACKS.onDownloadMissing,
+    onImportArchive: onImportArchive !== DEFAULT_CALLBACKS.onImportArchive,
+    onVerifyAll: onVerifyAll !== DEFAULT_CALLBACKS.onVerifyAll,
+    onRetryFailed: onRetryFailed !== DEFAULT_CALLBACKS.onRetryFailed,
+    onCancel: onCancel !== DEFAULT_CALLBACKS.onCancel,
+    onOpenFolder: onOpenFolder !== DEFAULT_CALLBACKS.onOpenFolder,
+  };
 
   useEffect(() => {
     if (!licenseDialogPurpose) return undefined;
@@ -222,7 +238,7 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
     setActionError(undefined);
     try {
       await action();
-      setActionMessage(`${label} request sent; waiting for native evidence.`);
+      setActionMessage(`${label} completed; native host returned control.`);
     } catch (error) {
       const message = getErrorMessage(error);
       setActionError(`${label} failed: ${message}`);
@@ -254,14 +270,22 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
     }
   };
 
-  const scanDisabled = !actionState('onScanLocal').enabled || operationBusy;
-  const chooseRootDisabled = !actionState('onChooseInstallPath').enabled || operationBusy;
-  const importDisabled = !actionState('onImportArchive').enabled || operationBusy;
-  const verifyDisabled = !actionState('onVerifyAll').enabled || operationBusy || packs.length === 0;
-  const retryDisabled = !actionState('onRetryFailed').enabled || operationBusy || failedPacks.length === 0;
-  const downloadDisabled = !actionState('onDownloadMissing').enabled || operationBusy || missingPacks.length === 0;
-  const cancelDisabled = !activeJob || !ACTIVE_JOB_STATUSES.includes(activeJob.status) || !actionState('onCancel').enabled;
-  const openFolderDisabled = !actionState('onOpenFolder').enabled || operationBusy || !activeRoot;
+  const scanDisabled = !callbackConnected.onScanLocal || !actionState('onScanLocal').enabled || operationBusy;
+  const chooseRootDisabled = !callbackConnected.onChooseInstallPath || !actionState('onChooseInstallPath').enabled || operationBusy;
+  const importDisabled = !callbackConnected.onImportArchive || !actionState('onImportArchive').enabled || operationBusy;
+  const verifyDisabled = !callbackConnected.onVerifyAll || !actionState('onVerifyAll').enabled || operationBusy || packs.length === 0;
+  const checkDisabled = !actionState('onVerifyAll').enabled || operationBusy || packs.length === 0 || !onCheckRuntime;
+  const retryDisabled = !callbackConnected.onRetryFailed || !actionState('onRetryFailed').enabled || operationBusy || failedPacks.length === 0;
+  const downloadDisabled = !callbackConnected.onDownloadMissing || !actionState('onDownloadMissing').enabled || operationBusy || missingPacks.length === 0;
+  const cancelDisabled = !callbackConnected.onCancel || !activeJob || !ACTIVE_JOB_STATUSES.includes(activeJob.status) || !actionState('onCancel').enabled;
+  const openFolderDisabled = !callbackConnected.onOpenFolder || !actionState('onOpenFolder').enabled || operationBusy || !activeRoot;
+  const chooseRootTitle = !callbackConnected.onChooseInstallPath
+    ? 'Install path handler is not connected.'
+    : disabledTitle('onChooseInstallPath', pickerReady ? 'Choose a writable local runtime root through the native picker.' : pickerBlockedReason);
+  const importTitle = !callbackConnected.onImportArchive
+    ? 'Archive import handler is not connected.'
+    : disabledTitle('onImportArchive', pickerReady ? 'Choose a local runtime archive through the native picker.' : pickerBlockedReason);
+  const checkTitle = disabledTitle('onVerifyAll', onCheckRuntime ? 'Check installed runtime health through the native host.' : 'Native runtime check callback is not connected.');
   const dialogEntries = licenseDialogPurpose === 'install' ? missingPacks : [];
 
   return (
@@ -305,9 +329,10 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
 
       <section className="flex min-w-0 flex-wrap items-center gap-2 border-b border-slate-800 bg-slate-950/80 p-4" aria-label="Runtime actions">
         <button type="button" onClick={() => void invokeAction('Local runtime scan', onScanLocal)} disabled={scanDisabled} title={disabledTitle('onScanLocal')} className="button-primary min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><ScanSearch className="h-4 w-4" aria-hidden="true" />Scan local</button>
-        <button type="button" onClick={() => void invokeAction('Install root selection', onChooseInstallPath)} disabled={chooseRootDisabled} title={disabledTitle('onChooseInstallPath')} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><FolderOpen className="h-4 w-4" aria-hidden="true" />Choose install path</button>
+        <button type="button" onClick={() => void invokeAction('Runtime health check', () => onCheckRuntime?.(packs.map((pack) => pack.entry.id)))} disabled={checkDisabled} title={checkTitle} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><ShieldCheck className="h-4 w-4" aria-hidden="true" />Check runtime</button>
+        <button type="button" onClick={() => void invokeAction('Install root selection', onChooseInstallPath)} disabled={chooseRootDisabled || !pickerReady} title={chooseRootTitle} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><FolderOpen className="h-4 w-4" aria-hidden="true" />Choose install path</button>
         <button type="button" onClick={() => void invokeAction('Runtime folder open', onOpenFolder)} disabled={openFolderDisabled} title={disabledTitle('onOpenFolder', activeRoot ? 'Open the active runtime root.' : 'Scan and select a writable runtime root first.')} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><FolderOpen className="h-4 w-4" aria-hidden="true" />Open folder</button>
-        <button type="button" onClick={() => setLicenseDialogPurpose('import')} disabled={importDisabled} title={disabledTitle('onImportArchive')} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><Upload className="h-4 w-4" aria-hidden="true" />Import archive</button>
+        <button type="button" onClick={() => setLicenseDialogPurpose('import')} disabled={importDisabled || !pickerReady} title={importTitle} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><Upload className="h-4 w-4" aria-hidden="true" />Import archive</button>
         <button type="button" onClick={() => void invokeAction('Runtime verification', () => onVerifyAll(packs.map((pack) => pack.entry.id)))} disabled={verifyDisabled} title={disabledTitle('onVerifyAll', packs.length === 0 ? 'A catalog scan is required first.' : 'Verify every catalog pack in the selected roots.')} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><ShieldCheck className="h-4 w-4" aria-hidden="true" />Verify all</button>
         <button type="button" onClick={() => void invokeAction('Retry failed runtime packs', () => onRetryFailed(failedPacks.map((pack) => pack.entry.id)))} disabled={retryDisabled} title={disabledTitle('onRetryFailed', failedPacks.length === 0 ? 'No failed pack is available for retry.' : 'Retry only packs with a recorded native failure.')} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className="h-4 w-4" aria-hidden="true" />Retry failed</button>
         <button type="button" onClick={() => setLicenseDialogPurpose('install')} disabled={downloadDisabled} title={disabledTitle('onDownloadMissing', missingPacks.length === 0 ? 'All catalog packs have a verified local match.' : 'Review licenses, then explicitly download missing packs.')} className="button-execute min-h-12 bg-indigo-600 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" aria-hidden="true" />Download all missing ({missingPacks.length})</button>
@@ -400,3 +425,4 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
     </main>
   );
 };
+

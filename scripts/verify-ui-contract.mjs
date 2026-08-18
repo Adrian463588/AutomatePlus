@@ -60,6 +60,7 @@ for (const file of collect(sourceRoot)) {
   const source = readFileSync(file, 'utf8');
   const relativePath = relative(root, file).replaceAll('\\', '/');
   if (/\bWinUI\b|native WinUI/iu.test(source)) findings.push(`${relativePath}: stale WinUI runtime wording`);
+  if (/\bwindow\.prompt\s*\(|\bprompt\s*\(/u.test(source)) findings.push(`${relativePath}: native path flows must not use window.prompt`);
   if (/onClick=\{\(\)\s*=>\s*\{\s*\}\}/u.test(source)) findings.push(`${relativePath}: no-op button handler`);
   for (const attributes of openingButtonTags(source)) {
     if (!/\bonClick\s*=/u.test(attributes) && !/\btype\s*=\s*["']submit["']/u.test(attributes)) {
@@ -74,6 +75,9 @@ for (const file of collect(sourceRoot)) {
 const css = readFileSync(join(sourceRoot, 'index.css'), 'utf8');
 for (const required of [
   'min-height: 3rem',
+  'color-scheme: dark',
+  'select',
+  'option',
   '@media (prefers-reduced-motion: reduce)',
   '@media (forced-colors: active)',
   '@media (max-width: 600px)',

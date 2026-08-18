@@ -74,9 +74,28 @@ export interface NativeArtifactsResponse {
   artifacts: readonly unknown[];
 }
 
+export interface NativeDialogFilter {
+  name: string;
+  extensions: readonly string[];
+}
+
+export interface NativeDialogPickRequest {
+  mode: 'folder' | 'file';
+  title: string;
+  initialPath?: string;
+  filters?: readonly NativeDialogFilter[];
+}
+
+export interface NativeDialogPickResponse {
+  protocolVersion: '1.0';
+  selectedPath: string | null;
+  cancelled: boolean;
+}
+
 export interface NativeProtocolMethodMap extends RuntimeProtocolMethodMap {
   'native.health': { expectedProtocolVersion?: string };
   'native.capabilities': Record<string, never>;
+  'native.dialog.pick': NativeDialogPickRequest;
   'devices.discover': Record<string, never>;
   'device-groups.list': Record<string, never>;
   'device-groups.create': { group: DeviceGroup };
@@ -97,6 +116,7 @@ export interface NativeProtocolMethodMap extends RuntimeProtocolMethodMap {
 export interface NativeProtocolResponseMap {
   'native.health': NativeHealth;
   'native.capabilities': NativeCapabilitySet;
+  'native.dialog.pick': NativeDialogPickResponse;
   'devices.discover': NativeDevicesResponse;
   'device-groups.list': NativeDeviceGroupsResponse;
   'device-groups.create': DeviceGroup;

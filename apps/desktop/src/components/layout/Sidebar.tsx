@@ -1,17 +1,20 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
-import { Globe, Smartphone, Server, SmartphoneNfc, CheckCircle2, XCircle, Clock, Plus, RefreshCw, X } from 'lucide-react';
+import { Globe, Smartphone, Server, SmartphoneNfc, CheckCircle2, XCircle, Clock, Plus, RefreshCw, X, FolderOpen, Loader2, Download, PackageCheck } from 'lucide-react';
 
 type DialogKind = 'project' | 'session' | undefined;
 
 export const Sidebar: React.FC = () => {
   const { projects, activeProject, sessions, activeSession, selectProject, selectSession, createProject, createSession,
-    devices, activeDevice, setActiveDevice, discoverDevices, deviceDiscoveryMessage, lastRunSummary } = useAppStore();
+    devices, activeDevice, setActiveDevice, discoverDevices, deviceDiscoveryMessage, lastRunSummary,
+    browseWorkspaceFolder, workspaceBrowse, runtimePreflight, checkRuntimePreflight, setActiveTab } = useAppStore();
   const [dialog, setDialog] = useState<DialogKind>();
   const [projectName, setProjectName] = useState('');
   const [workspacePath, setWorkspacePath] = useState('');
   const [sessionName, setSessionName] = useState('');
   const [sessionPlatform, setSessionPlatform] = useState<'web' | 'android' | 'api'>('web');
+  const [projectSubmitBusy, setProjectSubmitBusy] = useState(false);
+  const [projectSubmitError, setProjectSubmitError] = useState<string>();
   const dialogRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -36,10 +39,38 @@ export const Sidebar: React.FC = () => {
     };
   }, [dialog]);
 
-  const closeDialog = () => setDialog(undefined);
+  const closeDialog = () => {
+    if (projectSubmitBusy) return;
+    setDialog(undefined);
+    setProjectSubmitError(undefined);
+  };
+
+  const openProjectDialog = () => {
+    setProjectSubmitError(undefined);
+    setDialog('project');
+  };
+
+  const browseProjectWorkspace = async () => {
+    const selectedPath = await browseWorkspaceFolder();
+    if (selectedPath) setWorkspacePath(selectedPath);
+  };
+
   const submitProject = async () => {
-    await createProject(projectName, workspacePath);
-    if (projectName.trim() && workspacePath.trim()) { setProjectName(''); setWorkspacePath(''); closeDialog(); }
+    if (projectSubmitBusy) return;
+    setProjectSubmitBusy(true);
+    setProjectSubmitError(undefined);
+    try {
+      const created = await createProject(projectName, workspacePath);
+      if (created) {
+        setProjectName('');
+        setWorkspacePath('');
+        setDialog(undefined);
+      } else {
+        setProjectSubmitError(useAppStore.getState().feedback.message);
+      }
+    } finally {
+      setProjectSubmitBusy(false);
+    }
   };
   const submitSession = async () => {
     await createSession(sessionName, sessionPlatform);
@@ -58,7 +89,40 @@ export const Sidebar: React.FC = () => {
               <option value="">No project selected</option>
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
-            <button type="button" onClick={() => setDialog('project')} className="shrink-0 p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md border border-slate-800" aria-label="Create project" title="Create project"><Plus className="w-4 h-4" /></button>
+            <button type="button" onClick={openProjectDialog} className="shrink-0 p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-md border border-slate-800" aria-label="Create project" title="Create project"><Plus className="w-4 h-4" /></button>
+          </div>
+        </section>
+
+        <section aria-labelledby="runtime-preflight-heading">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
+            <span id="runtime-preflight-heading">Runtime preflight</span><Server className="w-3.5 h-3.5 text-slate-500" />
+          </div>
+          <div className="rounded-md border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+            <div className="flex items-start gap-2 text-slate-500 leading-5" role="status" aria-live="polite" aria-busy={runtimePreflight.status === 'busy'}>
+              <span className={`mt-1 h-2 w-2 rounded-full shrink-0 ${runtimePreflight.status === 'ready' ? 'bg-emerald-400' : runtimePreflight.status === 'busy' ? 'bg-sky-400' : runtimePreflight.status === 'error' ? 'bg-rose-400' : 'bg-amber-400'}`} />
+              <span>{runtimePreflight.message}</span>
+            </div>
+            {runtimePreflight.summary && <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-[10px] font-mono text-slate-500">
+              {runtimePreflight.summary.catalogEntryCount !== undefined && <span>Catalog: {runtimePreflight.summary.catalogEntryCount}</span>}
+              {runtimePreflight.summary.rootCount !== undefined && <span>Roots: {runtimePreflight.summary.rootCount}</span>}
+              {runtimePreflight.summary.writableRootCount !== undefined && <span>Writable: {runtimePreflight.summary.writableRootCount}</span>}
+              {runtimePreflight.summary.installedPackCount !== undefined && <span>Installed: {runtimePreflight.summary.installedPackCount}</span>}
+              {runtimePreflight.summary.healthyPackCount !== undefined && <span>Healthy: {runtimePreflight.summary.healthyPackCount}</span>}
+              {runtimePreflight.summary.healthIssueCount !== undefined && <span>Health issues: {runtimePreflight.summary.healthIssueCount}</span>}
+              {runtimePreflight.summary.catalogNeedsReviewCount !== undefined && runtimePreflight.summary.catalogNeedsReviewCount > 0 && <span>Needs review: {runtimePreflight.summary.catalogNeedsReviewCount}</span>}
+            </div>}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" onClick={() => void checkRuntimePreflight()} disabled={!runtimePreflight.canCheck || runtimePreflight.status === 'busy'} aria-busy={runtimePreflight.status === 'busy'} title={!runtimePreflight.canCheck ? runtimePreflight.message : 'Check the native runtime catalog, roots, and health.'} className="flex min-h-12 items-center gap-1.5 px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-slate-700 disabled:cursor-not-allowed disabled:opacity-50">
+                {runtimePreflight.status === 'busy' ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+                {runtimePreflight.status === 'busy' ? 'Checking runtime…' : 'Check runtime'}
+              </button>
+              <button type="button" onClick={() => setActiveTab('runtime')} title="Open Runtime Manager to review or download missing packs." className="flex min-h-12 items-center gap-1.5 px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-slate-700">
+                <PackageCheck className="w-3.5 h-3.5" /> Open Runtime Manager
+              </button>
+              <button type="button" onClick={() => setActiveTab('runtime')} title="Open Runtime Manager; license acceptance and native verification are required before downloading missing packs." className="flex min-h-12 items-center gap-1.5 px-2 py-1.5 text-indigo-200 hover:text-white hover:bg-indigo-900/50 rounded border border-indigo-700/70">
+                <Download className="w-3.5 h-3.5" /> Download missing
+              </button>
+            </div>
           </div>
         </section>
 
@@ -93,7 +157,7 @@ export const Sidebar: React.FC = () => {
       {dialog && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}>
         <div ref={dialogRef} className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="sidebar-dialog-title">
           <div className="flex items-center justify-between gap-3"><h2 id="sidebar-dialog-title" className="text-sm font-bold text-white">{dialog === 'project' ? 'Create project' : 'Create session'}</h2><button type="button" onClick={closeDialog} className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800" aria-label="Close dialog"><X className="w-4 h-4" /></button></div>
-          {dialog === 'project' ? <form onSubmit={(event) => { event.preventDefault(); void submitProject(); }} className="space-y-3 mt-4"><label className="block text-slate-300">Project name<input required value={projectName} onChange={(event) => setProjectName(event.target.value)} className="field mt-1" /></label><label className="block text-slate-300">Workspace path<input required value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} className="field mt-1" /></label><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} className="button-muted">Cancel</button><button type="submit" className="button-primary">Create project</button></div></form> : <form onSubmit={(event) => { event.preventDefault(); void submitSession(); }} className="space-y-3 mt-4"><label className="block text-slate-300">Session name<input required value={sessionName} onChange={(event) => setSessionName(event.target.value)} className="field mt-1" /></label><label className="block text-slate-300">Platform<select value={sessionPlatform} onChange={(event) => setSessionPlatform(event.target.value as 'web' | 'android' | 'api')} className="field mt-1"><option value="web">Web</option><option value="android">Android</option><option value="api">API</option></select></label><p className="text-xs text-slate-500">Targets, packages, URLs, secrets, and actions are entered explicitly after creation.</p><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} className="button-muted">Cancel</button><button type="submit" className="button-primary">Create session</button></div></form>}
+          {dialog === 'project' ? <form onSubmit={(event) => { event.preventDefault(); void submitProject(); }} aria-busy={projectSubmitBusy} className="space-y-3 mt-4"><label className="block text-slate-300">Project name<input required disabled={projectSubmitBusy} value={projectName} onChange={(event) => setProjectName(event.target.value)} className="field mt-1" /></label><label className="block text-slate-300">Workspace path<div className="flex gap-2 mt-1"><input required disabled={projectSubmitBusy} title={workspacePath || 'Enter a local workspace path.'} value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} className="field min-w-0 flex-1" /><button type="button" onClick={() => void browseProjectWorkspace()} disabled={!workspaceBrowse.canBrowse || workspaceBrowse.status === 'busy' || projectSubmitBusy} aria-busy={workspaceBrowse.status === 'busy'} title={workspaceBrowse.canBrowse ? 'Choose a local workspace folder using the native host.' : workspaceBrowse.message} className="button-muted min-h-12 shrink-0 px-3 disabled:cursor-not-allowed disabled:opacity-50">{workspaceBrowse.status === 'busy' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}<span className="sr-only">{workspaceBrowse.status === 'busy' ? 'Opening folder picker' : 'Browse workspace folder'}</span></button></div></label>{workspaceBrowse.message && <p role="status" aria-live="polite" className="text-xs text-slate-500">{workspaceBrowse.message}</p>}{projectSubmitError && <p role="alert" className="text-xs text-rose-300">{projectSubmitError}</p>}<div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} disabled={projectSubmitBusy} title={projectSubmitBusy ? 'Wait for the project save to finish.' : 'Cancel project creation'} className="button-muted disabled:cursor-not-allowed disabled:opacity-50">Cancel</button><button type="submit" disabled={projectSubmitBusy} title={projectSubmitBusy ? 'Project is being saved locally.' : 'Create project'} className="button-primary disabled:cursor-not-allowed disabled:opacity-50">{projectSubmitBusy ? 'Saving…' : 'Create project'}</button></div></form> : <form onSubmit={(event) => { event.preventDefault(); void submitSession(); }} className="space-y-3 mt-4"><label className="block text-slate-300">Session name<input required value={sessionName} onChange={(event) => setSessionName(event.target.value)} className="field mt-1" /></label><label className="block text-slate-300">Platform<select value={sessionPlatform} onChange={(event) => setSessionPlatform(event.target.value as 'web' | 'android' | 'api')} className="field mt-1"><option value="web">Web</option><option value="android">Android</option><option value="api">API</option></select></label><p className="text-xs text-slate-500">Targets, packages, URLs, secrets, and actions are entered explicitly after creation.</p><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} className="button-muted">Cancel</button><button type="submit" className="button-primary">Create session</button></div></form>}
         </div>
       </div>}
     </aside>

@@ -200,6 +200,130 @@ impl NativeRunArgs {
     }
 }
 
+const MAX_DIALOG_FILTERS: usize = 16;
+const MAX_DIALOG_EXTENSIONS_PER_FILTER: usize = 32;
+const MAX_DIALOG_TITLE_CHARS: usize = 128;
+const MAX_DIALOG_FILTER_NAME_CHARS: usize = 128;
+const MAX_DIALOG_EXTENSION_CHARS: usize = 64;
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum NativeDialogPickMode {
+    Folder,
+    File,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeDialogFilter {
+    pub name: String,
+    #[serde(default)]
+    pub extensions: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct NativeDialogPickArgs {
+    pub mode: NativeDialogPickMode,
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub initial_path: Option<String>,
+    #[serde(default)]
+    pub filters: Vec<NativeDialogFilter>,
+}
+
+impl NativeDialogPickArgs {
+    pub fn validate(&self) -> Result<(), String> {
+        if let Some(title) = &self.title {
+            validate_dialog_text("title", title, MAX_DIALOG_TITLE_CHARS)?;
+        }
+        if let Some(initial_path) = &self.initial_path {
+            validate_dialog_initial_path(initial_path)?;
+        }
+        if self.filters.len() > MAX_DIALOG_FILTERS {
+            return Err(format!(
+                "Native dialog accepts at most {MAX_DIALOG_FILTERS} filters."
+            ));
+        }
+        if matches!(&self.mode, NativeDialogPickMode::Folder) && !self.filters.is_empty() {
+            return Err("Folder dialogs cannot include file filters.".to_owned());
+        }
+        for filter in &self.filters {
+            validate_dialog_text("filter name", &filter.name, MAX_DIALOG_FILTER_NAME_CHARS)?;
+            if filter.extensions.is_empty() {
+                return Err("Every native dialog filter must include an extension.".to_owned());
+            }
+            if filter.extensions.len() > MAX_DIALOG_EXTENSIONS_PER_FILTER {
+                return Err(format!(
+                    "Native dialog filters accept at most {MAX_DIALOG_EXTENSIONS_PER_FILTER} extensions."
+                ));
+            }
+            for extension in &filter.extensions {
+                validate_dialog_extension(extension)?;
+            }
+        }
+        Ok(())
+    }
+}
+
+fn validate_dialog_text(field: &str, value: &str, max_chars: usize) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err(format!("Native dialog {field} cannot be empty."));
+    }
+    if value.chars().count() > max_chars {
+        return Err(format!("Native dialog {field} is too long."));
+    }
+    if value.chars().any(char::is_control) {
+        return Err(format!(
+            "Native dialog {field} contains control characters."
+        ));
+    }
+    Ok(())
+}
+
+fn validate_dialog_initial_path(value: &str) -> Result<(), String> {
+    if value.trim().is_empty() {
+        return Err("Native dialog initialPath cannot be empty.".to_owned());
+    }
+    if value.chars().any(char::is_control) {
+        return Err("Native dialog initialPath contains control characters.".to_owned());
+    }
+    if value.starts_with("\\\\") || value.starts_with("//") {
+        return Err("Native dialog initialPath cannot be a network path.".to_owned());
+    }
+    let path = std::path::Path::new(value);
+    if !path.is_absolute()
+        || path
+            .components()
+            .any(|component| matches!(component, std::path::Component::ParentDir))
+    {
+        return Err(
+            "Native dialog initialPath must be an absolute local path without parent traversal."
+                .to_owned(),
+        );
+    }
+    Ok(())
+}
+
+fn validate_dialog_extension(value: &str) -> Result<(), String> {
+    let extension = value.strip_prefix('.').unwrap_or(value);
+    if extension.is_empty()
+        || extension.chars().count() > MAX_DIALOG_EXTENSION_CHARS
+        || extension.starts_with('.')
+        || extension.ends_with('.')
+        || extension.contains("..")
+        || !extension.chars().all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '.' | '_' | '-')
+        })
+    {
+        return Err(format!(
+            "Native dialog extension '{value}' is invalid; use a simple local extension."
+        ));
+    }
+    Ok(())
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RunSummary {
@@ -323,6 +447,7 @@ impl NativeRequest {
                 | "runtime.verify"
                 | "runtime.health"
                 | "runtime.open-folder"
+                | "native.dialog.pick"
         ) {
             return Err(format!("Unsupported native method '{}'.", self.method));
         }

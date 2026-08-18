@@ -36,6 +36,16 @@ const props = (): RuntimeManagerPanelProps => ({
   onOpenFolder: () => undefined,
 });
 
+const missingPack: RuntimePackView = {
+  entry: catalogEntry,
+  status: 'Missing',
+  reason: 'No verified local pack matches this catalog entry.',
+};
+
+function buttonMarkup(markup: string, label: string): string {
+  return markup.match(/<button\b[\s\S]*?<\/button>/gu)?.find((button) => button.includes(label)) ?? '';
+}
+
 describe('[ComponentTest] RuntimeManagerPanel', () => {
   it('renders a truthful blocked browser-shell state with disabled native actions', () => {
     const html = renderToStaticMarkup(React.createElement(RuntimeManagerPanel));
@@ -78,6 +88,50 @@ describe('[ComponentTest] RuntimeManagerPanel', () => {
     expect(html).toContain('Verify all');
   });
 
+  it('keeps path and archive actions disabled until typed native picker callbacks are wired', () => {
+    const blockedHtml = renderToStaticMarkup(React.createElement(RuntimeManagerPanel, {
+      ...props(),
+      pickerBlockedReason: 'Native picker callbacks are unavailable.',
+    }));
+
+    expect(buttonMarkup(blockedHtml, 'Choose install path')).toContain('disabled=""');
+    expect(buttonMarkup(blockedHtml, 'Choose install path')).toContain('Native picker callbacks are unavailable.');
+    expect(buttonMarkup(blockedHtml, 'Import archive')).toContain('disabled=""');
+
+    const readyHtml = renderToStaticMarkup(React.createElement(RuntimeManagerPanel, {
+      ...props(),
+      pickerReady: true,
+    }));
+
+    expect(buttonMarkup(readyHtml, 'Choose install path')).not.toContain('disabled=""');
+    expect(buttonMarkup(readyHtml, 'Import archive')).not.toContain('disabled=""');
+  });
+
+  it('exposes Check runtime and explicit Download missing states only when evidence exists', () => {
+    const html = renderToStaticMarkup(React.createElement(RuntimeManagerPanel, {
+      ...props(),
+      packs: [missingPack],
+      onCheckRuntime: () => undefined,
+    }));
+
+    expect(html).toContain('Check runtime');
+    expect(html).toContain('Download all missing (1)');
+    expect(buttonMarkup(html, 'Check runtime')).not.toContain('disabled=""');
+    expect(buttonMarkup(html, 'Download all missing (1)')).not.toContain('disabled=""');
+  });
+
+  it('blocks runtime checks and downloads when no catalog evidence is loaded', () => {
+    const html = renderToStaticMarkup(React.createElement(RuntimeManagerPanel, {
+      ...props(),
+      onCheckRuntime: () => undefined,
+    }));
+
+    expect(html).toContain('Check runtime');
+    expect(html).toContain('Download all missing (0)');
+    expect(buttonMarkup(html, 'Check runtime')).toContain('disabled=""');
+    expect(buttonMarkup(html, 'Download all missing (0)')).toContain('disabled=""');
+  });
+
   it('renders unresolved catalog metadata as NeedsReview instead of fabricating artifact values', () => {
     const unresolved: RuntimePackView = {
       entry: {
@@ -98,3 +152,5 @@ describe('[ComponentTest] RuntimeManagerPanel', () => {
     expect(html).not.toContain('0 B');
   });
 });
+
+

@@ -90,7 +90,7 @@ Requests and responses are JSON objects:
       "payload": { "ok": true, "data": { "devices": [] } }
     }
 
-Supported methods are native.health, native.capabilities, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.cancel, artifacts.list, native.run, runtime.catalog.list, runtime.roots.scan, runtime.root.select, runtime.install.start, runtime.install.status, runtime.install.cancel, runtime.import, runtime.verify, runtime.health, and runtime.open-folder. Failure payloads use shared automation error codes; native failures never become a pass.
+Supported methods are native.health, native.capabilities, native.dialog.pick, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.cancel, artifacts.list, native.run, runtime.catalog.list, runtime.roots.scan, runtime.root.select, runtime.install.start, runtime.install.status, runtime.install.cancel, runtime.import, runtime.verify, runtime.health, and runtime.open-folder. `native.dialog.pick` is Rust-owned and uses a native Windows folder/file dialog; the renderer receives only a canonical selected path or an explicit cancellation. Failure payloads use shared automation error codes; native failures never become a pass.
 
 ## 6. Device model and discovery
 
@@ -163,7 +163,7 @@ The artifact index stores relative path, kind/media type, and SHA-256. Screensho
 
 ## 12. Security and offline distribution
 
-The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. They never download dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present, then a bundled bootstrap executable when the main host is absent; if neither exists it reports a setup blocker and exits. The browser-safe migration shell is an explicit `--browser` mode and keeps Android/device capabilities Blocked.
+The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. They never download dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present, then a bundled bootstrap executable when the main host is absent; if neither exists it reports a setup blocker and exits. The browser-safe migration shell is an explicit `--browser` mode and keeps Android/device capabilities Blocked. Native folder and archive selection is performed by the Rust host through the pinned `rfd` dependency; browser mode never emulates it with a prompt or shell command.
 
 Runtime Manager uses the bundled metadata-only `runtime-packs/catalog.json`; startup never contacts a remote catalog. Known roots are the user-selected root, workspace `runtime-packs`, `%LOCALAPPDATA%\AutomatePlus\runtime-packs`, `%ProgramData%\AutomatePlus\runtime-packs`, and bundled resources. The native manager stores root selection, job state, installed-pack records, license acceptance, and evidence in the versioned SQLite migration. Downloads are HTTPS-only, host-allowlisted, cancellation-aware, size-limited, streamed to staging, SHA-256 checked, safely extracted, health-checked, and atomically published. ZIP traversal, symlink, junction, executable-path, and overwrite risks fail closed. An online transfer can start only from the explicit Runtime Manager action with accepted licenses and `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`; execution after installation resolves local verified evidence only.
 
@@ -200,6 +200,7 @@ Fixtures may exercise parsers, selectors, IPC, lease logic, and failure transiti
 | Primary/follower recording | FR-16 | recorder contracts, native dispatch | observation tests | Contract/component; runtime blocked |
 | Runtime-context generation | FR-17 | packages/generators | no-fixed-port tests | Implemented |
 | Runtime Manager | FR-12, runtime IPC 1.0 | runtime.rs, runtime_catalog.rs, RuntimeManagerContainer, launcher | component verifiers, responsive PNGs, offline/release gates | Implemented; native artifact/Cargo gates blocked |
+| Native folder/archive picker | `native.dialog.pick`, IPC 1.0 | Rust `rfd` boundary, desktop bridge, Sidebar, Runtime Manager | contract tests and manual Windows picker evidence | Implemented in contract; native host evidence pending |
 | Truthful UI | NFR-05/NFR-16 | DeviceFarmView, bridge/store | authenticity/build/viewport evidence | Implemented in shell |
 | Persistence/evidence | FR-18 | Rust migration/persistence | SQLite gate | Source implemented; crate cache blocked |
 

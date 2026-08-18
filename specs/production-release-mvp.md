@@ -27,6 +27,7 @@ cloud control plane.
 | Primary/follower observation | FR-16, `RecordingPlan` | Android recorder and selector engine | Component observation tests; native recorder blocked | NeedsReview |
 | Complete generator matrix | FR-07/17, capability manifests | `packages/generators` | `verify:generators` — 27 combinations | Verified |
 | Runtime Manager and offline distribution | FR-12, runtime IPC 1.0, catalog contract | Rust runtime manager, SQLite migration, Runtime Manager UI, launcher | `verify:runtime-catalog`, `verify:runtime-manager`, `verify:offline-install`, `verify:release-manifest` | NeedsReview/Blocked until pinned artifacts and native bootstrap are supplied |
+| Native Windows folder and archive selection | `native.dialog.pick` IPC 1.0 | Rust `rfd` dialog boundary, versioned desktop bridge, Create Project and Runtime Manager | Picker contract tests; native Windows folder/file selection evidence | NeedsReview until Tauri host is built and manually exercised |
 | Real web/API target checks | FR-03/05/08/11 | Explicit online E2E harness | SauceDemo, DemoQA, and Petstore probes; browser and ReqRes prerequisites blocked | Blocked |
 | Responsive accessible UI | NFR-05/09 | React renderer | UI contract, lint/build, Runtime Manager viewport PNGs; live browser a11y retest pending | NeedsReview |
 | Safe publication | Change discipline | Reviewed allowlist and Git checks | Local/remote SHA match | Verified |
