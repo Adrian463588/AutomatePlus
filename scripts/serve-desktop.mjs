@@ -68,9 +68,9 @@ async function ensureDistBuilt() {
   if (fs.existsSync(indexHtml)) {
     return true;
   }
-  console.log('[AutomatePlus] Building desktop frontend bundle before initial launch...');
+  console.log('[AutomatePlus] Building monorepo packages and desktop frontend bundle before initial launch...');
   return new Promise((resolve, reject) => {
-    const buildProc = spawn('npm', ['run', 'build:desktop'], {
+    const buildProc = spawn('npm', ['run', 'build'], {
       cwd: ROOT_DIR,
       stdio: 'inherit',
       shell: true,
