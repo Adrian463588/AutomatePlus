@@ -50,6 +50,7 @@ const runtimeFor = (framework: string, language: string): string[] => {
   if (framework === 'k6') return ['k6'];
   if (framework === 'robot') return ['python', 'robotframework'];
   if (framework === 'selenium' && language === 'python') return ['python', 'selenium'];
+  if (framework === 'selenium' && language === 'java') return ['jdk', 'selenium-java'];
   if (framework === 'playwright' && language === 'python') return ['python', 'playwright'];
   if (framework === 'playwright' && language === 'java') return ['jdk', 'playwright-java'];
   if (framework === 'appium' && ['java', 'kotlin'].includes(language)) return ['jdk', 'appium', 'adb'];
@@ -81,11 +82,29 @@ const parallelSessionModelFor = (
   return 'single-session';
 };
 
-const requiredRuntimePacksFor = (framework: string, platform: CapabilityManifest['platform']): readonly string[] => {
-  if (platform !== 'android') return [];
-  if (framework === 'appium') return ['adb', 'appium', 'appium-uiautomator2'];
-  if (framework === 'maestro') return ['adb', 'maestro'];
-  return ['android-sdk', 'gradle', 'jdk'];
+const requiredRuntimePacksFor = (framework: string, language: string, platform: CapabilityManifest['platform']): readonly string[] => {
+  if (platform === 'web') {
+    if (framework === 'playwright') return [language === 'python' ? 'python' : language === 'java' ? 'temurin-jdk' : 'nodejs', 'playwright', 'browser-chromium'];
+    if (framework === 'cypress') return ['nodejs', 'cypress', 'browser-chromium'];
+    if (framework === 'puppeteer') return ['nodejs', 'puppeteer', 'browser-chromium'];
+    if (framework === 'selenium') {
+      if (language === 'java') return ['temurin-jdk', 'selenium', 'browser-chromium'];
+      if (language === 'python') return ['python', 'selenium', 'browser-chromium'];
+      return ['nodejs', 'selenium', 'browser-chromium'];
+    }
+    if (framework === 'robot') return ['python', 'robotframework', 'selenium', 'browser-chromium'];
+  }
+  if (platform === 'api') {
+    if (framework === 'k6') return ['k6'];
+    if (framework === 'http') {
+      if (language === 'python') return ['python', 'http-libraries'];
+      if (language === 'java') return ['temurin-jdk', 'http-libraries'];
+      return ['nodejs', 'http-libraries'];
+    }
+  }
+  if (framework === 'appium') return ['platform-tools', 'appium', 'appium-uiautomator2', 'android-sdk'];
+  if (framework === 'maestro') return ['platform-tools', 'maestro', 'android-sdk'];
+  return ['android-sdk', 'gradle', 'temurin-jdk', 'maven-gradle-cache'];
 };
 
 function actionsFor(framework: string, platform: CapabilityManifest['platform']): string[] {
@@ -111,7 +130,7 @@ export function createCapabilityManifest(
     requiredRuntimes: runtimeFor(framework, language),
     supportedDeviceStrategies: deviceStrategiesFor(framework, platform),
     parallelSessionModel: parallelSessionModelFor(framework, platform),
-    requiredRuntimePacks: requiredRuntimePacksFor(framework, platform),
+    requiredRuntimePacks: requiredRuntimePacksFor(framework, language, platform),
     requiresPhysicalDevice: platform === 'android' && framework !== 'robolectric',
     ...(framework === 'appium' && platform === 'android' ? { runtimeContext: APPIUM_RUNTIME_CONTEXT } : {}),
     runnerCommandId: `${framework}.${language}.run`,

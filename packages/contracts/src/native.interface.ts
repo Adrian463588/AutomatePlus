@@ -7,6 +7,17 @@ import type {
   RecordingPlan,
 } from './device-farm.interface.js';
 import type { RunSummary } from './runner.interface.js';
+import type {
+  RuntimeCatalogResponse,
+  RuntimeHealthResponse,
+  RuntimeImportedResponse,
+  RuntimeInstallResponse,
+  RuntimeInstallStatusResponse,
+  RuntimeProtocolMethodMap,
+  RuntimeOpenFolderResponse,
+  RuntimeRootsScanResponse,
+  RuntimeVerifyResponse,
+} from './runtime.interface.js';
 
 export type NativeHostState = 'ready' | 'blocked' | 'stopped';
 
@@ -63,7 +74,7 @@ export interface NativeArtifactsResponse {
   artifacts: readonly unknown[];
 }
 
-export interface NativeProtocolMethodMap {
+export interface NativeProtocolMethodMap extends RuntimeProtocolMethodMap {
   'native.health': { expectedProtocolVersion?: string };
   'native.capabilities': Record<string, never>;
   'devices.discover': Record<string, never>;
@@ -101,4 +112,14 @@ export interface NativeProtocolResponseMap {
   'farm.run.cancel': { runId: string; cancelled: boolean };
   'artifacts.list': NativeArtifactsResponse;
   'native.run': RunSummary;
+  'runtime.catalog.list': RuntimeCatalogResponse;
+  'runtime.roots.scan': RuntimeRootsScanResponse;
+  'runtime.root.select': RuntimeRootsScanResponse;
+  'runtime.install.start': RuntimeInstallResponse;
+  'runtime.install.status': RuntimeInstallStatusResponse;
+  'runtime.install.cancel': RuntimeInstallStatusResponse;
+  'runtime.import': RuntimeImportedResponse;
+  'runtime.verify': RuntimeVerifyResponse;
+  'runtime.health': RuntimeHealthResponse;
+  'runtime.open-folder': RuntimeOpenFolderResponse;
 }

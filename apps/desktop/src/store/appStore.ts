@@ -13,7 +13,7 @@ import {
 } from '@automate-plus/contracts';
 import { bridge } from '../services/desktopBridge.js';
 
-export type ActiveTab = 'visual' | 'api_builder' | 'device_farm';
+export type ActiveTab = 'visual' | 'api_builder' | 'device_farm' | 'runtime';
 export type FeedbackKind = 'idle' | 'pending' | 'success' | 'error' | 'blocked' | 'cancelled';
 
 export interface UiFeedback {

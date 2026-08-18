@@ -107,7 +107,7 @@ Persist raw logs, normalized reports, screenshots, traces, videos, and metrics l
 
 ### FR-12 — Offline runtime manager
 
-Verify local version, path, architecture, SHA-256, license metadata, and health for Node, Rust/Tauri, ADB, Appium/UiAutomator2, scrcpy, sidecar, WebView2, and framework packs. Never download or install implicitly.
+Provide a native `Runtime Manager` that lists the metadata-only catalog, scans the selected project root plus known local/bundled roots, imports a local ZIP, verifies installed packs, runs allowlisted health commands, and opens the active root. `Download all missing` is available only after explicit user license acceptance and an explicit download-mode opt-in; there is no startup download, remote catalog fetch, hidden installer, telemetry, or cloud fallback. Reuse requires exact `id + version + architecture + source SHA-256 + license acceptance + health evidence`; a different SHA is `NeedsReview` and is never overwritten automatically. Pack metadata must include an official HTTPS source, pinned version, size, SHA-256, SPDX/license reference, archive format, executable allowlist, and health command before it can be downloaded.
 
 ### FR-13 — Security
 
@@ -189,9 +189,10 @@ Use semantic heading/list/grid/dialog/progress/status roles, focus-visible state
 Run-AutomatePlus.bat at the repository root delegates to scripts/Run-AutomatePlus.bat. It:
 
 1. sets the workspace and local working directory;
-2. starts an existing AutomatePlus.exe when present, or checks the manifest, Node, Rust/Tauri, renderer build, packs, WebView2, ADB/Appium/scrcpy, and single-process conditions before attempting a local build;
-3. fails closed with exit code 2 when the native build is blocked; it never silently changes acceptance mode;
-4. starts the browser-safe migration shell only when the user passes `--browser`, keeping Android/device capabilities Blocked and never fabricating evidence.
+2. starts an existing `AutomatePlus.exe` when present;
+3. otherwise starts the bundled `AutomatePlusBootstrap.exe` so the user can open Runtime Manager and provision packs;
+4. otherwise reports a setup blocker with exit code 2. An explicit `--build-dev` may run the local offline build preflight; it never silently changes acceptance mode;
+5. starts the browser-safe migration shell only when the user passes `--browser`, keeping Android/device capabilities Blocked and never fabricating evidence.
 
 Exit code 2 is a truthful Blocked prerequisite result for missing native prerequisites. Native preflight blockers are printed before the launcher exits. No network fallback is allowed.
 
@@ -208,6 +209,7 @@ Rex reviews requirements, Aria reviews contracts/persistence/IPC, Mason implemen
 | Multi-device replay | FR-15, FarmRunSpec/leases | contracts, runner core, Rust host | scheduler/lease tests | Contract/component; Appium execution blocked |
 | Primary/follower recording | FR-16, RecordingPlan/Observation | recorder contracts and native dispatch | observation tests | Contract/component; runtime blocked |
 | Runtime-context generation | FR-07/17, capability manifest | generators | no-fixed-port/context tests | Implemented |
+| Runtime Manager and explicit offline distribution | FR-12, runtime IPC 1.0, catalog contract | Rust runtime manager, SQLite migration, Runtime Manager UI, launcher | runtime-manager/catalog/offline verifiers; release manifest gate | Implemented; artifact/Cargo prerequisites blocked |
 | Responsive truthful UI | NFR-05/09 | React farm workspace | build/authenticity/viewport evidence | Implemented in shell |
 
 ## 11. Acceptance boundary

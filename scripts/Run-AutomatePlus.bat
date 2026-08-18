@@ -1,16 +1,27 @@
 @echo off
 setlocal EnableExtensions
 set "ROOT=%~dp0.."
-set "NATIVE=%ROOT%\apps\desktop\src-tauri\target\release\AutomatePlus.exe"
+set "NATIVE=%ROOT%\release\AutomatePlus.exe"
+if not exist "%NATIVE%" set "NATIVE=%ROOT%\apps\desktop\src-tauri\target\release\AutomatePlus.exe"
+set "BOOTSTRAP=%ROOT%\release\AutomatePlusBootstrap.exe"
 set "FORCE_BROWSER=0"
 set "DOCTOR=0"
+set "DEV_BUILD=0"
 if /I "%~1"=="--browser" set "FORCE_BROWSER=1"
 if /I "%~1"=="--doctor" set "DOCTOR=1"
+if /I "%~1"=="--build-dev" set "DEV_BUILD=1"
 cd /d "%ROOT%"
 
 if "%DOCTOR%"=="1" goto doctor
 
 if "%FORCE_BROWSER%"=="0" if exist "%NATIVE%" goto launch_native
+if "%FORCE_BROWSER%"=="0" if exist "%BOOTSTRAP%" goto launch_bootstrap
+
+if "%FORCE_BROWSER%"=="0" if "%DEV_BUILD%"=="0" (
+  echo [AutomatePlus] BLOCKED: AutomatePlus.exe and AutomatePlusBootstrap.exe are not present.
+  echo [AutomatePlus] Install the signed offline release package, or use --browser explicitly for migration-shell diagnostics.
+  exit /b 2
+)
 
 where node >nul 2>nul
 if errorlevel 1 (
@@ -40,6 +51,14 @@ if not exist "%NATIVE%" (
   exit /b 1
 )
 goto launch_native
+
+:launch_bootstrap
+set "AUTOMATE_PLUS_WORKSPACE=%ROOT%"
+echo [AutomatePlus] Starting offline bootstrap host. Runtime Manager is available for explicit pack setup.
+start "AutomatePlus Bootstrap" /wait "%BOOTSTRAP%"
+set "EXIT_CODE=%ERRORLEVEL%"
+if not "%EXIT_CODE%"=="0" echo [AutomatePlus] Bootstrap exited with code %EXIT_CODE%.
+exit /b %EXIT_CODE%
 
 :launch_browser
 if not exist "%ROOT%\node_modules" (

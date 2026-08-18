@@ -90,7 +90,7 @@ Requests and responses are JSON objects:
       "payload": { "ok": true, "data": { "devices": [] } }
     }
 
-Supported methods are native.health, native.capabilities, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.cancel, artifacts.list, and native.run. Failure payloads use shared automation error codes; native failures never become a pass.
+Supported methods are native.health, native.capabilities, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.cancel, artifacts.list, native.run, runtime.catalog.list, runtime.roots.scan, runtime.root.select, runtime.install.start, runtime.install.status, runtime.install.cancel, runtime.import, runtime.verify, runtime.health, and runtime.open-folder. Failure payloads use shared automation error codes; native failures never become a pass.
 
 ## 6. Device model and discovery
 
@@ -163,7 +163,9 @@ The artifact index stores relative path, kind/media type, and SHA-256. Screensho
 
 ## 12. Security and offline distribution
 
-The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. They never download dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present; otherwise it reports native blockers and exits. The browser-safe migration shell is an explicit `--browser` mode and keeps Android/device capabilities Blocked.
+The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. They never download dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present, then a bundled bootstrap executable when the main host is absent; if neither exists it reports a setup blocker and exits. The browser-safe migration shell is an explicit `--browser` mode and keeps Android/device capabilities Blocked.
+
+Runtime Manager uses the bundled metadata-only `runtime-packs/catalog.json`; startup never contacts a remote catalog. Known roots are the user-selected root, workspace `runtime-packs`, `%LOCALAPPDATA%\AutomatePlus\runtime-packs`, `%ProgramData%\AutomatePlus\runtime-packs`, and bundled resources. The native manager stores root selection, job state, installed-pack records, license acceptance, and evidence in the versioned SQLite migration. Downloads are HTTPS-only, host-allowlisted, cancellation-aware, size-limited, streamed to staging, SHA-256 checked, safely extracted, health-checked, and atomically published. ZIP traversal, symlink, junction, executable-path, and overwrite risks fail closed. An online transfer can start only from the explicit Runtime Manager action with accepted licenses and `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`; execution after installation resolves local verified evidence only.
 
 Tauri capabilities are least privilege. CSP permits only the local renderer and loopback development connection. Secrets are references, redacted in logs and errors, and never placed in generated source as plaintext.
 
@@ -180,6 +182,7 @@ Every button has a real action or an explanatory disabled state. Browser mode ha
 | TypeScript | npm ci --offline, lint, format, typecheck, test | Required and runnable locally |
 | Packages/UI | build:packages, build:sidecar, build:desktop | Required before release |
 | Smoke/docs | verify:sidecar, verify:k6:fixture, verify:docs, verify:authenticity | Component evidence only; verify:k6 is target-online and separately gated |
+| Runtime distribution | verify:runtime-catalog, verify:runtime-manager, verify:offline-install, verify:release-manifest | Catalog completeness is component-verified; unresolved artifact metadata is Blocked/NeedsReview |
 | Rust source | cargo fmt --check | Must pass independently |
 | Rust build/test | cargo clippy --offline, cargo test --offline | Blocked when crates are not cached |
 | Tauri build | npm run native:build | Requires local Tauri CLI/packs |
@@ -196,6 +199,7 @@ Fixtures may exercise parsers, selectors, IPC, lease logic, and failure transiti
 | Farm strategies and leases | FR-15, ADR-004 | device-farm, runner core, Rust ports | scheduler/lease tests | Contract/component; Appium executor blocked |
 | Primary/follower recording | FR-16 | recorder contracts, native dispatch | observation tests | Contract/component; runtime blocked |
 | Runtime-context generation | FR-17 | packages/generators | no-fixed-port tests | Implemented |
+| Runtime Manager | FR-12, runtime IPC 1.0 | runtime.rs, runtime_catalog.rs, RuntimeManagerContainer, launcher | component verifiers, responsive PNGs, offline/release gates | Implemented; native artifact/Cargo gates blocked |
 | Truthful UI | NFR-05/NFR-16 | DeviceFarmView, bridge/store | authenticity/build/viewport evidence | Implemented in shell |
 | Persistence/evidence | FR-18 | Rust migration/persistence | SQLite gate | Source implemented; crate cache blocked |
 

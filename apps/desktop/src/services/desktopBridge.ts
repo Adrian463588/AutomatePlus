@@ -27,6 +27,15 @@ import type { IpcResponse } from '@automate-plus/contracts';
 import type { SessionIR } from '@automate-plus/ir-schema';
 import { ApiFunctionalRunner } from '@automate-plus/runner-core/browser';
 import type { LoopingSummary, K6StressMetrics } from '@automate-plus/stress-engine/browser';
+import {
+  BROWSER_RUNTIME_BLOCKED_REASON,
+  RuntimeManagerClient,
+  type RuntimeManagerHostState,
+  type RuntimeManagerInvoke,
+  type RuntimeMethod,
+  type RuntimeMethodPayloads,
+  type RuntimeMethodResponses,
+} from './runtimeManager.js';
 
 type NativeCommand = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
 
@@ -146,6 +155,18 @@ class NativeCapabilityAdapter {
   public hasBridge(): boolean {
     return Boolean(this.resolveBridge()?.invoke);
   }
+
+  public runtimeHostState(): RuntimeManagerHostState {
+    if (!this.hasBridge()) {
+      return { mode: 'browser', status: 'blocked', reason: BROWSER_RUNTIME_BLOCKED_REASON };
+    }
+    return { mode: 'native', status: 'ready', reason: this.status.reason };
+  }
+
+  public runtimeInvoke: RuntimeManagerInvoke = async <M extends RuntimeMethod>(
+    method: M,
+    payload: RuntimeMethodPayloads[M],
+  ): Promise<RuntimeMethodResponses[M]> => this.request<RuntimeMethodResponses[M]>(method, payload);
 
   public async probe(): Promise<NativeHostStatus> {
     const bridge = this.resolveBridge();
@@ -337,6 +358,14 @@ export class DesktopBridgeService {
 
   public getNativeHostStatus(): NativeHostStatus {
     return this.native.getStatus();
+  }
+
+  public getRuntimeHostState(): RuntimeManagerHostState {
+    return this.native.runtimeHostState();
+  }
+
+  public getRuntimeManager(): RuntimeManagerClient {
+    return new RuntimeManagerClient(this.native.runtimeInvoke, this.getRuntimeHostState());
   }
 
   public probeNativeHost(): Promise<NativeHostStatus> {

@@ -25,7 +25,7 @@ export interface GeneratedProject {
   files: GeneratedFile[];
   manifest: CapabilityManifest;
   entrypoint: string;
-  runtimeRequirements?: string[];
+  runtimeRequirements?: readonly string[];
   checksums?: Record<string, string>;
 }
 

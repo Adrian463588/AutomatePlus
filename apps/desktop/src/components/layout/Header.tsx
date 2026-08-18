@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
-import { Play, PlaySquare, Repeat, Zap, Globe, Server, Layers, Square, Activity, Smartphone } from 'lucide-react';
+import { Play, PlaySquare, Repeat, Zap, Globe, Server, Layers, Square, Activity, Smartphone, HardDriveDownload } from 'lucide-react';
 
 interface HeaderProps { onOpenStressModal: () => void; }
 
@@ -37,6 +37,20 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
         >
           <Globe className="w-3.5 h-3.5 text-sky-400" />
           <span>Recorder</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('runtime')}
+          aria-pressed={activeTab === 'runtime'}
+          aria-label="Runtime Manager"
+          title="Scan, import, verify, and explicitly download offline runtime packs"
+          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
+            activeTab === 'runtime' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <HardDriveDownload className="w-3.5 h-3.5 text-violet-400" />
+          <span>Runtime</span>
         </button>
 
         <button

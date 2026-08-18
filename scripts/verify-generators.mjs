@@ -1,4 +1,9 @@
 import { GeneratorFactory } from '@automate-plus/generators';
+import { readCatalog } from './runtime-catalog.mjs';
+
+const runtimeCatalog = readCatalog(undefined, { requireGeneratorCoverage: true });
+if (!runtimeCatalog.validation.ok) throw new Error(`runtime catalog is invalid: ${runtimeCatalog.validation.errors.join('; ')}`);
+const runtimePackIds = new Set(runtimeCatalog.validation.entries.map((entry) => entry.id));
 
 const combinations = GeneratorFactory.getSupportedCombinations();
 const forbidden = [
@@ -113,6 +118,8 @@ for (const combination of combinations) {
   const generator = GeneratorFactory.getGenerator(combination.framework, combination.language);
   const session = sessionFor(generator.supportedPlatforms[0]);
   const project = await generator.generateFullProject(session);
+  const missingRuntimePacks = project.manifest.requiredRuntimePacks.filter((packId) => !runtimePackIds.has(packId));
+  if (missingRuntimePacks.length > 0) throw new Error(`${combination.framework}/${combination.language} references runtime packs absent from catalog: ${missingRuntimePacks.join(', ')}`);
   if (project.entrypoint !== project.files[0]?.relativePath) throw new Error(`${combination.framework}/${combination.language} entrypoint mismatch`);
   if (!project.files.some((file) => file.relativePath === 'automateplus.manifest.json')) throw new Error(`${combination.framework}/${combination.language} manifest missing`);
   if (new Set(project.files.map((file) => file.relativePath)).size !== project.files.length) throw new Error(`${combination.framework}/${combination.language} duplicate generated paths`);

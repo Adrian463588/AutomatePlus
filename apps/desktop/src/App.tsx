@@ -8,6 +8,7 @@ import { DeviceFarmView } from './components/farm/DeviceFarmView.js';
 import { MonacoView } from './components/editor/MonacoView.js';
 import { TerminalPanel } from './components/terminal/TerminalPanel.js';
 import { StressModal } from './components/stress/StressModal.js';
+import { RuntimeManagerContainer } from './components/runtime/RuntimeManagerContainer.js';
 
 export const App: React.FC = () => {
   const { loadInitialData, activeTab } = useAppStore();
@@ -23,6 +24,8 @@ export const App: React.FC = () => {
         return <ApiBuilderView />;
       case 'device_farm':
         return <DeviceFarmView />;
+      case 'runtime':
+        return <RuntimeManagerContainer />;
       case 'visual':
       default:
         return <VisualCanvas />;

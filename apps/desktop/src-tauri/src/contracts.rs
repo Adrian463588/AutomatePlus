@@ -313,6 +313,16 @@ impl NativeRequest {
                 | "farm.run.cancel"
                 | "artifacts.list"
                 | "native.run"
+                | "runtime.catalog.list"
+                | "runtime.roots.scan"
+                | "runtime.root.select"
+                | "runtime.install.start"
+                | "runtime.install.status"
+                | "runtime.install.cancel"
+                | "runtime.import"
+                | "runtime.verify"
+                | "runtime.health"
+                | "runtime.open-folder"
         ) {
             return Err(format!("Unsupported native method '{}'.", self.method));
         }

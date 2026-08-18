@@ -159,7 +159,7 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .app-header { grid-template-columns: minmax(0, 1fr); }
   .app-header { padding-left: .75rem; padding-right: .75rem; }
   .header-actions { gap: .35rem; }
-  .header-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; min-width: 0; overflow: hidden; }
+  .header-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; min-width: 0; overflow: hidden; }
   .header-tabs button { min-width: 0; width: 100%; justify-content: center; padding-left: .25rem; padding-right: .25rem; }
   .header-tabs button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .button-execute { padding-left: .55rem; padding-right: .55rem; }

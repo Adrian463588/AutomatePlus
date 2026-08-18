@@ -1,5 +1,6 @@
 use crate::adb::AdbClient;
 use crate::contracts::{DeviceProfile, NativeCapabilities, NativeHealth};
+use crate::runtime_catalog::discover_known_roots;
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
@@ -446,15 +447,12 @@ fn webview2_available(root: &Path) -> bool {
 }
 
 fn runtime_root(root: &Path) -> PathBuf {
-    let local = root.join("runtime-packs");
-    if local.is_dir() {
-        return local;
-    }
-    let bundled = root.join("resources").join("runtime-packs");
-    if bundled.is_dir() {
-        return bundled;
-    }
-    local
+    let candidates = discover_known_roots(root, None);
+    candidates
+        .iter()
+        .find(|candidate| candidate.path.join("manifest.json").is_file())
+        .map(|candidate| candidate.path.clone())
+        .unwrap_or_else(|| root.join("runtime-packs"))
 }
 
 fn capabilities(

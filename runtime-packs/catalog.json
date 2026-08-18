@@ -1,0 +1,517 @@
+{
+  "schemaVersion": 1,
+  "product": "AutomatePlus",
+  "architecture": "win-x64",
+  "policy": {
+    "catalogMode": "metadata-only",
+    "downloadMode": "explicit-user-action-only",
+    "network": "offline-by-default",
+    "unresolvedSourceRule": "No pack may be downloaded until exact official artifact URL, version, size, SHA-256, license, executable path, and health command are verified."
+  },
+  "entries": [
+    {
+      "id": "automateplus-bootstrap",
+      "category": "bootstrap",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://v2.tauri.app/start/prerequisites/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://v2.tauri.app/" },
+      "provides": ["bootstrap-host", "native-host"],
+      "requires": ["webview2"],
+      "healthCommand": [],
+      "generatorIds": [],
+      "status": "NeedsReview",
+      "reviewReason": "The repository does not contain a verified prebuilt AutomatePlus host or bootstrap artifact. A release artifact must be supplied with its exact version, SHA-256, license, executable paths, and health command."
+    },
+    {
+      "id": "nodejs",
+      "category": "build",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://nodejs.org/en/download/current"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/nodejs/node/blob/main/LICENSE" },
+      "provides": ["node", "npm"],
+      "requires": [],
+      "healthCommand": [],
+      "generatorIds": ["playwright-typescript", "playwright-javascript", "cypress-typescript", "cypress-javascript", "puppeteer-typescript", "puppeteer-javascript", "selenium-typescript", "selenium-javascript", "appium-typescript", "appium-javascript", "http-typescript", "http-javascript"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact official Node.js win-x64 artifact, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "python",
+      "category": "build",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://www.python.org/downloads/windows/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://docs.python.org/3/license.html" },
+      "provides": ["python"],
+      "requires": [],
+      "healthCommand": [],
+      "generatorIds": ["playwright-python", "selenium-python", "robot-robot", "http-python"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact official Python win-x64 artifact, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "temurin-jdk",
+      "category": "build",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://adoptium.net/temurin/releases/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://adoptium.net/about.html" },
+      "provides": ["jdk", "java"],
+      "requires": [],
+      "healthCommand": [],
+      "generatorIds": ["playwright-java", "selenium-java", "appium-java", "appium-kotlin", "espresso-kotlin", "espresso-java", "robolectric-kotlin", "robolectric-java", "http-java"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact official Temurin win-x64 artifact, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "rust-tauri",
+      "category": "build",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://www.rust-lang.org/tools/install"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://www.rust-lang.org/policies/licenses" },
+      "provides": ["rust", "cargo", "tauri-cli"],
+      "requires": [],
+      "healthCommand": [],
+      "generatorIds": [],
+      "status": "NeedsReview",
+      "reviewReason": "No prebuilt or offline Rust/Tauri toolchain pack is recorded. Normal users must not be asked to populate Cargo cache implicitly."
+    },
+    {
+      "id": "webview2",
+      "category": "bootstrap",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://developer.microsoft.com/en-us/microsoft-edge/webview2/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://www.microsoft.com/en-us/legal/terms-of-use" },
+      "provides": ["webview2"],
+      "requires": [],
+      "healthCommand": [],
+      "generatorIds": [],
+      "status": "NeedsReview",
+      "reviewReason": "No bundled offline WebView2 artifact, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "playwright",
+      "category": "web",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://playwright.dev/docs/browsers"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/microsoft/playwright/blob/main/LICENSE" },
+      "provides": ["playwright", "playwright-java", "browser-runtime"],
+      "requires": ["nodejs", "python", "temurin-jdk"],
+      "healthCommand": [],
+      "generatorIds": ["playwright-typescript", "playwright-javascript", "playwright-python", "playwright-java"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact Playwright package/browser artifact set, pinned versions, sizes, SHA-256 values, licenses, executable paths, or health commands are recorded."
+    },
+    {
+      "id": "cypress",
+      "category": "web",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://docs.cypress.io/app/get-started/install-cypress"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/cypress-io/cypress/blob/develop/LICENSE" },
+      "provides": ["cypress"],
+      "requires": ["nodejs"],
+      "healthCommand": [],
+      "generatorIds": ["cypress-typescript", "cypress-javascript"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact Cypress desktop artifact, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "puppeteer",
+      "category": "web",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://pptr.dev/guides/installation"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/puppeteer/puppeteer/blob/main/LICENSE" },
+      "provides": ["puppeteer"],
+      "requires": ["nodejs"],
+      "healthCommand": [],
+      "generatorIds": ["puppeteer-typescript", "puppeteer-javascript"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact Puppeteer/browser artifact set, pinned versions, sizes, SHA-256 values, licenses, executable paths, or health commands are recorded."
+    },
+    {
+      "id": "selenium",
+      "category": "web",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://www.selenium.dev/downloads/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/SeleniumHQ/selenium/blob/trunk/LICENSE" },
+      "provides": ["selenium", "browser-driver"],
+      "requires": ["nodejs", "python", "temurin-jdk"],
+      "healthCommand": [],
+      "generatorIds": ["selenium-typescript", "selenium-javascript", "selenium-python", "selenium-java"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact Selenium bindings/driver artifact set, pinned versions, sizes, SHA-256 values, licenses, executable paths, or health commands are recorded."
+    },
+    {
+      "id": "robotframework",
+      "category": "web",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://robotframework.org/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/robotframework/robotframework/blob/master/LICENSE.txt" },
+      "provides": ["robotframework"],
+      "requires": ["python"],
+      "healthCommand": [],
+      "generatorIds": ["robot-robot"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact Robot Framework package and browser library artifacts, pinned versions, sizes, SHA-256 values, licenses, executable paths, or health commands are recorded."
+    },
+    {
+      "id": "browser-chromium",
+      "category": "web",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://www.chromium.org/getting-involved/download-chromium/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://chromium.googlesource.com/chromium/src/+/main/LICENSE" },
+      "provides": ["chromium", "browser-binary"],
+      "requires": [],
+      "healthCommand": [],
+      "generatorIds": ["playwright-typescript", "playwright-javascript", "playwright-python", "playwright-java", "cypress-typescript", "cypress-javascript", "puppeteer-typescript", "puppeteer-javascript", "selenium-typescript", "selenium-javascript", "selenium-python", "selenium-java", "robot-robot"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact browser binary/driver artifacts, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "k6",
+      "category": "api",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://grafana.com/docs/k6/latest/set-up/install-k6/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/grafana/k6/blob/master/LICENSE.md" },
+      "provides": ["k6"],
+      "requires": [],
+      "healthCommand": [],
+      "generatorIds": ["k6-javascript"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact official k6 win-x64 artifact, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "http-libraries",
+      "category": "library",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://www.npmjs.com/package/axios"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/axios/axios/blob/v1.x/LICENSE" },
+      "provides": ["http", "axios", "requests", "restassured"],
+      "requires": ["nodejs", "python", "temurin-jdk"],
+      "healthCommand": [],
+      "generatorIds": ["http-typescript", "http-javascript", "http-python", "http-java"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact offline HTTP library bundle with lock metadata, pinned versions, artifact sizes, SHA-256 values, licenses, or health commands is recorded."
+    },
+    {
+      "id": "platform-tools",
+      "category": "android",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://developer.android.com/tools/releases/platform-tools"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://developer.android.com/license" },
+      "provides": ["adb", "fastboot"],
+      "requires": [],
+      "healthCommand": [],
+      "generatorIds": ["appium-java", "appium-kotlin", "appium-typescript", "appium-javascript", "maestro-yaml"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact official Android Platform Tools archive, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "appium",
+      "category": "android",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://appium.io/docs/en/2.0/quickstart/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/appium/appium/blob/master/LICENSE" },
+      "provides": ["appium"],
+      "requires": ["nodejs", "platform-tools"],
+      "healthCommand": [],
+      "generatorIds": ["appium-java", "appium-kotlin", "appium-typescript", "appium-javascript"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact offline Appium server artifact, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "appium-uiautomator2",
+      "category": "android",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://appium.io/docs/en/2.0/quickstart/uiauto2-driver/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/appium/appium-uiautomator2-driver/blob/master/LICENSE" },
+      "provides": ["appium-uiautomator2"],
+      "requires": ["appium", "platform-tools", "android-sdk"],
+      "healthCommand": [],
+      "generatorIds": ["appium-java", "appium-kotlin", "appium-typescript", "appium-javascript"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact offline UiAutomator2 driver and Android server artifacts, pinned versions, sizes, SHA-256 values, licenses, executable paths, or health commands are recorded."
+    },
+    {
+      "id": "android-sdk",
+      "category": "android",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://developer.android.com/studio"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://developer.android.com/license" },
+      "provides": ["android-sdk", "android-build-tools"],
+      "requires": ["platform-tools", "temurin-jdk"],
+      "healthCommand": [],
+      "generatorIds": ["espresso-kotlin", "espresso-java", "robolectric-kotlin", "robolectric-java"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact Android SDK/build-tools package set, pinned versions, sizes, SHA-256 values, licenses, executable paths, or health commands are recorded."
+    },
+    {
+      "id": "gradle",
+      "category": "build",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://gradle.org/releases/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://gradle.org/legal/" },
+      "provides": ["gradle"],
+      "requires": ["temurin-jdk", "android-sdk"],
+      "healthCommand": [],
+      "generatorIds": ["espresso-kotlin", "espresso-java", "robolectric-kotlin", "robolectric-java"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact offline Gradle distribution and dependency cache, pinned versions, sizes, SHA-256 values, licenses, executable paths, or health commands are recorded."
+    },
+    {
+      "id": "scrcpy",
+      "category": "android",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://github.com/Genymobile/scrcpy/blob/master/doc/windows.md"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/Genymobile/scrcpy/blob/master/LICENSE" },
+      "provides": ["scrcpy", "android-recording"],
+      "requires": ["platform-tools"],
+      "healthCommand": [],
+      "generatorIds": [],
+      "status": "NeedsReview",
+      "reviewReason": "No exact official scrcpy Windows archive, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "maestro",
+      "category": "android",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://maestro.mobile.dev/getting-started/installing-maestro"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/mobile-dev-inc/maestro/blob/main/LICENSE" },
+      "provides": ["maestro"],
+      "requires": ["platform-tools"],
+      "healthCommand": [],
+      "generatorIds": ["maestro-yaml"],
+      "status": "NeedsReview",
+      "reviewReason": "No exact official Maestro Windows artifact, pinned version, size, SHA-256, license metadata, executable path, or health command is recorded."
+    },
+    {
+      "id": "npm-cache",
+      "category": "library",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://docs.npmjs.com/cli/v11/commands/npm-cache"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://github.com/npm/cli/blob/latest/LICENSE" },
+      "provides": ["npm-cache", "javascript-dependencies"],
+      "requires": ["nodejs"],
+      "healthCommand": [],
+      "generatorIds": ["playwright-typescript", "playwright-javascript", "cypress-typescript", "cypress-javascript", "puppeteer-typescript", "puppeteer-javascript", "selenium-typescript", "selenium-javascript", "appium-typescript", "appium-javascript", "http-typescript", "http-javascript"],
+      "status": "NeedsReview",
+      "reviewReason": "No offline NPM cache snapshot with exact lock metadata, artifact sizes, SHA-256, license metadata, or health command is recorded."
+    },
+    {
+      "id": "python-wheels",
+      "category": "library",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://packaging.python.org/en/latest/guides/tool-recommendations/"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://pypi.org/pypi" },
+      "provides": ["python-wheels", "python-dependencies"],
+      "requires": ["python"],
+      "healthCommand": [],
+      "generatorIds": ["playwright-python", "selenium-python", "robot-robot", "http-python"],
+      "status": "NeedsReview",
+      "reviewReason": "No offline Python wheel set with exact versions, hashes, licenses, archive metadata, or health commands is recorded."
+    },
+    {
+      "id": "maven-gradle-cache",
+      "category": "library",
+      "version": null,
+      "architecture": "win-x64",
+      "source": {
+        "url": null,
+        "allowedHost": null,
+        "sha256": null,
+        "sizeBytes": null,
+        "officialReference": "https://docs.gradle.org/current/userguide/dependency_caching.html"
+      },
+      "archive": { "format": "directory", "executablePaths": [] },
+      "license": { "spdx": null, "url": null, "sha256": null, "officialReference": "https://gradle.org/legal/" },
+      "provides": ["maven-cache", "gradle-cache", "java-dependencies"],
+      "requires": ["temurin-jdk", "gradle"],
+      "healthCommand": [],
+      "generatorIds": ["playwright-java", "selenium-java", "appium-java", "appium-kotlin", "espresso-kotlin", "espresso-java", "robolectric-kotlin", "robolectric-java", "http-java"],
+      "status": "NeedsReview",
+      "reviewReason": "No offline Maven/Gradle dependency cache with exact artifact versions, hashes, licenses, archive metadata, or health commands is recorded."
+    }
+  ]
+}

@@ -39,7 +39,7 @@ describe('Appium device-farm generation', () => {
 
       expect(project.manifest.supportedDeviceStrategies).toEqual(['single', 'all-devices', 'split-iterations']);
       expect(project.manifest.parallelSessionModel).toBe('multi-session');
-      expect(project.manifest.requiredRuntimePacks).toEqual(['adb', 'appium', 'appium-uiautomator2']);
+      expect(project.manifest.requiredRuntimePacks).toEqual(['platform-tools', 'appium', 'appium-uiautomator2', 'android-sdk']);
       expect(project.manifest.requiresPhysicalDevice).toBe(true);
       expect(project.manifest.runtimeContext).toEqual(APPIUM_RUNTIME_CONTEXT);
       expect(source).toContain('AUTOMATEPLUS_APPIUM_URL');

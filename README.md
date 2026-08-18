@@ -1,13 +1,15 @@
 # AutomatePlus (Sprint 2) 🚀
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-140%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-150%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
 
-![AutomatePlus Sprint 2 Android farm blocked-state preview](docs/assets/sprint-2-preview-1440x900.png)
+![AutomatePlus Runtime Manager blocked-state preview](docs/assets/runtime-manager-preview-1440x900.png)
+
+Runtime Manager responsive previews: [390×844](docs/assets/runtime-manager-preview-390x844.png) · [600×900](docs/assets/runtime-manager-preview-600x900.png) · [768×1024](docs/assets/runtime-manager-preview-768x1024.png) · [840×1024](docs/assets/runtime-manager-preview-840x1024.png) · [1024×768](docs/assets/runtime-manager-preview-1024x768.png) · [1280×800](docs/assets/runtime-manager-preview-1280x800.png) · [1440×900](docs/assets/runtime-manager-preview-1440x900.png)
 
 Responsive previews: [390×844](docs/assets/sprint-2-preview-390x844.png) · [600×900](docs/assets/sprint-2-preview-600x900.png) · [768×1024](docs/assets/sprint-2-preview-768x1024.png) · [840×1024](docs/assets/sprint-2-preview-840x1024.png) · [1024×768](docs/assets/sprint-2-preview-1024x768.png) · [1280×800](docs/assets/sprint-2-preview-1280x800.png) · [1440×900](docs/assets/sprint-2-preview-1440x900.png)
 
@@ -15,7 +17,7 @@ The previews are captured from the current built renderer in a fresh local brows
 
 ## Evidence and acceptance boundaries
 
-The current component evidence includes 140 passing TypeScript tests across 25 test files, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. Responsive review targets `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900` without horizontal overflow.
+The current component evidence includes 150 passing TypeScript tests across 27 test files, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. Runtime Manager was rendered at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`.
 
 Native Tauri/Rust acceptance remains explicitly `Blocked` until the offline Cargo/Tauri dependency cache and verified runtime packs are available. Physical target preflight was run against two authorized devices with the installed NotiPlus package/activity and the real `Riwayat` semantic selector; AutomatePlus farm acceptance remains `Blocked` because the verified farm/Appium packs and native host IPC replay are not available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
@@ -156,6 +158,27 @@ Open your browser at `http://127.0.0.1:5173` to interact with the GUI.
 
 For the official one-click offline desktop path, double-click `Run-AutomatePlus.bat` or `automate-plus.bat` in the repository root. The default path is native-only and fails closed with a diagnostic when the published `AutomatePlus.exe`, verified packs, or Tauri toolchain are unavailable. The launcher never downloads or installs a dependency. Pass `--browser` explicitly to start the migration shell; browser mode is not native acceptance. Pass `--doctor` for JSON preflight diagnostics.
 
+### Runtime Manager and offline distribution
+
+The `Runtime` header button is implemented in the native Tauri/Rust host. It scans only the selected project root, the workspace root, `%LOCALAPPDATA%`, `%ProgramData%`, and bundled resources. `Scan local`, `Choose install path`, `Import archive`, `Verify all`, `Retry failed`, `Cancel`, and `Open folder` are real native actions; the browser migration shell keeps them disabled with an explicit reason.
+
+Runtime download is opt-in twice: the user accepts the license dialog and starts the action, and the process has `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`. There is no startup download, remote catalog fetch, hidden installer, telemetry, or cloud fallback:
+
+```powershell
+$env:AUTOMATEPLUS_RUNTIME_DOWNLOAD = '1'
+# Start AutomatePlus natively, open Runtime, review the catalog, then click Download all missing.
+.\automate-plus.bat
+```
+
+After installation, execution resolves only checksum-verified local packs and health evidence. Exact `id + version + source SHA-256` matches are reused; different hashes become `NeedsReview` and are never overwritten automatically. `runtime-packs/catalog.json` is metadata-only until an official artifact has a pinned version, HTTPS URL, size, SHA-256, license, executable allowlist, and health command. Run `npm run verify:runtime-catalog` and `npm run verify:offline-install` to see the current status. The current checkout deliberately reports `NeedsReview/Blocked` because those verified release artifacts and the offline Cargo/`cargo-tauri` cache are not present.
+
+The release verifier expects `release/AutomatePlus.exe`, `release/AutomatePlusBootstrap.exe`, `release/WebView2RuntimeInstallerX64.exe`, and the catalog. It writes `release/release-manifest.json` only after hashing every artifact from disk:
+
+```powershell
+npm run verify:release-manifest
+npm run native:preflight
+```
+
 ### 2. Build Monorepo Packages
 Compile all internal TypeScript packages:
 ```bash
@@ -184,6 +207,10 @@ npm run verify:generators
 npm run verify:ui-contract
 npm run verify:k6:fixture # component-only loopback fixture
 npm run verify:k6         # explicit target-online k6 gate; Blocked without verified k6 pack
+npm run verify:runtime-catalog
+npm run verify:runtime-manager
+npm run verify:offline-install
+npm run verify:release-manifest
 ```
 
 ### 5. Explicit target-online and physical-device gates

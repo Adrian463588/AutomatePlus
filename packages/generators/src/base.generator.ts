@@ -92,7 +92,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
       files,
       manifest: this.manifest,
       entrypoint: files[0].relativePath,
-      runtimeRequirements: this.manifest.requiredRuntimes,
+      runtimeRequirements: this.manifest.requiredRuntimePacks,
     };
 
     const validation = await this.validate(project);
@@ -146,12 +146,13 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
               type: 'module',
               scripts: { test: this.testCommand(entrypoint) },
               dependencies: dependency ? { [dependency.name]: dependency.version } : {},
-              devDependencies: this.language === 'typescript' ? { typescript: '^5.7.2' } : {},
+              devDependencies: this.language === 'typescript' ? { typescript: '5.7.2' } : {},
             },
             null,
             2,
           ),
         },
+        this.runtimeLockFile(),
       ];
     }
 
@@ -159,6 +160,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
       return [
         manifestFile,
         { relativePath: 'requirements.txt', language: 'text', content: `${this.pythonDependency()}\n` },
+        this.runtimeLockFile(),
       ];
     }
 
@@ -167,6 +169,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
         return [
           manifestFile,
           { relativePath: 'build.gradle.kts', language: 'kotlin', content: this.androidGradleFile() },
+          this.runtimeLockFile(),
         ];
       }
       return [
@@ -176,6 +179,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
           language: 'xml',
           content: this.javaBuildFile(projectName),
         },
+        this.runtimeLockFile(),
       ];
     }
 
@@ -189,6 +193,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
             ? this.androidGradleFile()
             : this.kotlinBuildFile(),
         },
+        this.runtimeLockFile(),
       ];
     }
 
@@ -197,14 +202,33 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
 
   private runtimeDependency(): { name: string; version: string } | undefined {
     const dependencies: Record<string, { name: string; version: string }> = {
-      playwright: { name: '@playwright/test', version: '^1.49.1' },
-      cypress: { name: 'cypress', version: '^13.17.0' },
-      puppeteer: { name: 'puppeteer', version: '^23.11.1' },
-      selenium: { name: 'selenium-webdriver', version: '^4.27.0' },
-      appium: { name: 'webdriverio', version: '^9.15.0' },
-      http: { name: 'axios', version: '^1.7.9' },
+      playwright: { name: '@playwright/test', version: '1.49.1' },
+      cypress: { name: 'cypress', version: '13.17.0' },
+      puppeteer: { name: 'puppeteer', version: '23.11.1' },
+      selenium: { name: 'selenium-webdriver', version: '4.27.0' },
+      appium: { name: 'webdriverio', version: '9.15.0' },
+      http: { name: 'axios', version: '1.7.9' },
     };
     return dependencies[this.framework];
+  }
+
+  private runtimeLockFile(): GeneratedFile {
+    const dependency = this.runtimeDependency();
+    return {
+      relativePath: 'automateplus.runtime.json',
+      language: 'json',
+      content: JSON.stringify({
+        schemaVersion: 1,
+        architecture: 'win-x64',
+        framework: this.framework,
+        language: this.language,
+        generatorId: this.manifest.id,
+        requiredRuntimePacks: this.manifest.requiredRuntimePacks,
+        requiredRuntimes: this.manifest.requiredRuntimes,
+        installMode: 'offline-after-explicit-install',
+        dependencyVersions: dependency ? { [dependency.name]: dependency.version } : {},
+      }, null, 2),
+    };
   }
 
   private testCommand(entrypoint: string): string {

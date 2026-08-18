@@ -5,6 +5,8 @@ mod persistence;
 mod ports;
 mod preflight;
 mod process;
+mod runtime;
+mod runtime_catalog;
 
 use contracts::{
     DeviceGroupCommandArgs, DeviceGroupDeleteArgs, FarmCommandArgs, NativeRequest, NativeResponse,
@@ -15,6 +17,7 @@ use persistence::Database;
 use ports::PortLeaseManager;
 use preflight::Preflight;
 use process::ProcessSupervisor;
+use runtime::RuntimeManager;
 use serde_json::{json, Value};
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
@@ -32,6 +35,7 @@ pub struct AppState {
     pub cancellation: Arc<AtomicBool>,
     pub database: Mutex<Option<Database>>,
     pub processes: ProcessSupervisor,
+    pub runtime: RuntimeManager,
     instance_lock: Option<InstanceLock>,
 }
 
@@ -49,6 +53,7 @@ impl AppState {
             cancellation: Arc::new(AtomicBool::new(false)),
             database: Mutex::new(database),
             processes: ProcessSupervisor::default(),
+            runtime: RuntimeManager::new(workspace_root()),
             instance_lock,
         }
     }
@@ -72,6 +77,23 @@ impl AppState {
     fn dispatch(&self, request: NativeRequest) -> NativeResponse {
         if let Err(message) = request.validate() {
             return NativeResponse::failure(request, "PROTOCOL_ERROR", message, json!({}));
+        }
+
+        if request.method.starts_with("runtime.") {
+            let method = request.method.clone();
+            return match self.runtime.dispatch(&method, request.payload.clone()) {
+                Ok(data) => NativeResponse::success(request, data),
+                Err(message) => NativeResponse::failure(
+                    request,
+                    if message.starts_with("NeedsReview:") {
+                        "NEEDS_REVIEW"
+                    } else {
+                        "RUNTIME_BLOCKED"
+                    },
+                    message,
+                    json!({ "state": "blocked" }),
+                ),
+            };
         }
 
         match request.method.as_str() {

@@ -26,8 +26,9 @@ cloud control plane.
 | Farm leases and ports | FR-15, `FarmRunSpec`, `DeviceRunContext` | Rust coordinator, port/process supervisors | Component lease tests; verified Appium pack/native executor blocked | NeedsReview |
 | Primary/follower observation | FR-16, `RecordingPlan` | Android recorder and selector engine | Component observation tests; native recorder blocked | NeedsReview |
 | Complete generator matrix | FR-07/17, capability manifests | `packages/generators` | `verify:generators` — 27 combinations | Verified |
+| Runtime Manager and offline distribution | FR-12, runtime IPC 1.0, catalog contract | Rust runtime manager, SQLite migration, Runtime Manager UI, launcher | `verify:runtime-catalog`, `verify:runtime-manager`, `verify:offline-install`, `verify:release-manifest` | NeedsReview/Blocked until pinned artifacts and native bootstrap are supplied |
 | Real web/API target checks | FR-03/05/08/11 | Explicit online E2E harness | SauceDemo, DemoQA, and Petstore probes; browser and ReqRes prerequisites blocked | Blocked |
-| Responsive accessible UI | NFR-05/09 | React renderer | UI contract, lint/build, responsive preview assets; live browser a11y retest pending | NeedsReview |
+| Responsive accessible UI | NFR-05/09 | React renderer | UI contract, lint/build, Runtime Manager viewport PNGs; live browser a11y retest pending | NeedsReview |
 | Safe publication | Change discipline | Reviewed allowlist and Git checks | Local/remote SHA match | Verified |
 
 ## Required behavior
@@ -60,6 +61,10 @@ npm run verify:ui-contract
 npm run verify:sidecar
 npm run verify:k6:fixture
 npm run verify:k6
+npm run verify:runtime-catalog
+npm run verify:runtime-manager
+npm run verify:offline-install
+npm run verify:release-manifest
 npm run verify:docs
 npm run verify:authenticity
 cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check

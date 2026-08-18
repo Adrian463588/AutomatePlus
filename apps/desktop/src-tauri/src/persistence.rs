@@ -51,6 +51,20 @@ impl Database {
                 params![2_i64, "0002_device_group_metadata", now()],
             )?;
         }
+        let runtime_migration_applied = connection
+            .query_row(
+                "SELECT 1 FROM schema_migrations WHERE version = 3",
+                [],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?;
+        if runtime_migration_applied.is_none() {
+            connection.execute_batch(include_str!("../migrations/0003_runtime_manager.sql"))?;
+            connection.execute(
+                "INSERT INTO schema_migrations (version, name, applied_at) VALUES (?1, ?2, ?3)",
+                params![3_i64, "0003_runtime_manager", now()],
+            )?;
+        }
         Ok(())
     }
 

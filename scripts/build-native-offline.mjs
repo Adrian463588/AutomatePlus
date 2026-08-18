@@ -17,6 +17,7 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const native = join(root, 'apps', 'desktop', 'src-tauri');
 const runtimePacksRoot = join(root, 'runtime-packs');
 const manifestPath = join(root, 'runtime-packs', 'manifest.json');
+const catalogPath = join(root, 'runtime-packs', 'catalog.json');
 const cargoManifestPath = join(native, 'Cargo.toml');
 const blockedCode = 2;
 
@@ -80,6 +81,18 @@ function loadManifest() {
     return { manifest, packs: manifest.packs, error: null };
   } catch (error) {
     return { packs: [], error: `invalid runtime manifest: ${error.message}` };
+  }
+}
+function loadCatalog() {
+  if (!existsSync(catalogPath)) return { catalog: null, error: 'runtime-packs/catalog.json is missing' };
+  try {
+    const catalog = JSON.parse(readFileSync(catalogPath, 'utf8'));
+    if (!catalog || typeof catalog !== 'object' || !Array.isArray(catalog.entries)) {
+      return { catalog: null, error: 'runtime catalog must contain an entries array' };
+    }
+    return { catalog, error: null };
+  } catch (error) {
+    return { catalog: null, error: `invalid runtime catalog: ${error.message}` };
   }
 }
 function manifestIsValid(manifest) {
@@ -190,6 +203,7 @@ function run(command, args, options = {}) {
 }
 function preflight() {
   const packs = verifyPacks();
+  const catalog = loadCatalog();
   const runtimeTools = {
     adb: runtimeToolPath('adb', packs.verified),
     appium: runtimeToolPath('appium', packs.verified),
@@ -207,6 +221,13 @@ function preflight() {
       verifiedCount: packs.verified.length,
       status: packs.verified.length > 0 ? 'ready' : 'blocked',
     },
+    runtimeCatalog: {
+      path: catalogPath,
+      present: Boolean(catalog.catalog),
+      entryCount: catalog.catalog?.entries?.length ?? 0,
+      issue: catalog.error,
+      status: catalog.error ? 'blocked' : 'ready',
+    },
     tools: {
       cargo: commandExists('cargo'),
       rustc: commandExists('rustc'),
@@ -220,6 +241,7 @@ function preflight() {
   if (!result.tools.cargo || !result.tools.rustc) reasons.push('Rust toolchain is unavailable');
   if (!result.tools.node) reasons.push('Node.js is unavailable');
   if (!result.packs.verified.length) reasons.push(result.packs.issue ?? 'no verified offline packs are present');
+  if (catalog.error) reasons.push(catalog.error);
   if (!existsSync(result.frontendDist)) reasons.push('apps/desktop/dist is missing; build the real renderer first');
   if (!result.tools.tauriCli) reasons.push('cargo-tauri is unavailable in the local toolchain');
   if (!result.tools.webview2) reasons.push('fixed WebView2 runtime is not staged or installed');
@@ -257,6 +279,7 @@ function stagePacks(packs) {
   mkdirSync(dirname(destination), { recursive: true });
   mkdirSync(destination);
   try {
+    copyFileSync(join(runtimePacksRoot, 'catalog.json'), join(destination, 'catalog.json'));
     const stagedPacks = [];
     for (const pack of packs) {
       const packRelativePath = relative(runtimePacksRoot, pack.path);
