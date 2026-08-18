@@ -29,6 +29,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           type="button"
           onClick={() => setActiveTab('visual')}
           aria-pressed={activeTab === 'visual'}
+          aria-label="Recorder"
+          title="Recorder"
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
             activeTab === 'visual' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
           }`}
@@ -41,6 +43,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           type="button"
           onClick={() => setActiveTab('device_farm')}
           aria-pressed={activeTab === 'device_farm'}
+          aria-label="Device Farm"
+          title="Device Farm"
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
             activeTab === 'device_farm' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
           }`}
@@ -53,6 +57,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           type="button"
           onClick={() => setActiveTab('api_builder')}
           aria-pressed={activeTab === 'api_builder'}
+          aria-label="API Builder"
+          title="API Builder"
           className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
             activeTab === 'api_builder' ? 'bg-slate-800 text-white shadow-xs' : 'text-slate-400 hover:text-slate-200'
           }`}
@@ -110,6 +116,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
               type="button"
               disabled={!canLoop || isRunning}
               onClick={() => { setShowLoopInput(false); void runLooping(Number(loopCount)); }}
+              title={canLoop && !isRunning ? 'Run the requested loop count' : 'Enter a positive loop count while no run is active'}
               className="button-small bg-amber-600 disabled:opacity-50"
             >
               Go

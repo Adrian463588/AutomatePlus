@@ -9,9 +9,8 @@ mod process;
 use contracts::{
     DeviceGroupCommandArgs, DeviceGroupDeleteArgs, FarmCommandArgs, NativeRequest, NativeResponse,
     NativeRunArgs, PortAllocateArgs, PortReleaseArgs, PortValidateArgs, ProcessStartArgs,
-    ProcessStopArgs, RecordingCommandArgs, RecordingPlan, RunSummary,
+    ProcessStopArgs, RecordingCommandArgs, RecordingPlan,
 };
-use farm::FarmCoordinator;
 use persistence::Database;
 use ports::PortLeaseManager;
 use preflight::Preflight;
@@ -300,7 +299,20 @@ impl AppState {
                 let run_id = request.payload.get("runId").cloned().unwrap_or(Value::Null);
                 NativeResponse::success(request, json!({ "runId": run_id, "cancelled": true }))
             }
-            "artifacts.list" => NativeResponse::success(request, json!({ "artifacts": [] })),
+            "artifacts.list" => {
+                let run_id = request.payload.get("runId").and_then(Value::as_str);
+                match self.list_artifacts(run_id) {
+                    Ok(artifacts) => {
+                        NativeResponse::success(request, json!({ "artifacts": artifacts }))
+                    }
+                    Err(message) => NativeResponse::failure(
+                        request,
+                        "RUNTIME_MISSING",
+                        message,
+                        json!({ "state": "blocked" }),
+                    ),
+                }
+            }
             "native.run" => {
                 let args = match request.decode_payload::<NativeRunArgs>() {
                     Ok(args) => args,
@@ -313,13 +325,26 @@ impl AppState {
                         )
                     }
                 };
-                let summary = RunSummary::blocked(
-                    args.session_id(),
-                    "Native execution is not available in the verified offline host.".to_owned(),
-                );
-                NativeResponse::success(
+                let health = self.health();
+                let code = if health.capabilities.native_execution {
+                    "CAPABILITY_ERROR"
+                } else {
+                    "RUNTIME_MISSING"
+                };
+                NativeResponse::failure(
                     request,
-                    serde_json::to_value(summary).unwrap_or_else(|_| json!({})),
+                    code,
+                    if health.missing_prerequisites.is_empty() {
+                        "Native execution has no verified executor implementation.".to_owned()
+                    } else {
+                        format_blocked(&health)
+                    },
+                    json!({
+                        "sessionId": args.session_id(),
+                        "framework": args.framework,
+                        "language": args.language,
+                        "state": "blocked"
+                    }),
                 )
             }
             _ => NativeResponse::failure(
@@ -437,6 +462,18 @@ impl AppState {
             .map_err(|error| error.to_string())
     }
 
+    fn list_artifacts(&self, run_id: Option<&str>) -> Result<Vec<Value>, String> {
+        let guard = self
+            .database
+            .lock()
+            .map_err(|_| "Database state is unavailable.".to_owned())?;
+        guard
+            .as_ref()
+            .ok_or_else(|| "SQLite database is unavailable; artifacts are blocked.".to_owned())?
+            .list_artifacts(run_id)
+            .map_err(|error| error.to_string())
+    }
+
     fn start_recording(
         &self,
         args: RecordingCommandArgs,
@@ -471,25 +508,15 @@ impl AppState {
                 json!({ "strategy": args.spec.strategy }),
             ));
         }
-        let devices = self
-            .discover()
-            .map_err(|message| ("DEVICE_UNAVAILABLE", message, json!({})))?;
-        let database = self.database.lock().ok().and_then(|guard| {
-            guard
-                .as_ref()
-                .and_then(|database| database.connection().ok())
-        });
-        let coordinator = FarmCoordinator::new(
-            health,
-            self.ports.clone(),
-            self.cancellation.clone(),
-            database,
-        );
-        let summary = coordinator
-            .plan(args.session, args.spec, devices)
-            .map_err(|message| ("CAPABILITY_ERROR", message, json!({})))?;
-        serde_json::to_value(summary)
-            .map_err(|error| ("PROTOCOL_ERROR", error.to_string(), json!({})))
+        if let Err(message) = farm::validate_spec(&args.spec) {
+            return Err(("PROTOCOL_ERROR", message, json!({})));
+        }
+        Err((
+            "CAPABILITY_ERROR",
+            "Farm replay executor is not implemented in the verified host; execution was not attempted."
+                .to_owned(),
+            json!({ "strategy": args.spec.strategy, "state": "blocked" }),
+        ))
     }
 }
 

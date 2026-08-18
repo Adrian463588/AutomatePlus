@@ -16,8 +16,15 @@ for (const file of files) {
   if (!content.endsWith('\n')) failures.push(`${file}: missing final newline`);
 
   let previousHeadingLevel = 0;
+  let inFence = false;
   for (let index = 0; index < lines.length; index += 1) {
     const line = lines[index];
+    if (/^\s*(```|~~~)/u.test(line)) {
+      inFence = !inFence;
+      continue;
+    }
+    if (inFence) continue;
+
     const heading = /^(#{1,6})\s+\S/u.exec(line);
     if (heading) {
       const level = heading[1].length;

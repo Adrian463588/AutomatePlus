@@ -1,7 +1,7 @@
 # AutomatePlus (Sprint 2) 🚀
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-135%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-140%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
@@ -11,13 +11,13 @@
 
 Responsive previews: [390×844](docs/assets/sprint-2-preview-390x844.png) · [600×900](docs/assets/sprint-2-preview-600x900.png) · [768×1024](docs/assets/sprint-2-preview-768x1024.png) · [840×1024](docs/assets/sprint-2-preview-840x1024.png) · [1024×768](docs/assets/sprint-2-preview-1024x768.png) · [1280×800](docs/assets/sprint-2-preview-1280x800.png) · [1440×900](docs/assets/sprint-2-preview-1440x900.png)
 
-The preview is captured from the real browser migration shell with an explicitly created Android session and no discovered devices. It shows the truthful blocked state: no target package, device, generated code, or synthetic run result is created until the user supplies real data and the native host provides it.
+The previews are captured from the current built renderer in a fresh local browser profile. They show the truthful empty/blocked state: no project, target package, device, generated code, or synthetic run result is created until the user supplies real data and the native host provides it.
 
 ## Evidence and acceptance boundaries
 
-The current Sprint 2 component evidence includes 135 passing TypeScript tests across 23 test files (including end-to-end Saucedemo Web, DemoQA Web, Swagger Petstore & Reqres API, and NotiPlus Android Multi-Device Phone Farm automation suites), lint, format, typecheck, package/sidecar/React builds, documentation checks, sidecar capability smoke, loopback k6 smoke, and an authenticity scan. Responsive review targets `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900` without horizontal overflow.
+The current component evidence includes 140 passing TypeScript tests across 25 test files, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. Responsive review targets `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900` without horizontal overflow.
 
-Native Tauri/Rust and physical Android acceptance remain explicitly `Blocked` until the offline Cargo/Tauri toolchain, verified runtime packs, WebView2, a real target app, and the required authorized devices are available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
+Native Tauri/Rust acceptance remains explicitly `Blocked` until the offline Cargo/Tauri dependency cache and verified runtime packs are available. Physical target preflight was run against two authorized devices with the installed NotiPlus package/activity and the real `Riwayat` semantic selector; AutomatePlus farm acceptance remains `Blocked` because the verified farm/Appium packs and native host IPC replay are not available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
 ### Sprint 2 Android device farm
 
@@ -154,7 +154,7 @@ npm run dev:desktop
 ```
 Open your browser at `http://127.0.0.1:5173` to interact with the GUI.
 
-For the official one-click offline desktop path, double-click `Run-AutomatePlus.bat` in the repository root. It starts a published `AutomatePlus.exe` when present; otherwise it reports the native preflight and opens the browser-safe shell locally so the UI remains usable. Android farm/recording stay `Blocked` until the native host is actually available. The launcher never downloads a dependency. Pass `--browser` to force the migration shell.
+For the official one-click offline desktop path, double-click `Run-AutomatePlus.bat` or `automate-plus.bat` in the repository root. The default path is native-only and fails closed with a diagnostic when the published `AutomatePlus.exe`, verified packs, or Tauri toolchain are unavailable. The launcher never downloads or installs a dependency. Pass `--browser` explicitly to start the migration shell; browser mode is not native acceptance. Pass `--doctor` for JSON preflight diagnostics.
 
 ### 2. Build Monorepo Packages
 Compile all internal TypeScript packages:
@@ -180,8 +180,27 @@ npm run format:check
 npm run typecheck
 npm run verify:docs
 npm run verify:sidecar
-npm run verify:k6
+npm run verify:generators
+npm run verify:ui-contract
+npm run verify:k6:fixture # component-only loopback fixture
+npm run verify:k6         # explicit target-online k6 gate; Blocked without verified k6 pack
 ```
+
+### 5. Explicit target-online and physical-device gates
+
+The control plane remains offline. These commands intentionally access only the named public targets after an explicit opt-in; they do not download dependencies, log in, or emit credentials:
+
+```powershell
+$env:AUTOMATEPLUS_ONLINE_E2E = '1'
+# Set AUTOMATEPLUS_REQRES_API_KEY from the local secret store before this command.
+npm run e2e:online
+npm run verify:k6
+
+$env:AUTOMATEPLUS_ANDROID_E2E = '1'
+npm run e2e:android
+```
+
+`e2e:online` records response status, shape, timing, and hashes without persisting response bodies. ReqRes is `Blocked` until its current `x-api-key` credential is supplied. `e2e:android` discovers serials at runtime, validates `com.notifplus/.MainActivity`, captures the real hierarchy on every authorized device, and uses only an observed `Riwayat` text/content-description locator. Raw ADB checks do not count as native farm acceptance. Evidence is written to the ignored `.automateplus/evidence/` directory.
 
 ---
 

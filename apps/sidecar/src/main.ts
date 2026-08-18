@@ -13,6 +13,7 @@ import { migrateSessionIR, validateSessionIR } from '@automate-plus/ir-schema';
 
 const controllers = new Map<string, AbortController>();
 const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
+const EXPECTED_GENERATOR_COUNT = 27;
 
 for await (const line of input) {
   if (!line.trim()) continue;
@@ -55,7 +56,19 @@ async function dispatch(request: IpcRequest, signal: AbortSignal): Promise<unkno
   const payload = asRecord(request.payload);
   switch (request.method) {
     case 'health':
-      return { status: 'ready', processId: process.pid, protocolVersion: '1.0' };
+      {
+        const generatorCount = GeneratorFactory.getSupportedCombinations().length;
+        const ready = generatorCount === EXPECTED_GENERATOR_COUNT;
+        return {
+          status: ready ? 'ready' : 'blocked',
+          host: 'typescript-sidecar',
+          processId: process.pid,
+          protocolVersion: '1.0',
+          generatorCount,
+          expectedGeneratorCount: EXPECTED_GENERATOR_COUNT,
+          missingPrerequisites: ready ? [] : [`generator_matrix:${EXPECTED_GENERATOR_COUNT}`],
+        };
+      }
     case 'session.validate': {
       const result = validateSessionIR(payload.session ?? payload);
       return { valid: result.success, errors: result.errors ?? [], data: result.data };

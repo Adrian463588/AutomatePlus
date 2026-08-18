@@ -59,8 +59,27 @@ export class MultiDeviceRunner {
     const farmRunId = createRuntimeId();
     const startTime = Date.now();
 
-    // 1. Filter target devices
-    const targetDevices = devices.filter((d) => (spec.deviceIds || (spec as any).targetDeviceIds || []).includes(d.deviceId || (d as any).id));
+    const deviceIds = spec.deviceIds;
+    if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
+      throw new Error('DeviceFarmError: deviceIds must contain at least one discovered device.');
+    }
+    if (!Number.isInteger(spec.maxParallelDevices) || spec.maxParallelDevices < 1) {
+      throw new Error('DeviceFarmError: maxParallelDevices must be a positive integer.');
+    }
+    if (spec.strategy === 'split-iterations') {
+      if (!Number.isInteger(spec.totalIterations) || (spec.totalIterations ?? 0) < 1) {
+        throw new Error('DeviceFarmError: totalIterations must be a positive integer for split-iterations.');
+      }
+    } else if (!Number.isInteger(spec.iterationsPerDevice) || (spec.iterationsPerDevice ?? 0) < 1) {
+      throw new Error('DeviceFarmError: iterationsPerDevice must be a positive integer for device replay.');
+    }
+    if (!Number.isInteger(spec.iterationDelayMs) || spec.iterationDelayMs < 0) {
+      throw new Error('DeviceFarmError: iterationDelayMs must be a non-negative integer.');
+    }
+
+    // 1. Filter target devices from the current authorized snapshot.
+    const selectedDevices = devices.filter((device) => device.status === 'device' && deviceIds.includes(device.deviceId));
+    const targetDevices = spec.strategy === 'single' ? selectedDevices.slice(0, 1) : selectedDevices;
     if (targetDevices.length === 0) {
       throw new Error(`DeviceFarmError: No target devices available for execution.`);
     }
@@ -72,16 +91,16 @@ export class MultiDeviceRunner {
     });
 
     // 2. Determine iteration distribution
-    let plannedPerDevice: Map<string, number> = new Map();
+    const plannedPerDevice = new Map<string, number>();
     if (spec.strategy === 'all-devices' || spec.strategy === 'single') {
-      const iters = spec.iterationsPerDevice || (spec as any).iterations || 1;
-      targetDevices.forEach((d) => plannedPerDevice.set(d.deviceId || (d as any).id, iters));
+      const iters = spec.iterationsPerDevice as number;
+      targetDevices.forEach((device) => plannedPerDevice.set(device.deviceId, iters));
     } else if (spec.strategy === 'split-iterations') {
-      const total = spec.totalIterations || (spec as any).iterations || targetDevices.length;
+      const total = spec.totalIterations as number;
       const base = Math.floor(total / targetDevices.length);
       const remainder = total % targetDevices.length;
       targetDevices.forEach((d, idx) => {
-        plannedPerDevice.set(d.deviceId || (d as any).id, base + (idx < remainder ? 1 : 0));
+        plannedPerDevice.set(d.deviceId, base + (idx < remainder ? 1 : 0));
       });
     }
 
@@ -107,19 +126,22 @@ export class MultiDeviceRunner {
     // 3. Acquire Leases and execute per-device workers
     const concurrency = Math.min(
       targetDevices.length,
-      Number.isInteger(spec.maxParallelDevices) && spec.maxParallelDevices > 0 ? spec.maxParallelDevices : 1,
+      spec.maxParallelDevices,
     );
     const limiter = new ConcurrencyLimiter(concurrency);
     const workerPromises = targetDevices.map((device) => limiter.run(async () => {
-      const deviceId = device.deviceId || (device as any).id;
-      const plannedIterations = plannedPerDevice.get(deviceId) || 1;
+      const deviceId = device.deviceId;
+      const plannedIterations = plannedPerDevice.get(deviceId);
+      if (plannedIterations === undefined) {
+        throw new Error(`DeviceFarmError: no iteration plan exists for device '${deviceId}'.`);
+      }
 
       const deviceRunResult: DeviceRunResult = {
         deviceRunId: createRuntimeId(),
         deviceId,
         adbSerial: device.adbSerial,
         model: device.model,
-        status: 'running' as any,
+        status: 'running',
         plannedIterations,
         completedIterations: 0,
         passedIterations: 0,
@@ -158,9 +180,16 @@ export class MultiDeviceRunner {
           const runSummary = await player.run(session, { executionMode: 'functional' }, onLog);
           const iterDuration = Date.now() - iterStart;
 
+          const iterationStatus: DeviceIterationResult['status'] = runSummary.status === 'passed'
+            ? 'passed'
+            : runSummary.status === 'blocked'
+              ? 'blocked'
+              : runSummary.status === 'cancelled'
+                ? 'cancelled'
+                : 'failed';
           const iterResult: DeviceIterationResult = {
             iterationNumber: i,
-            status: runSummary.status === 'passed' ? 'passed' : 'failed',
+            status: iterationStatus,
             durationMs: iterDuration,
             startedAt: iterStart,
             finishedAt: Date.now(),
@@ -174,7 +203,7 @@ export class MultiDeviceRunner {
           if (iterResult.status === 'passed') {
             deviceRunResult.passedIterations++;
             summary.totalPassedIterations++;
-          } else {
+          } else if (iterResult.status === 'failed') {
             deviceRunResult.failedIterations++;
             summary.totalFailedIterations++;
             if (spec.failurePolicy === 'fail-fast') {
@@ -187,6 +216,12 @@ export class MultiDeviceRunner {
               });
               break;
             }
+          } else {
+            deviceRunResult.status = iterResult.status;
+            if (iterResult.status === 'cancelled') {
+              this.isCancelled = true;
+            }
+            break;
           }
 
           if (onProgress) onProgress({ ...summary });
@@ -196,7 +231,7 @@ export class MultiDeviceRunner {
           }
         }
 
-        if (deviceRunResult.status !== 'cancelled') {
+        if (deviceRunResult.status !== 'cancelled' && deviceRunResult.status !== 'blocked') {
           deviceRunResult.status = deviceRunResult.failedIterations === 0 ? 'passed' : 'failed';
         }
       } catch (err: unknown) {
@@ -220,11 +255,17 @@ export class MultiDeviceRunner {
 
     summary.finishedAt = Date.now();
     summary.durationMs = summary.finishedAt - startTime;
-    summary.status = summary.totalCompletedIterations === 0
-      ? 'blocked'
-      : summary.totalFailedIterations === 0 && summary.totalCompletedIterations === summary.totalPlannedIterations
-        ? 'passed'
-        : 'failed';
+    const hasBlockedDevice = summary.deviceRuns.some((deviceRun) => deviceRun.status === 'blocked');
+    const hasCancelledDevice = summary.deviceRuns.some((deviceRun) => deviceRun.status === 'cancelled');
+    summary.status = hasCancelledDevice
+      ? 'cancelled'
+      : hasBlockedDevice
+        ? 'blocked'
+        : summary.totalCompletedIterations === 0
+          ? 'blocked'
+          : summary.totalFailedIterations === 0 && summary.totalCompletedIterations === summary.totalPlannedIterations
+            ? 'passed'
+            : 'failed';
 
     onLog({
       timestamp: Date.now(),

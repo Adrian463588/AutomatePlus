@@ -40,7 +40,7 @@ const exitCode = await new Promise((resolve, reject) => {
 if (exitCode !== 0) throw new Error(`Sidecar exited with code ${exitCode}: ${stderr}`);
 const responses = stdout.trim().split('\n').filter(Boolean).map((line) => JSON.parse(line));
 if (responses.length !== requests.length) throw new Error(`Expected ${requests.length} responses, received ${responses.length}`);
-if (responses[0]?.kind !== 'response' || responses[0]?.payload?.ok !== true || responses[0]?.payload?.data?.status !== 'ready') {
+if (responses[0]?.kind !== 'response' || responses[0]?.payload?.ok !== true || responses[0]?.payload?.data?.status !== 'ready' || responses[0]?.payload?.data?.host !== 'typescript-sidecar' || responses[0]?.payload?.data?.generatorCount !== 27) {
   throw new Error(`Health response was not ready: ${JSON.stringify(responses[0])}`);
 }
 if (responses[1]?.kind !== 'response' || responses[1]?.payload?.ok !== true || !Array.isArray(responses[1]?.payload?.data) || responses[1].payload.data.length !== 27) {

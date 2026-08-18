@@ -3,13 +3,14 @@ import { DeviceLeaseManager, MultiDeviceRunner, PortLeaseManager } from '../src/
 import { DeviceProfile, FarmRunSpec } from '@automate-plus/contracts';
 import { SessionIR } from '@automate-plus/ir-schema';
 
-describe('Multi-Device Android Phone Farm Testing', () => {
+// ComponentTest boundary: injected executor and fixture profiles are not physical-device evidence.
+describe('ComponentTest fixture: Multi-Device Android Phone Farm', () => {
   const sampleAndroidSession: SessionIR = {
     id: 'session-android-farm-1',
     projectId: 'proj-1',
     name: 'Android Multi-Device Smoke Test',
     platform: 'android',
-    targetConfig: { appPackage: 'com.example.app', appActivity: '.MainActivity' },
+    targetConfig: { appPackage: 'com.notifplus', appActivity: '.MainActivity' },
     environmentVariables: {},
     steps: [
       {
@@ -17,7 +18,7 @@ describe('Multi-Device Android Phone Farm Testing', () => {
         stepNumber: 1,
         platform: 'android',
         action: 'tap',
-        locators: [{ strategy: 'accessibilityId', value: 'btn-login', score: 100 }],
+        locators: [{ strategy: 'text', value: 'Riwayat', score: 100 }],
         timeoutMs: 3000,
         timestamp: Date.now(),
       },
@@ -26,7 +27,7 @@ describe('Multi-Device Android Phone Farm Testing', () => {
         stepNumber: 2,
         platform: 'android',
         action: 'assertVisible',
-        locators: [{ strategy: 'resourceId', value: 'com.example.app:id/welcome_title', score: 95 }],
+        locators: [{ strategy: 'text', value: 'Riwayat', score: 95 }],
         timeoutMs: 3000,
         timestamp: Date.now(),
       },
@@ -38,66 +39,62 @@ describe('Multi-Device Android Phone Farm Testing', () => {
   const sampleDevices: DeviceProfile[] = [
     {
       schemaVersion: 1,
-      id: 'phone-s24',
-      deviceId: 'phone-s24',
-      adbSerial: 'R5CX123ABC',
-      model: 'Galaxy S24',
-      manufacturer: 'Samsung',
-      product: 'e1sxxx',
-      androidVersion: '15.0',
-      sdkVersion: 35,
+      deviceId: 'fixture-device-1',
+      adbSerial: 'fixture-serial-1',
+      model: 'fixture-device-1',
+      manufacturer: 'fixture',
+      product: 'fixture',
+      androidVersion: 'fixture',
+      sdkVersion: 0,
       isEmulator: false,
-      resolution: { width: 1080, height: 2340 },
-      density: 420,
-      orientation: 'portrait',
-      transport: 'usb',
-      authorization: 'device',
-      healthState: 'Ready',
-      batteryLevel: 95,
-      lastSeenAt: Date.now(),
-    } as any,
+      resolution: { width: 1, height: 1 },
+      density: 1,
+      orientation: 'unknown',
+      transport: 'unknown',
+      status: 'device',
+      healthState: 'ready',
+      lastSeenAt: 1,
+    },
     {
       schemaVersion: 1,
-      id: 'phone-pixel9',
-      deviceId: 'phone-pixel9',
-      adbSerial: '48121FDCH0038T',
-      model: 'Pixel 9 Pro',
-      manufacturer: 'Google',
-      product: 'caiman',
-      androidVersion: '15.0',
-      sdkVersion: 35,
+      deviceId: 'fixture-device-2',
+      adbSerial: 'fixture-serial-2',
+      model: 'fixture-device-2',
+      manufacturer: 'fixture',
+      product: 'fixture',
+      androidVersion: 'fixture',
+      sdkVersion: 0,
       isEmulator: false,
-      resolution: { width: 1280, height: 2856 },
-      density: 480,
-      orientation: 'portrait',
-      transport: 'usb',
-      authorization: 'device',
-      healthState: 'Ready',
-      batteryLevel: 88,
-      lastSeenAt: Date.now(),
-    } as any,
+      resolution: { width: 1, height: 1 },
+      density: 1,
+      orientation: 'unknown',
+      transport: 'unknown',
+      status: 'device',
+      healthState: 'ready',
+      lastSeenAt: 1,
+    },
   ];
 
   describe('DeviceLeaseManager', () => {
     it('acquires and releases device locks atomically', async () => {
       const leaseManager = new DeviceLeaseManager();
-      const ports = { appiumPort: 4723, systemPort: 8200 };
+      const ports = { appiumPort: 0, systemPort: 0 };
 
-      const lease = await leaseManager.acquire('run-1', 'phone-s24', 'R5CX123ABC', 'worker-1', ports);
+      const lease = await leaseManager.acquire('run-1', 'fixture-device-1', 'fixture-serial-1', 'worker-1', ports);
       expect(lease.leaseId).toBeDefined();
-      expect(leaseManager.isLocked('phone-s24')).toBe(true);
-      expect(leaseManager.isSerialLocked('R5CX123ABC')).toBe(true);
+      expect(leaseManager.isLocked('fixture-device-1')).toBe(true);
+      expect(leaseManager.isSerialLocked('fixture-serial-1')).toBe(true);
 
       // Attempt concurrent acquisition should throw lock error
       await expect(
-        leaseManager.acquire('run-2', 'phone-s24', 'R5CX123ABC', 'worker-2', ports)
+        leaseManager.acquire('run-2', 'fixture-device-1', 'fixture-serial-1', 'worker-2', ports)
       ).rejects.toThrow(/DeviceLockError/);
 
       // Release lock
       const released = await leaseManager.release(lease.leaseId);
       expect(released).toBe(true);
-      expect(leaseManager.isLocked('phone-s24')).toBe(false);
-      expect(leaseManager.isSerialLocked('R5CX123ABC')).toBe(false);
+      expect(leaseManager.isLocked('fixture-device-1')).toBe(false);
+      expect(leaseManager.isSerialLocked('fixture-serial-1')).toBe(false);
     });
   });
 
@@ -105,14 +102,14 @@ describe('Multi-Device Android Phone Farm Testing', () => {
     it('allocates unique loopback ports per device', () => {
       const portManager = new PortLeaseManager();
 
-      const alloc1 = portManager.allocate('phone-s24');
-      const alloc2 = portManager.allocate('phone-pixel9');
+      const alloc1 = portManager.allocate('fixture-device-1');
+      const alloc2 = portManager.allocate('fixture-device-2');
 
       expect(alloc1.appiumPort).not.toBe(alloc2.appiumPort);
       expect(alloc1.systemPort).not.toBe(alloc2.systemPort);
 
-      portManager.release('phone-s24');
-      expect(portManager.getAllocation('phone-s24')).toBeUndefined();
+      portManager.release('fixture-device-1');
+      expect(portManager.getAllocation('fixture-device-1')).toBeUndefined();
     });
   });
 
@@ -124,10 +121,11 @@ describe('Multi-Device Android Phone Farm Testing', () => {
       const spec: FarmRunSpec = {
         sessionId: sampleAndroidSession.id,
         strategy: 'all-devices',
-        targetDeviceIds: ['phone-s24', 'phone-pixel9'],
-        iterations: 2,
+        schemaVersion: 1,
+        deviceIds: ['fixture-device-1', 'fixture-device-2'],
         iterationsPerDevice: 2,
         maxParallelDevices: 2,
+        iterationDelayMs: 0,
         failurePolicy: 'continue-other-devices',
       };
 
@@ -156,10 +154,11 @@ describe('Multi-Device Android Phone Farm Testing', () => {
       const spec: FarmRunSpec = {
         sessionId: sampleAndroidSession.id,
         strategy: 'split-iterations',
-        targetDeviceIds: ['phone-s24', 'phone-pixel9'],
-        iterations: 6,
+        schemaVersion: 1,
+        deviceIds: ['fixture-device-1', 'fixture-device-2'],
         totalIterations: 6,
         maxParallelDevices: 2,
+        iterationDelayMs: 0,
         failurePolicy: 'continue-other-devices',
       };
 
@@ -185,10 +184,11 @@ describe('Multi-Device Android Phone Farm Testing', () => {
       const spec: FarmRunSpec = {
         sessionId: sampleAndroidSession.id,
         strategy: 'single',
-        targetDeviceIds: ['phone-s24'],
-        iterations: 1,
+        schemaVersion: 1,
+        deviceIds: ['fixture-device-1'],
         iterationsPerDevice: 1,
         maxParallelDevices: 1,
+        iterationDelayMs: 0,
         failurePolicy: 'continue-other-devices',
       };
 

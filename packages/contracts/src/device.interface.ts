@@ -37,7 +37,7 @@ export interface DeviceRunResult {
   deviceId: string;
   adbSerial: string;
   model: string;
-  status: 'passed' | 'failed' | 'blocked' | 'cancelled';
+  status: 'running' | 'passed' | 'failed' | 'blocked' | 'cancelled';
   plannedIterations: number;
   completedIterations: number;
   passedIterations: number;

@@ -3,7 +3,8 @@ import { ActionIR, SessionIR, validateSessionIR } from '@automate-plus/ir-schema
 import { GeneratorFactory } from '@automate-plus/generators';
 import { ApiFunctionalRunner } from '@automate-plus/runner-core';
 
-describe('Saucedemo API Automation Suite', () => {
+// ComponentTest boundary: the HTTP response is injected; use e2e:online for real target traffic.
+describe('ComponentTest fixture: SauceDemo API generator', () => {
   const saucedemoApiSteps: ActionIR[] = [
     {
       id: 'b1000000-0000-4000-8000-000000000001',

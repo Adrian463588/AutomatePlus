@@ -142,6 +142,34 @@ impl Database {
             params![group_id],
         )? > 0)
     }
+
+    pub fn list_artifacts(&self, run_id: Option<&str>) -> Result<Vec<Value>> {
+        let connection = Connection::open(&self.path)?;
+        let mut statement = connection.prepare(
+            if run_id.is_some() {
+                "SELECT artifact_id, run_id, path, sha256, media_type, created_at FROM artifact_index WHERE run_id = ?1 ORDER BY created_at"
+            } else {
+                "SELECT artifact_id, run_id, path, sha256, media_type, created_at FROM artifact_index ORDER BY created_at"
+            },
+        )?;
+        let mut rows = if let Some(run_id) = run_id {
+            statement.query(params![run_id])?
+        } else {
+            statement.query([])?
+        };
+        let mut artifacts = Vec::new();
+        while let Some(row) = rows.next()? {
+            artifacts.push(serde_json::json!({
+                "artifactId": row.get::<_, String>(0)?,
+                "runId": row.get::<_, Option<String>>(1)?,
+                "relativePath": row.get::<_, String>(2)?,
+                "sha256": row.get::<_, String>(3)?,
+                "mediaType": row.get::<_, String>(4)?,
+                "createdAt": row.get::<_, i64>(5)?
+            }));
+        }
+        Ok(artifacts)
+    }
 }
 
 fn now() -> i64 {

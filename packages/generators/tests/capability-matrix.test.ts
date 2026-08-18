@@ -14,20 +14,20 @@ const combinations = [
 
 function createSession(platform: 'web' | 'android' | 'api', action: ActionIR['action']): SessionIR {
   const step: ActionIR = platform === 'web'
-    ? { id: '00000000-0000-4000-8000-000000000101', stepNumber: 1, platform, action: 'navigate', value: 'http://127.0.0.1:4173', timeoutMs: 5000, timestamp: Date.now(), optional: false }
+    ? { id: '00000000-0000-4000-8000-000000000101', stepNumber: 1, platform, action: 'navigate', value: 'https://www.saucedemo.com/', timeoutMs: 5000, timestamp: 1, optional: false }
     : platform === 'android'
-      ? { id: '00000000-0000-4000-8000-000000000102', stepNumber: 1, platform, action: 'tap', locators: [{ strategy: 'resourceId', value: 'com.example:id/action', score: 100 }], timeoutMs: 5000, timestamp: Date.now(), optional: false }
-      : { id: '00000000-0000-4000-8000-000000000103', stepNumber: 1, platform, action: 'httpRequest', apiPayload: { method: 'GET', url: 'http://127.0.0.1:4173/health', headers: {}, queryParams: {}, bodyType: 'none', extractedVariables: [] }, timeoutMs: 5000, timestamp: Date.now(), optional: false };
+      ? { id: '00000000-0000-4000-8000-000000000102', stepNumber: 1, platform, action: 'tap', locators: [{ strategy: 'text', value: 'Riwayat', score: 100 }], timeoutMs: 5000, timestamp: 1, optional: false }
+      : { id: '00000000-0000-4000-8000-000000000103', stepNumber: 1, platform, action: 'httpRequest', apiPayload: { method: 'GET', url: 'https://petstore.swagger.io/v2/store/inventory', headers: {}, queryParams: {}, bodyType: 'none', extractedVariables: [] }, timeoutMs: 5000, timestamp: 1, optional: false };
   return {
     id: '00000000-0000-4000-8000-000000000100',
     projectId: '00000000-0000-4000-8000-000000000001',
     name: `matrix-${platform}-${action}`,
     platform,
-    targetConfig: platform === 'android' ? { appPackage: 'com.example.app', appActivity: 'MainActivity' } : {},
+    targetConfig: platform === 'android' ? { appPackage: 'com.notifplus', appActivity: 'com.notifplus.MainActivity' } : platform === 'web' ? { startUrl: 'https://www.saucedemo.com/' } : { baseUrl: 'https://petstore.swagger.io/v2' },
     environmentVariables: {},
     steps: [step],
-    createdAt: Date.now(),
-    updatedAt: Date.now(),
+    createdAt: 1,
+    updatedAt: 1,
   };
 }
 

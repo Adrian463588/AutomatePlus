@@ -4,11 +4,13 @@ Version: 3.0.0
 Status: Active implementation contract
 Desktop runtime: Tauri 2 + Rust on Windows x64
 Renderer and sidecar: React/TypeScript with local versioned IPC
-Operating boundary: offline only
+Operating boundary: offline local control plane; explicit user-requested target E2E may access declared websites/APIs
 
 ## 1. Decision summary
 
 Tauri 2 + Rust is the active desktop host. The React/Vite application is the same renderer used by Tauri and remains a safe migration shell when opened in an ordinary browser. The previous .NET/WinUI implementation is retained as legacy reference source only; it is not built, launched, or required by the release path because the required .NET 8 toolchain is not available on the target workstation.
+
+The host has no implicit network dependency. A user may explicitly start an online target E2E profile for the declared acceptance websites/APIs; that traffic is target execution data, not cloud orchestration, telemetry, dependency installation, or a launcher fallback.
 
 Rust owns the privileged and stateful operations:
 
@@ -161,7 +163,7 @@ The artifact index stores relative path, kind/media type, and SHA-256. Screensho
 
 ## 12. Security and offline distribution
 
-The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. They never download dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present; otherwise it reports native blockers and opens the browser-safe migration shell. The shell keeps Android/device capabilities Blocked. It returns exit code 2 only when the shell itself cannot start, and accepts `--browser` to force migration mode.
+The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. They never download dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present; otherwise it reports native blockers and exits. The browser-safe migration shell is an explicit `--browser` mode and keeps Android/device capabilities Blocked.
 
 Tauri capabilities are least privilege. CSP permits only the local renderer and loopback development connection. Secrets are references, redacted in logs and errors, and never placed in generated source as plaintext.
 
@@ -177,7 +179,7 @@ Every button has a real action or an explanatory disabled state. Browser mode ha
 |---|---|---|
 | TypeScript | npm ci --offline, lint, format, typecheck, test | Required and runnable locally |
 | Packages/UI | build:packages, build:sidecar, build:desktop | Required before release |
-| Smoke/docs | verify:sidecar, verify:k6, verify:docs, verify:authenticity | Component evidence only |
+| Smoke/docs | verify:sidecar, verify:k6:fixture, verify:docs, verify:authenticity | Component evidence only; verify:k6 is target-online and separately gated |
 | Rust source | cargo fmt --check | Must pass independently |
 | Rust build/test | cargo clippy --offline, cargo test --offline | Blocked when crates are not cached |
 | Tauri build | npm run native:build | Requires local Tauri CLI/packs |

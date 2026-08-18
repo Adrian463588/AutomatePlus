@@ -21,6 +21,8 @@ export interface NativeHealth {
   protocolVersion: string;
   host: 'tauri-rust';
   state: NativeHostState;
+  status?: NativeHostState;
+  available?: boolean;
   reason?: string;
   missingPrerequisites: readonly string[];
   capabilities: NativeCapabilitySet;
@@ -55,6 +57,10 @@ export interface NativeFarmCancelRequest {
 
 export interface NativeArtifactsRequest {
   runId?: string;
+}
+
+export interface NativeArtifactsResponse {
+  artifacts: readonly unknown[];
 }
 
 export interface NativeProtocolMethodMap {
@@ -93,6 +99,6 @@ export interface NativeProtocolResponseMap {
   'recording.stop': { recordingId: string; state: NativeHostState };
   'farm.run.start': FarmRunReport;
   'farm.run.cancel': { runId: string; cancelled: boolean };
-  'artifacts.list': readonly unknown[];
+  'artifacts.list': NativeArtifactsResponse;
   'native.run': RunSummary;
 }

@@ -5,7 +5,7 @@ export type { K6StressMetrics, K6StressOptions } from './k6-runner.js';
 
 /**
  * The browser migration shell cannot own child processes. The production
- * WinUI/.NET host or sidecar must provide the k6 runtime explicitly.
+ * The Tauri/Rust host must provide the k6 runtime explicitly.
  */
 export class K6StressRunner {
   public async runStressTest(

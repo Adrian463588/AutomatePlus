@@ -3,7 +3,8 @@ import { ActionIR, SessionIR, validateSessionIR } from '@automate-plus/ir-schema
 import { GeneratorFactory } from '@automate-plus/generators';
 import { ApiFunctionalRunner } from '@automate-plus/runner-core';
 
-describe('Petstore & Reqres API Automation Suite', () => {
+// ComponentTest boundary: network responses are injected; use e2e:online for real target traffic.
+describe('ComponentTest fixture: Petstore and ReqRes API generators', () => {
   const petstoreReqresSteps: ActionIR[] = [
     {
       id: 'f1000000-0000-4000-8000-000000000001',

@@ -155,13 +155,16 @@ class NativeCapabilityAdapter {
       const health = await this.request<NativeHealth>('native.health', {});
       const capabilities = health.capabilities;
       const available = health.state === 'ready' && health.host === 'tauri-rust';
+      const healthReason = health.status === 'blocked'
+        ? health.reason || 'Native host runtime prerequisites are blocked.'
+        : 'Native Tauri desktop host is connected.';
       this.status = {
         available,
         deviceDiscovery: capabilities.deviceDiscovery === true,
         androidRecording: available && capabilities.androidRecording === true,
         farmReplay: available && capabilities.farmReplay === true,
         nativeExecution: available && capabilities.nativeExecution === true,
-        reason: available ? 'Native Tauri desktop host is connected.' : health.reason || BROWSER_BLOCKED_REASON,
+        reason: available ? healthReason : health.reason || BROWSER_BLOCKED_REASON,
       };
     } catch (error) {
       this.status = { ...this.status, reason: error instanceof Error ? error.message : BROWSER_BLOCKED_REASON };
@@ -229,6 +232,14 @@ class NativeCapabilityAdapter {
       throw new Error('Native host returned an invalid farm summary.');
     }
     return response as unknown as MultiDeviceRunSummary;
+  }
+
+  public async listArtifacts(runId?: string): Promise<readonly unknown[]> {
+    const response = await this.request<unknown>('artifacts.list', runId ? { runId } : {});
+    if (!isRecord(response) || !Array.isArray(response.artifacts)) {
+      throw new Error('Native host returned an invalid artifact index response.');
+    }
+    return response.artifacts;
   }
 
   public async cancel(): Promise<void> {
@@ -440,6 +451,11 @@ export class DesktopBridgeService {
       onProgress?.(summary);
       return summary;
     }
+  }
+
+  public listArtifacts(runId?: string): Promise<readonly unknown[]> {
+    if (!this.native.hasBridge()) return Promise.resolve([]);
+    return this.native.listArtifacts(runId);
   }
 
   public async runLooping(

@@ -51,7 +51,8 @@
 }
 
 .app-shell { height: 100dvh; overflow: hidden; }
-.app-header { display: grid; grid-template-columns: minmax(12rem, 1fr) auto minmax(12rem, 1fr); align-items: center; gap: .75rem; }
+.app-header { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: .75rem; min-width: 0; width: 100%; box-sizing: border-box; }
+.header-tabs { min-width: 0; max-width: 100%; }
 .header-actions { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; }
 .header-feedback { grid-column: 1 / -1; grid-row: 3; min-height: 1.25rem; font-size: .72rem; line-height: 1rem; color: #94a3b8; }
 .feedback-pending { color: #fbbf24; }
@@ -59,7 +60,7 @@
 .feedback-error { color: #fda4af; }
 .feedback-blocked { color: #fcd34d; }
 .feedback-cancelled { color: #cbd5e1; }
-.workspace-layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr) minmax(19rem, .85fr); min-height: 0; overflow: hidden; }
+.workspace-layout { display: grid; grid-template-columns: 15rem minmax(0, 1fr) minmax(19rem, .85fr); min-height: 0; min-width: 0; width: 100%; overflow: hidden; }
 .terminal-panel { height: clamp(8rem, 20dvh, 14rem); }
 .button-execute, .button-small, .button-primary, .button-muted {
   display: inline-flex;
@@ -155,8 +156,12 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
 }
 
 @media (max-width: 600px) {
+  .app-header { grid-template-columns: minmax(0, 1fr); }
   .app-header { padding-left: .75rem; padding-right: .75rem; }
   .header-actions { gap: .35rem; }
+  .header-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; min-width: 0; overflow: hidden; }
+  .header-tabs button { min-width: 0; width: 100%; justify-content: center; padding-left: .25rem; padding-right: .25rem; }
+  .header-tabs button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .button-execute { padding-left: .55rem; padding-right: .55rem; }
   .recorder-toolbar, .api-request-bar { align-items: stretch; }
   .field-inline, .field-inline input { width: 100%; }
@@ -168,6 +173,10 @@ button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-
   .grid-cols-\[1fr_1fr_auto\], .grid-cols-\[auto_1fr_1fr_auto\] { grid-template-columns: 1fr; }
   .farm-controls, .farm-recording-row { grid-template-columns: 1fr; }
   .farm-device-grid { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 480px) {
+  .header-tabs button span { display: none; }
 }
 
 @media (prefers-reduced-motion: reduce) {

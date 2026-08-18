@@ -11,8 +11,8 @@ const session: SessionIR = {
   name: 'AndroidRuntimeContext',
   platform: 'android',
   targetConfig: {
-    appPackage: 'com.automateplus.app',
-    appActivity: 'MainActivity',
+    appPackage: 'com.notifplus',
+    appActivity: '.MainActivity',
   },
   environmentVariables: {},
   steps: [
@@ -21,7 +21,7 @@ const session: SessionIR = {
       stepNumber: 1,
       platform: 'android',
       action: 'tap',
-      locators: [{ strategy: 'resourceId', value: 'com.automateplus.app:id/run', score: 100 }],
+      locators: [{ strategy: 'text', value: 'Riwayat', score: 100 }],
       timeoutMs: 5000,
       timestamp: 1,
       optional: false,
@@ -35,7 +35,7 @@ describe('Appium device-farm generation', () => {
   it('publishes multi-device capability metadata and requires worker context', async () => {
     for (const language of appiumLanguages) {
       const project = await GeneratorFactory.getGenerator('appium', language).generateFullProject(session);
-      const source = project.files.find((file) => file.relativePath.startsWith('tests/'))?.content ?? '';
+      const source = project.files.find((file) => file.content.includes('AUTOMATEPLUS_APPIUM_URL'))?.content ?? '';
 
       expect(project.manifest.supportedDeviceStrategies).toEqual(['single', 'all-devices', 'split-iterations']);
       expect(project.manifest.parallelSessionModel).toBe('multi-session');

@@ -73,12 +73,12 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
 
     const fullContent = [header, steps, footer].filter(Boolean).join('\n');
 
-    const extension = this.getFileExtension();
-    const fileName = `${session.name.toLowerCase().replace(/[^a-z0-9]+/g, '_')}.test.${extension}`;
+    const fileName = this.generatedFileName(session);
+    const entrypoint = this.generatedEntrypoint(session, fileName);
 
     const files: GeneratedFile[] = [
       {
-        relativePath: `tests/${fileName}`,
+        relativePath: entrypoint,
         content: fullContent,
         language: this.language,
       },
@@ -163,6 +163,12 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     }
 
     if (this.language === 'java') {
+      if (this.framework === 'espresso' || this.framework === 'robolectric') {
+        return [
+          manifestFile,
+          { relativePath: 'build.gradle.kts', language: 'kotlin', content: this.androidGradleFile() },
+        ];
+      }
       return [
         manifestFile,
         {
@@ -179,7 +185,9 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
         {
           relativePath: 'build.gradle.kts',
           language: 'kotlin',
-          content: this.kotlinBuildFile(),
+          content: this.framework === 'espresso' || this.framework === 'robolectric'
+            ? this.androidGradleFile()
+            : this.kotlinBuildFile(),
         },
       ];
     }
@@ -215,20 +223,80 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   }
 
   private pythonDependency(): string {
-    if (this.framework === 'robot') return 'robotframework==7.1.1';
+    if (this.framework === 'robot') return 'robotframework==7.1.1\nrobotframework-seleniumlibrary==6.6.1';
+    if (this.framework === 'playwright') return 'pytest-playwright==1.49.1';
     if (this.framework === 'selenium') return 'selenium==4.27.1';
     return 'requests==2.32.3';
   }
 
   private javaBuildFile(projectName: string): string {
-    const dependency = this.framework === 'selenium'
-      ? '<artifactId>selenium-java</artifactId>\n      <version>4.27.0</version>'
-      : '<artifactId>rest-assured</artifactId>\n      <version>5.5.0</version>';
-    return `<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>com.automateplus.generated</groupId>\n  <artifactId>${projectName}</artifactId>\n  <version>1.0.0</version>\n  <properties><maven.compiler.release>17</maven.compiler.release></properties>\n  <dependencies><dependency><groupId>org.seleniumhq.selenium</groupId>${dependency}\n  </dependency></dependencies>\n</project>\n`;
+    const dependency = {
+      appium: '<groupId>io.appium</groupId><artifactId>java-client</artifactId><version>9.4.0</version>',
+      http: '<groupId>io.rest-assured</groupId><artifactId>rest-assured</artifactId><version>5.5.0</version>',
+      playwright: '<groupId>com.microsoft.playwright</groupId><artifactId>playwright</artifactId><version>1.49.1</version>',
+      selenium: '<groupId>org.seleniumhq.selenium</groupId><artifactId>selenium-java</artifactId><version>4.27.0</version>',
+    }[this.framework];
+    if (!dependency) {
+      throw new CapabilityError(`Framework '${this.framework}' does not have a Maven project contract.`, {
+        framework: this.framework,
+        language: this.language,
+      });
+    }
+    return `<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"\n  xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">\n  <modelVersion>4.0.0</modelVersion>\n  <groupId>com.automateplus.generated</groupId>\n  <artifactId>${projectName}</artifactId>\n  <version>1.0.0</version>\n  <properties><maven.compiler.release>17</maven.compiler.release><project.build.sourceEncoding>UTF-8</project.build.sourceEncoding></properties>\n  <dependencies><dependency>${dependency}</dependency><dependency><groupId>org.junit.jupiter</groupId><artifactId>junit-jupiter</artifactId><version>5.11.3</version><scope>test</scope></dependency></dependencies>\n  <build><plugins><plugin><groupId>org.apache.maven.plugins</groupId><artifactId>maven-surefire-plugin</artifactId><version>3.5.2</version></plugin></plugins></build>\n</project>\n`;
   }
 
   private kotlinBuildFile(): string {
-    return `plugins { kotlin("jvm") version "2.0.21" }\n\nrepositories { mavenCentral() }\n\ndependencies {\n  testImplementation(kotlin("test"))\n  testImplementation("io.appium:java-client:9.4.0")\n}\n\ntasks.test { useJUnitPlatform() }\n`;
+    const dependency = this.framework === 'appium'
+      ? 'testImplementation("io.appium:java-client:9.4.0")'
+      : this.framework === 'http'
+        ? 'testImplementation("io.rest-assured:rest-assured:5.5.0")'
+        : undefined;
+    if (!dependency) {
+      throw new CapabilityError(`Framework '${this.framework}' does not have a Kotlin/JVM project contract.`, {
+        framework: this.framework,
+        language: this.language,
+      });
+    }
+    return `plugins { kotlin("jvm") version "2.0.21" }\n\nrepositories { mavenCentral() }\n\ndependencies {\n  testImplementation(kotlin("test"))\n  ${dependency}\n}\n\ntasks.test { useJUnitPlatform() }\n`;
+  }
+
+  private androidGradleFile(): string {
+    if (this.framework === 'espresso') {
+      return `plugins {\n  id("com.android.test") version "8.7.3"\n  id("org.jetbrains.kotlin.android") version "2.0.21"\n}\n\nandroid {\n  namespace = "com.automateplus.tests"\n  compileSdk = 35\n  defaultConfig {\n    minSdk = 26\n    targetSdk = 35\n    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"\n  }\n  targetProjectPath = ":app"\n}\n\ndependencies {\n  androidTestImplementation("androidx.test:runner:1.6.2")\n  androidTestImplementation("androidx.test:rules:1.6.1")\n  androidTestImplementation("androidx.test.espresso:espresso-core:3.6.1")\n  androidTestImplementation("androidx.test.ext:junit:1.2.1")\n}\n`;
+    }
+    return `plugins {\n  id("com.android.library") version "8.7.3"\n  id("org.jetbrains.kotlin.android") version "2.0.21"\n}\n\nandroid {\n  namespace = "com.automateplus.tests"\n  compileSdk = 35\n  defaultConfig { minSdk = 26 }\n}\n\ndependencies {\n  testImplementation("junit:junit:4.13.2")\n  testImplementation("org.robolectric:robolectric:4.14.1")\n  testImplementation("androidx.test:core:1.6.1")\n  testImplementation("androidx.test.espresso:espresso-core:3.6.1")\n}\n`;
+  }
+
+  private generatedFileName(session: SessionIR): string {
+    const slug = session.name.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'automateplus_test';
+    if (this.language === 'python') return `test_${slug}.py`;
+    if (this.language === 'java' || this.language === 'kotlin') {
+      const suffix = this.framework === 'http' ? 'ApiTest' : 'Test';
+      return `${this.generatedClassName(session.name)}${suffix}.${this.getFileExtension()}`;
+    }
+    return `${slug}.test.${this.getFileExtension()}`;
+  }
+
+  private generatedEntrypoint(session: SessionIR, fileName: string): string {
+    if (this.language === 'java' || this.language === 'kotlin') {
+      const sourceRoot = this.framework === 'espresso'
+        ? 'app/src/androidTest/java'
+        : this.framework === 'robolectric'
+          ? 'app/src/test/java'
+          : this.language === 'kotlin'
+            ? 'src/test/kotlin'
+            : 'src/test/java';
+      return `${sourceRoot}/com/automateplus/tests/${fileName}`;
+    }
+    return `tests/${fileName}`;
+  }
+
+  private generatedClassName(value: string): string {
+    const pascal = value
+      .replace(/[^a-zA-Z0-9]+(.)/g, (_, character: string) => character.toUpperCase())
+      .replace(/^[a-z]/u, (character) => character.toUpperCase())
+      .replace(/[^a-zA-Z0-9]/gu, '');
+    return /^[A-Za-z]/u.test(pascal) ? pascal : `Generated${pascal}`;
   }
 
   public async validate(project: GeneratedProject): Promise<ValidationResult> {

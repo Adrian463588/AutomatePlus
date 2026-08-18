@@ -73,7 +73,7 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
       case 'resourceId':
         return `id: "${loc.value}"`;
       case 'text':
-        return this.unsupportedLocator(loc);
+        return `text: "${loc.value}"`;
       default:
         return this.unsupportedLocator(loc);
     }

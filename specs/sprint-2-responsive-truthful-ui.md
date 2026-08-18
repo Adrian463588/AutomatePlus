@@ -2,7 +2,7 @@
 
 ## Objective
 
-Deliver the approved Sprint 2 slice across the React migration shell and the WinUI production shell while preserving the architecture and acceptance boundaries in `PRD.md`, `AGENTS.md`, and `DESIGN.md`.
+Deliver the approved Sprint 2 slice across the React renderer and the Tauri/Rust production host while preserving the architecture and acceptance boundaries in `PRD.md`, `AGENTS.md`, and `DESIGN.md`.
 
 The application must start from truthful empty state, use only user-provided targets and persisted user-created sessions, fail closed when a runtime/device/capability is unavailable, and remain usable at the agreed desktop, tablet, and mobile viewport sizes.
 
@@ -10,7 +10,7 @@ The application must start from truthful empty state, use only user-provided tar
 
 - React migration shell: responsive layout, truthful state, API request/assertion state, capability-driven options, accessibility, feedback, and cancellation.
 - TypeScript generators/runners: reject incomplete or fabricated fallback output; preserve explicit locator metadata; propagate k6 `maxVUs`.
-- WinUI shell: replace literal sample content with MVVM-bound state and command surfaces without claiming native runtime acceptance while the required SDK/packs are unavailable.
+- Tauri/Rust host: expose native readiness, device, recorder, process, and run command state without claiming native runtime acceptance while the required SDK/packs are unavailable.
 - Tests, specification traceability, responsive evidence, README preview, and audit evidence.
 
 Out of scope: copying reference-project code/assets, adding runtime binaries, downloading dependencies during tests, inventing an Android package/site/API target, or changing normative requirements without an accompanying PRD/DESIGN decision.
@@ -22,7 +22,7 @@ Out of scope: copying reference-project code/assets, adding runtime binaries, do
 3. Missing target, runtime, device, prerequisite, or unsupported action is `Blocked`, never a simulated pass.
 4. Test doubles are confined to test fixtures and are not runtime acceptance evidence.
 5. Secrets are never seeded, rendered as plaintext, or committed.
-6. Native acceptance remains blocked until the .NET 8 SDK and verified runtime packs are available.
+6. Native acceptance remains blocked until the Tauri/Cargo offline cache, WebView2, and verified runtime packs are available.
 
 ## Given/When/Then acceptance scenarios
 
@@ -54,9 +54,9 @@ Out of scope: copying reference-project code/assets, adding runtime binaries, do
 - Given an Android action without a real app package, locator, or supported action mapping, when generation runs, then it raises `CapabilityError` rather than emitting default package names, center taps, unconditional assertions, or comment fallbacks.
 - Given a stress configuration with `maxVUs`, when the run starts, then the exact value reaches the k6 runner and the normalized report records it.
 
-### F. WinUI contract binding
+### F. Tauri contract binding
 
-- Given the WinUI shell, when it renders, then navigation, platform/framework selection, session state, runtime readiness, recorder commands, and run state come from view-model/application contracts rather than literal sample sessions/timeline/code.
+- Given the Tauri renderer, when it renders, then navigation, platform/framework selection, session state, runtime readiness, recorder commands, and run state come from application contracts rather than literal sample sessions/timeline/code.
 - Given unavailable native prerequisites, when the shell is inspected, then it clearly reports `Blocked` and does not claim runtime readiness.
 
 ## Verification evidence
@@ -75,9 +75,9 @@ npm run build:desktop
 npm run verify:docs
 npm run verify:sidecar
 npm run verify:k6
-dotnet format AutomatePlus.sln --verify-no-changes
-dotnet build AutomatePlus.sln --no-restore
-dotnet test AutomatePlus.sln --no-restore
+cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
+cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --offline -- -D warnings
+cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --offline
 ```
 
 Also required: focused tests for startup/persistence, capability rejection, Android preflight, API status/assertions, maxVUs, and modal/button accessibility; responsive screenshots at all five viewports; ADB discovery and lock/preflight evidence using only a real user-selected package; and a production authenticity/security scan.

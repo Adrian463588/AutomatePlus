@@ -53,46 +53,29 @@ export class InteractivePlayer implements ITestRunner {
 
       const stepStart = Date.now();
       try {
-        await this.executeStep(step, onLog);
+        const healed = await this.executeStepWithHealing(step, onLog);
         passedSteps++;
         onLog({
           timestamp: Date.now(),
           type: 'step_pass',
           stepId: step.id,
-          message: `[PASS] Step ${step.stepNumber}: ${step.action} (${Date.now() - stepStart}ms)`,
+          message: healed
+            ? `[HEALED & PASS] Step ${step.stepNumber}: ${step.action}`
+            : `[PASS] Step ${step.stepNumber}: ${step.action} (${Date.now() - stepStart}ms)`,
         });
-      } catch (err: any) {
-        // Attempt self-healing if selector failed
-        const failedSelector = step.locators?.[0]?.value ?? '';
-        const healing = findNextResilientLocator(step, failedSelector);
+      } catch (err: unknown) {
+        failedSteps++;
+        runError = err instanceof Error ? err.message : String(err);
+        onLog({
+          timestamp: Date.now(),
+          type: 'step_fail',
+          stepId: step.id,
+          message: `[FAIL] Step ${step.stepNumber}: ${step.action} - ${runError}`,
+        });
 
-        if (healing.healed && healing.chosenCandidate) {
-          onLog({
-            timestamp: Date.now(),
-            type: 'stdout',
-            message: `[HEALING] Primary locator failed. Retrying with fallback: ${healing.chosenCandidate.strategy}="${healing.chosenCandidate.value}"`,
-          });
-          passedSteps++;
-          onLog({
-            timestamp: Date.now(),
-            type: 'step_pass',
-            stepId: step.id,
-            message: `[HEALED & PASS] Step ${step.stepNumber}: ${step.action}`,
-          });
-        } else {
-          failedSteps++;
-          runError = err.message || 'Step execution failed';
-          onLog({
-            timestamp: Date.now(),
-            type: 'step_fail',
-            stepId: step.id,
-            message: `[FAIL] Step ${step.stepNumber}: ${step.action} - ${runError}`,
-          });
-
-          if (!step.optional) {
-            this._status = 'failed';
-            break;
-          }
+        if (!step.optional) {
+          this._status = 'failed';
+          break;
         }
       }
     }
@@ -134,6 +117,36 @@ export class InteractivePlayer implements ITestRunner {
       );
     }
     await this.executor.execute(step);
+  }
+
+  private async executeStepWithHealing(step: ActionIR, onLog: RunLogCallback): Promise<boolean> {
+    try {
+      await this.executeStep(step, onLog);
+      return false;
+    } catch (primaryError: unknown) {
+      const failedSelector = step.locators?.[0]?.value ?? '';
+      const healing = findNextResilientLocator(step, failedSelector);
+
+      if (!healing.chosenCandidate) {
+        throw primaryError;
+      }
+
+      const retryStep: ActionIR = {
+        ...step,
+        locators: [healing.chosenCandidate],
+      };
+
+      onLog({
+        timestamp: Date.now(),
+        type: 'stdout',
+        message: `[HEALING] Primary locator failed. Retrying with fallback: ${healing.chosenCandidate.strategy}="${healing.chosenCandidate.value}"`,
+      });
+
+      // A candidate is only a retry plan. The step is healed only when this
+      // real executor call completes successfully.
+      await this.executeStep(retryStep, onLog);
+      return true;
+    }
   }
 }
 

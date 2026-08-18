@@ -5,7 +5,7 @@ Status: Active Sprint 2 contract
 Target: Windows 10/11 x64 desktop
 Active host: Tauri 2 + Rust
 Renderer and sidecar: React/TypeScript
-Operating model: offline only
+Operating model: offline local control plane; explicit user-requested target E2E may access declared websites/APIs
 
 ## 1. Product definition
 
@@ -24,12 +24,13 @@ The product never invents devices, targets, metrics, artifacts, progress, or suc
 - Generate maintainable projects for supported framework/language capabilities.
 - Replay Android flows on one or many real devices with leases, unique ports, cleanup, and evidence.
 - Support primary/follower recording without duplicating canonical IR.
-- Run fully offline with checksum-verified local runtime packs.
+- Run the control plane fully offline with checksum-verified local runtime packs.
+- Permit network traffic only for an explicit user-requested target E2E against the declared test websites/APIs; never use implicit cloud control, telemetry, or dependency downloads.
 - Keep the UI responsive, keyboard accessible, and truthful at every missing-runtime state.
 
 ### Non-goals
 
-- Cloud grid, hosted browser farm, telemetry, login, or implicit network call.
+- Cloud grid, hosted browser farm, telemetry, login, or implicit network call. Explicit target traffic is limited to the user-requested E2E action and is not a platform control-plane dependency.
 - Replacing Playwright, Selenium, Appium, UiAutomator2, Espresso, Maestro, or k6.
 - Calling functional/UI iteration rate API RPS.
 - Broadcasting primary coordinates to follower devices.
@@ -189,10 +190,10 @@ Run-AutomatePlus.bat at the repository root delegates to scripts/Run-AutomatePlu
 
 1. sets the workspace and local working directory;
 2. starts an existing AutomatePlus.exe when present, or checks the manifest, Node, Rust/Tauri, renderer build, packs, WebView2, ADB/Appium/scrcpy, and single-process conditions before attempting a local build;
-3. falls back to the browser-safe migration shell when the native build is blocked, keeping Android/device capabilities Blocked and never fabricating evidence;
-4. returns the native or browser-shell exit code. `--browser` forces the migration shell.
+3. fails closed with exit code 2 when the native build is blocked; it never silently changes acceptance mode;
+4. starts the browser-safe migration shell only when the user passes `--browser`, keeping Android/device capabilities Blocked and never fabricating evidence.
 
-Exit code 2 is a truthful Blocked prerequisite result when the browser shell itself cannot start. Native preflight blockers are printed before the safe browser fallback. No network fallback is allowed.
+Exit code 2 is a truthful Blocked prerequisite result for missing native prerequisites. Native preflight blockers are printed before the launcher exits. No network fallback is allowed.
 
 ## 10. BMAD and traceability
 

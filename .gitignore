@@ -29,6 +29,9 @@ pnpm-debug.log*
 lerna-debug.log*
 *.log
 
+# Local acceptance evidence (fresh target/device output; never source or release input)
+.automateplus/
+
 # IDE & Editor Configs
 .vscode/*
 !.vscode/extensions.json
@@ -56,3 +59,6 @@ runtime-packs/**/*.exe
 runtime-packs/**/*.dll
 runtime-packs/**/*.zip
 runtime-packs/**/*.7z
+
+# Native build staging is generated from verified packs and removed after build
+apps/desktop/src-tauri/resources/runtime-packs/

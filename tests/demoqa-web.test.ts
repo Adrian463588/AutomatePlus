@@ -3,7 +3,8 @@ import { ActionIR, SessionIR, validateSessionIR } from '@automate-plus/ir-schema
 import { GeneratorFactory } from '@automate-plus/generators';
 import { InteractivePlayer } from '@automate-plus/runner-core';
 
-describe('DemoQA Web Automation Suite', () => {
+// ComponentTest boundary: the executor is injected; this suite never opens a browser.
+describe('ComponentTest fixture: DemoQA Web generator', () => {
   const demoqaSteps: ActionIR[] = [
     {
       id: 'd1000000-0000-4000-8000-000000000001',

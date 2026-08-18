@@ -81,7 +81,7 @@ export class RobolectricKotlinGenerator extends BaseCodeGenerator {
       case 'accessibilityId':
         return `withContentDescription("${loc.value}")`;
       case 'text':
-        return this.unsupportedLocator(loc);
+        return `withText("${loc.value}")`;
       default:
         return this.unsupportedLocator(loc);
     }

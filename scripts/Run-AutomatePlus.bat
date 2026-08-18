@@ -3,38 +3,65 @@ setlocal EnableExtensions
 set "ROOT=%~dp0.."
 set "NATIVE=%ROOT%\apps\desktop\src-tauri\target\release\AutomatePlus.exe"
 set "FORCE_BROWSER=0"
+set "DOCTOR=0"
 if /I "%~1"=="--browser" set "FORCE_BROWSER=1"
+if /I "%~1"=="--doctor" set "DOCTOR=1"
 cd /d "%ROOT%"
+
+if "%DOCTOR%"=="1" goto doctor
+
+if "%FORCE_BROWSER%"=="0" if exist "%NATIVE%" goto launch_native
 
 where node >nul 2>nul
 if errorlevel 1 (
-  if exist "%NATIVE%" if "%FORCE_BROWSER%"=="0" goto launch_native
-  echo [AutomatePlus] BLOCKED: local Node.js is required for the desktop server or native build. No download will be attempted.
+  echo [AutomatePlus] BLOCKED: local Node.js is required for this launch mode. No download will be attempted.
   exit /b 2
 )
 
-if exist "%NATIVE%" if "%FORCE_BROWSER%"=="0" goto launch_native
+if "%FORCE_BROWSER%"=="1" goto launch_browser
 
-if exist "%ROOT%\runtime-packs\manifest.json" if "%FORCE_BROWSER%"=="0" (
-  node "%ROOT%\scripts\build-native-offline.mjs" --preflight >nul 2>&1
-  if not errorlevel 1 (
-    echo [AutomatePlus] Native sources and offline packs are ready; building the local host.
-    node "%ROOT%\scripts\build-native-offline.mjs" --build
-    if not errorlevel 1 if exist "%NATIVE%" goto launch_native
-    echo [AutomatePlus] Native build did not complete; opening high-performance local desktop shell.
-  )
+echo [AutomatePlus] Running native offline preflight...
+node "%ROOT%\scripts\build-native-offline.mjs" --preflight
+set "PREFLIGHT_CODE=%ERRORLEVEL%"
+if not "%PREFLIGHT_CODE%"=="0" (
+  echo [AutomatePlus] Native launch blocked by the preflight result above.
+  exit /b 2
 )
 
+echo [AutomatePlus] Native host prerequisites are ready; building Tauri/Rust host offline.
+node "%ROOT%\scripts\build-native-offline.mjs" --build
+set "BUILD_CODE=%ERRORLEVEL%"
+if not "%BUILD_CODE%"=="0" (
+  echo [AutomatePlus] BLOCKED: native Tauri/Rust build failed with code %BUILD_CODE%.
+  exit /b 1
+)
+if not exist "%NATIVE%" (
+  echo [AutomatePlus] BLOCKED: native build returned success but AutomatePlus.exe is missing.
+  exit /b 1
+)
+goto launch_native
+
+:launch_browser
 if not exist "%ROOT%\node_modules" (
   echo [AutomatePlus] BLOCKED: frontend dependencies are missing. Run npm ci --offline, then retry.
   exit /b 2
 )
 
-echo [AutomatePlus] Starting AutomatePlus desktop platform...
+echo [AutomatePlus] Starting explicit browser migration shell. Native capabilities remain Blocked.
 node "%ROOT%\scripts\serve-desktop.mjs" %*
 set "EXIT_CODE=%ERRORLEVEL%"
 if not "%EXIT_CODE%"=="0" echo [AutomatePlus] Server exited with code %EXIT_CODE%.
 exit /b %EXIT_CODE%
+
+:doctor
+where node >nul 2>nul
+if errorlevel 1 (
+  echo [AutomatePlus] BLOCKED: local Node.js is required for diagnostics. No download will be attempted.
+  exit /b 2
+)
+echo [AutomatePlus] Running native offline diagnostics...
+node "%ROOT%\scripts\build-native-offline.mjs" --preflight
+exit /b %ERRORLEVEL%
 
 :launch_native
 set "AUTOMATE_PLUS_WORKSPACE=%ROOT%"
