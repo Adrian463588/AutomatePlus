@@ -75,9 +75,9 @@ npm run build:desktop
 npm run verify:docs
 npm run verify:sidecar
 npm run verify:k6
-cargo fmt --manifest-path apps/desktop/src-tauri/Cargo.toml -- --check
-cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --offline -- -D warnings
-cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --offline
+cargo fmt --manifest-path backend/Cargo.toml -- --check
+cargo clippy --manifest-path backend/Cargo.toml --offline -- -D warnings
+cargo test --manifest-path backend/Cargo.toml --offline
 ```
 
 Also required: focused tests for startup/persistence, capability rejection, Android preflight, API status/assertions, maxVUs, and modal/button accessibility; responsive screenshots at all five viewports; ADB discovery and lock/preflight evidence using only a real user-selected package; and a production authenticity/security scan.

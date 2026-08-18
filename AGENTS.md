@@ -11,8 +11,8 @@
 
 ## Active runtime
 
-- The released desktop host is Tauri 2 + Rust under `apps/desktop/src-tauri`.
-- React/TypeScript under `apps/desktop` is the renderer. Ordinary browser mode is a migration shell.
+- The released desktop host is Tauri 2 + Rust under `backend`.
+- React/TypeScript, the local sidecar, and internal frontend packages live under `frontend`. Ordinary browser mode is a migration shell.
 - TypeScript sidecar packages own IR validation, selector ranking, recorder adapters, and generators.
 - The old .NET/WinUI tree is legacy source only and is not a release dependency.
 - Runtime is Windows x64 and offline. No test or launcher may download, install, log in, or call cloud services.
@@ -41,11 +41,11 @@ Use the RTK wrapper for shell commands. Run the applicable gates after the final
 
 | Scope | Command |
 |---|---|
-| Locked offline install | `npm ci --offline` |
+| Locked offline install | `npm ci --offline` (root lock owns the local frontend/package graph) |
 | TypeScript quality | `npm run lint`, `npm run format:check`, `npm run typecheck`, `npm test` |
 | TypeScript builds | `npm run build:packages`, `npm run build:sidecar`, `npm run build:desktop` |
 | Smoke and docs | `npm run verify:sidecar`, `npm run verify:k6`, `npm run verify:docs`, `npm run verify:authenticity` |
-| Native source | `cargo fmt --check`, `cargo clippy --offline -- -D warnings`, `cargo test --offline` |
+| Native source | `cargo fmt --manifest-path backend/Cargo.toml -- --check`, `cargo clippy --manifest-path backend/Cargo.toml --offline -- -D warnings`, `cargo test --manifest-path backend/Cargo.toml --offline` |
 | Native packaging | `npm run native:preflight`, `npm run native:check`, `npm run native:build` |
 
 Do not report Rust/Tauri, pack, Appium, or multi-device acceptance as `Verified` when the offline Cargo cache, Tauri CLI, verified packs, target app, or physical devices are absent. Report the exact blocker and exit code.

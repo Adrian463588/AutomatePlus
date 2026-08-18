@@ -14,7 +14,7 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const native = join(root, 'apps', 'desktop', 'src-tauri');
+const native = join(root, 'backend');
 const runtimePacksRoot = join(root, 'runtime-packs');
 const manifestPath = join(root, 'runtime-packs', 'manifest.json');
 const catalogPath = join(root, 'runtime-packs', 'catalog.json');
@@ -213,7 +213,7 @@ function preflight() {
   const result = {
     status: 'ready',
     nativeDirectory: native,
-    frontendDist: join(root, 'apps', 'desktop', 'dist'),
+    frontendDist: join(root, 'frontend', 'dist'),
     packs: {
       ...packs,
       manifestPresent: existsSync(manifestPath),
@@ -242,7 +242,7 @@ function preflight() {
   if (!result.tools.node) reasons.push('Node.js is unavailable');
   if (!result.packs.verified.length) reasons.push(result.packs.issue ?? 'no verified offline packs are present');
   if (catalog.error) reasons.push(catalog.error);
-  if (!existsSync(result.frontendDist)) reasons.push('apps/desktop/dist is missing; build the real renderer first');
+  if (!existsSync(result.frontendDist)) reasons.push('frontend/dist is missing; build the real renderer first');
   if (!result.tools.tauriCli) reasons.push('cargo-tauri is unavailable in the local toolchain');
   if (!result.tools.webview2) reasons.push('fixed WebView2 runtime is not staged or installed');
   const capabilityPacks = result.packs.verified;

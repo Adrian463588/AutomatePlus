@@ -61,4 +61,4 @@ runtime-packs/**/*.zip
 runtime-packs/**/*.7z
 
 # Native build staging is generated from verified packs and removed after build
-apps/desktop/src-tauri/resources/runtime-packs/
+backend/resources/runtime-packs/

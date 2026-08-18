@@ -80,7 +80,7 @@ function statusOf(results) {
 
 function componentMatrixStatus() {
   const script = join(root, 'scripts', 'verify-generators.mjs');
-  if (!existsSync(join(root, 'packages', 'generators', 'dist', 'index.js')) || !existsSync(script)) {
+  if (!existsSync(join(root, 'frontend', 'packages', 'generators', 'dist', 'index.js')) || !existsSync(script)) {
     return { status: 'Blocked', reason: 'generator build output is unavailable; run npm run verify:generators first' };
   }
   const result = spawnSync(process.execPath, [script], { cwd: root, encoding: 'utf8', windowsHide: true, timeout: 120_000 });

@@ -1,5 +1,5 @@
 import { createServer } from 'node:http';
-import { K6StressRunner } from '../packages/stress-engine/dist/index.js';
+import { K6StressRunner } from '../frontend/packages/stress-engine/dist/index.js';
 
 const server = createServer((_request, response) => {
   const body = JSON.stringify({ healthy: true });

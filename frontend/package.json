@@ -1,0 +1,45 @@
+{
+  "name": "@automate-plus/desktop",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "npm run build:packages && npm run build:sidecar && npm run build:desktop",
+    "build:desktop": "tsc && vite build",
+    "build:packages": "npm --prefix packages/ir-schema run build && npm --prefix packages/contracts run build && npm --prefix packages/selector-engine run build && npm --prefix packages/generators run build && npm --prefix packages/persistence run build && npm --prefix packages/recorder-web run build && npm --prefix packages/recorder-android run build && npm --prefix packages/runner-core run build && npm --prefix packages/stress-engine run build",
+    "build:sidecar": "npm --prefix sidecar run build",
+    "test": "vitest run",
+    "typecheck": "npm run typecheck:packages && npm run typecheck:sidecar && npm run typecheck:desktop",
+    "typecheck:packages": "tsc -p tsconfig.packages.json --noEmit",
+    "typecheck:sidecar": "tsc -p sidecar/tsconfig.json --noEmit",
+    "typecheck:desktop": "tsc -p tsconfig.json --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@automate-plus/contracts": "file:packages/contracts",
+    "@automate-plus/generators": "file:packages/generators",
+    "@automate-plus/ir-schema": "file:packages/ir-schema",
+    "@automate-plus/persistence": "file:packages/persistence",
+    "@automate-plus/recorder-android": "file:packages/recorder-android",
+    "@automate-plus/recorder-web": "file:packages/recorder-web",
+    "@automate-plus/runner-core": "file:packages/runner-core",
+    "@automate-plus/selector-engine": "file:packages/selector-engine",
+    "@automate-plus/stress-engine": "file:packages/stress-engine",
+    "lucide-react": "^0.468.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "zustand": "^5.0.2"
+  },
+  "devDependencies": {
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.3.3",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  }
+}

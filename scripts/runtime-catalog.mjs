@@ -357,7 +357,7 @@ export function knownRuntimeRoots({ workspaceRoot = REPOSITORY_ROOT, configuredR
   add(join(workspaceRoot, 'runtime-packs'), 'workspace');
   if (nonEmptyString(env.LOCALAPPDATA)) add(join(env.LOCALAPPDATA, 'AutomatePlus', 'runtime-packs'), 'local-app-data');
   if (nonEmptyString(env.ProgramData)) add(join(env.ProgramData, 'AutomatePlus', 'runtime-packs'), 'program-data');
-  add(bundledRoot ?? join(workspaceRoot, 'apps', 'desktop', 'src-tauri', 'resources', 'runtime-packs'), 'bundled');
+  add(bundledRoot ?? join(workspaceRoot, 'backend', 'resources', 'runtime-packs'), 'bundled');
   return roots;
 }
 

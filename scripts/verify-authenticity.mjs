@@ -3,7 +3,7 @@ import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
-const productionRoots = ['apps/desktop/src', 'packages', 'src'];
+const productionRoots = ['frontend/src', 'frontend/packages', 'src'];
 const ignoredDirectoryNames = new Set(['dist', 'node_modules', 'bin', 'obj', 'coverage']);
 
 const rules = [
@@ -37,7 +37,7 @@ for (const relativeRoot of productionRoots) {
     if (relativePath.includes('/tests/') || relativePath.includes('.test.')) continue;
     const source = readFileSync(filePath, 'utf8');
     for (const rule of rules) {
-      if (rule.name === 'generator fallback output' && relativePath === 'packages/generators/src/base.generator.ts') continue;
+      if (rule.name === 'generator fallback output' && relativePath === 'frontend/packages/generators/src/base.generator.ts') continue;
       const match = rule.expression.exec(source);
       rule.expression.lastIndex = 0;
       if (match) findings.push(`${relativePath}:${lineNumber(source, match.index)} ${rule.name}`);
@@ -45,7 +45,7 @@ for (const relativeRoot of productionRoots) {
   }
 }
 
-for (const filePath of collectFiles(join(root, 'apps/desktop/src'))) {
+for (const filePath of collectFiles(join(root, 'frontend/src'))) {
   const relativePath = relative(root, filePath).replaceAll('\\', '/');
   const source = readFileSync(filePath, 'utf8');
   const match = /\bplaceholder\s*=/u.exec(source);

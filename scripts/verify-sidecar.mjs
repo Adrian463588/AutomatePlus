@@ -17,7 +17,7 @@ const requests = [
   },
 ];
 
-const child = spawn(process.execPath, ['apps/sidecar/dist/main.js'], {
+const child = spawn(process.execPath, ['frontend/sidecar/dist/main.js'], {
   cwd: process.cwd(),
   shell: false,
   stdio: ['pipe', 'pipe', 'pipe'],

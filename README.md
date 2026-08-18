@@ -1,11 +1,13 @@
-# AutomatePlus (Sprint 2) 🚀
+# AutomatePlus (Sprint 2)
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-159%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-126%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
+
+The renderer follows the **Precision Workbench** contract: neutral dark surfaces, cyan as the primary action accent, semantic status colors, native controls, restrained state-driven motion, and no decorative gradients or glass effects. The runtime and device screens use the full available work area; generated-code space is reserved for Recorder and API Builder only.
 
 ![AutomatePlus blocked-state preview](docs/assets/runtime-manager-preview-1440x900.png)
 
@@ -17,7 +19,7 @@ The previews are captured from the current renderer in a fresh local browser pro
 
 ## Evidence and acceptance boundaries
 
-The current component evidence includes 161 passing TypeScript tests across 28 test files, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. A fresh Playwright audit rendered Runtime Manager and the main workspace at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`, every visible interactive control was at least 48 px high, and the clean reload had no application console errors.
+The current component evidence includes 126 passing TypeScript tests across 23 test files, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. A fresh Playwright audit rendered Runtime Manager and the main workspace at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`, every visible interactive control was at least 48 px high, and the clean reload had no application console errors.
 
 Native Tauri/Rust acceptance remains explicitly `Blocked` until the offline Cargo/Tauri dependency cache and verified runtime packs are available. Physical target preflight was run against two authorized devices with the installed NotiPlus package/activity and the real `Riwayat` semantic selector; AutomatePlus farm acceptance remains `Blocked` because the verified farm/Appium packs and native host IPC replay are not available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
@@ -54,7 +56,7 @@ AutomatePlus empowers QA engineers, developers, and automation specialists to vi
 | **Production Desktop GUI** | Tauri 2, Rust, WebView2, React 18 |
 | **Native orchestration** | Rust ADB/Appium/scrcpy, SQLite, leases, ports, cancellation |
 | **Renderer and sidecar** | TypeScript, Vite, Tailwind CSS, Zustand, versioned IPC |
-| **Monorepo Architecture** | npm workspaces, TypeScript Project References |
+| **Monorepo Architecture** | Simple root npm lock, TypeScript Project References |
 | **Testing & Verification** | Vitest, Node.js, cargo fmt/check/test, Tauri offline preflight |
 | **IR & Schema Validation** | Zod (v3.23) Schema Contracts |
 | **Selector Engine** | Multi-attribute scoring algorithm (Test ID, Role, Text, CSS, XPath) |
@@ -62,35 +64,38 @@ AutomatePlus empowers QA engineers, developers, and automation specialists to vi
 
 ---
 
-## 🧩 Monorepo Workspace Structure
+## 🧩 Monolithic Local Structure
 
 ```text
 AutomatePlus/
-├── apps/
-│   ├── desktop/                 # Browser-safe React/Vite migration shell
-│   └── sidecar/                 # TypeScript NDJSON sidecar entrypoint
-├── packages/
-│   ├── contracts/               # Shared TypeScript interfaces & capability manifests
-│   ├── ir-schema/               # Versioned ActionIR, SessionIR, and Zod schemas
-│   ├── selector-engine/         # Robust selector scoring & fallback ranker
-│   ├── generators/              # 27 capability-checked generators & GeneratorFactory
-│   ├── persistence/             # Storage engines & repository abstractions
-│   ├── recorder-web/            # Web browser interaction & CDP capture
-│   ├── recorder-android/        # Android screencast & gesture capture
-│   ├── runner-core/             # Interactive in-app player & process runner
-│   └── stress-engine/           # Functional looper & k6 RPS load generator
+├── backend/                     # Tauri 2 + Rust native host
+│   ├── src/                     # Native commands, ADB, runtime, persistence
+│   ├── migrations/              # SQLite migrations
+│   ├── capabilities/            # Tauri capability policy
+│   └── tauri.conf.json          # Native bundle configuration
+├── frontend/                    # Single TypeScript frontend boundary
+│   ├── src/                     # React/Vite migration shell and UI
+│   ├── sidecar/                 # Local TypeScript NDJSON sidecar
+│   ├── packages/                # Required local TypeScript libraries
+│   │   ├── contracts/           # Shared TypeScript interfaces & capability manifests
+│   │   ├── ir-schema/           # Versioned ActionIR, SessionIR, and Zod schemas
+│   │   ├── selector-engine/     # Robust selector scoring & fallback ranker
+│   │   ├── generators/          # 27 capability-checked generators & GeneratorFactory
+│   │   ├── persistence/         # Storage engines & repository abstractions
+│   │   ├── recorder-web/        # Web browser interaction & CDP capture
+│   │   ├── recorder-android/    # Android screencast & gesture capture
+│   │   ├── runner-core/         # Interactive in-app player & process runner
+│   │   └── stress-engine/       # Functional looper & k6 RPS load generator
 ├── docs/                        # Architecture & reference documentation
-├── apps/desktop/src-tauri/      # Tauri 2 + Rust native host
 ├── src/                         # Legacy .NET source; not a release dependency
 ├── tests/                       # Legacy .NET tests; not a release gate
 ├── runtime-packs/               # Offline runtime manifest; no binaries committed
 ├── scripts/                     # Quality and loopback verification fixtures
-├── Run-AutomatePlus.bat         # Root one-click offline launcher
+├── Run-AutomatePlus.bat         # Only user-facing launcher
 ├── AGENTS.md                    # Agent behavior & verification rules
 ├── DESIGN.md                    # System architecture specification
 ├── PRD.md                       # Product requirement document
-├── package.json                 # Monorepo root configuration
-└── tsconfig.json                # Base TypeScript configuration
+└── package.json                 # Root command facade; no npm workspace
 ```
 
 ---
@@ -132,7 +137,7 @@ AutomatePlus provides first-class code generation for the following frameworks a
 - **OS**: Windows 10 / 11 (x64)
 
 ### Installation
-Clone the repository and install all workspace dependencies:
+Clone the repository and install the locked local dependencies:
 
 ```bash
 # Clone the repository
@@ -141,7 +146,7 @@ git clone https://github.com/Adrian463588/AutomatePlus.git
 # Navigate to project directory
 cd AutomatePlus
 
-# Install the locked dependency graph without network access
+# Root lock owns the local frontend, sidecar, and package dependency graph
 npm ci --offline
 ```
 
@@ -156,7 +161,17 @@ npm run dev:desktop
 ```
 Open your browser at `http://127.0.0.1:5173` to interact with the GUI.
 
-For the official one-click offline desktop path, double-click `Run-AutomatePlus.bat` or `automate-plus.bat` in the repository root. The default path is native-only and fails closed with a diagnostic when the published `AutomatePlus.exe`, verified packs, or Tauri toolchain are unavailable. The launcher never downloads or installs a dependency. Pass `--browser` explicitly to start the migration shell; browser mode is not native acceptance. Pass `--doctor` for JSON preflight diagnostics.
+For the official one-click offline desktop path, double-click `Run-AutomatePlus.bat` in the repository root. The default path is native-only and fails closed with a diagnostic when the published `AutomatePlus.exe`, bootstrap, verified packs, or Tauri toolchain are unavailable. The launcher never downloads or installs a dependency. Pass `--browser` explicitly to start the migration shell; browser mode is not native acceptance. Pass `--doctor` for JSON preflight diagnostics. `--build-dev` performs an offline native build only after preflight passes.
+
+```powershell
+.\Run-AutomatePlus.bat
+.\Run-AutomatePlus.bat --doctor
+.\Run-AutomatePlus.bat --browser --no-open --port=5173
+.\Run-AutomatePlus.bat --browser --dev --no-open --port=5173
+.\Run-AutomatePlus.bat --build-dev
+```
+
+The launcher returns `0` on normal completion, `1` on a runtime/build failure, and `2` when a prerequisite or argument is blocked. It never falls back to browser mode automatically.
 
 ### Runtime Manager and offline distribution
 
@@ -169,7 +184,7 @@ Runtime download requires an explicitly selected writable root, license acceptan
 ```powershell
 $env:AUTOMATEPLUS_RUNTIME_DOWNLOAD = '1'
 # Start AutomatePlus natively, open Runtime, review the catalog, then click Download missing.
-.\automate-plus.bat
+.\Run-AutomatePlus.bat
 ```
 
 After installation, execution resolves only checksum-verified local packs and health evidence. Exact `id + version + source SHA-256` matches are reused; different hashes become `NeedsReview` and are never overwritten automatically. `runtime-packs/catalog.json` is metadata-only until an official artifact has a pinned version, HTTPS URL, size, SHA-256, license, executable allowlist, and health command. Run `npm run verify:runtime-catalog` and `npm run verify:offline-install` to see the current status. The current checkout deliberately reports `NeedsReview/Blocked` because those verified release artifacts and the offline Cargo/`cargo-tauri` cache are not present.
@@ -207,6 +222,7 @@ npm run verify:docs
 npm run verify:sidecar
 npm run verify:generators
 npm run verify:ui-contract
+npm run verify:anti-slop
 npm run verify:k6:fixture # component-only loopback fixture
 npm run verify:k6         # explicit target-online k6 gate; Blocked without verified k6 pack
 npm run verify:runtime-catalog

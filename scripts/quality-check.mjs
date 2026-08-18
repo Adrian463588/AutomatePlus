@@ -4,7 +4,7 @@ import process from 'node:process';
 
 const mode = process.argv[2];
 const repositoryRoot = process.cwd();
-const sourceRoots = ['packages', path.join('apps', 'desktop', 'src'), path.join('apps', 'sidecar', 'src'), 'scripts'];
+const sourceRoots = [path.join('frontend', 'packages'), path.join('frontend', 'src'), path.join('frontend', 'sidecar', 'src'), 'scripts'];
 const sourceExtensions = new Set(['.ts', '.tsx', '.mjs']);
 
 function collectFiles(directory) {

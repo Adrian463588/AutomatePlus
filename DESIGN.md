@@ -57,16 +57,16 @@ The browser shell may persist user-created projects and sessions in browser stor
 
 | Layer | Location | Responsibility |
 |---|---|---|
-| Renderer | apps/desktop/src | React UI, state, responsive/a11y presentation |
-| Bridge | apps/desktop/src/services/desktopBridge.ts | Browser-safe adapters and Tauri IPC calls |
-| Contracts | packages/contracts/src | IPC, device-farm, capability, runner contracts |
-| IR | packages/ir-schema | Canonical versioned session/action schemas |
-| Selector | packages/selector-engine | Semantic locator ranking |
-| Generators | packages/generators | One project per framework/language with runtime context |
-| Sidecar | apps/sidecar and recorder packages | IR/selector/generator and recorder protocol |
-| Native host | apps/desktop/src-tauri/src | Rust discovery, preflight, leases, SQLite, processes, cleanup |
+| Renderer | frontend/src | React UI, state, responsive/a11y presentation |
+| Bridge | frontend/src/services/desktopBridge.ts | Browser-safe adapters and Tauri IPC calls |
+| Contracts | frontend/packages/contracts/src | IPC, device-farm, capability, runner contracts |
+| IR | frontend/packages/ir-schema | Canonical versioned session/action schemas |
+| Selector | frontend/packages/selector-engine | Semantic locator ranking |
+| Generators | frontend/packages/generators | One project per framework/language with runtime context |
+| Sidecar | frontend/sidecar and frontend/packages | IR/selector/generator and recorder protocol |
+| Native host | backend/src | Rust discovery, preflight, leases, SQLite, processes, cleanup |
 | Native packaging | scripts/build-native-offline.mjs | Offline verification, staging, format/test/build |
-| Launcher | Run-AutomatePlus.bat, automate-plus.bat | One-click offline desktop and server entrypoints |
+| Launcher | Run-AutomatePlus.bat | Single native-first offline desktop entrypoint |
 
 reference/ and docs/Sprint2/ are research inputs and remain read-only.
 
@@ -175,6 +175,21 @@ The farm workspace is responsive at 390, 600, 768, 840, 1024, 1280, and 1440 px.
 
 Every button has a real action or an explanatory disabled state. Browser mode has no fake ShopApp, device, battery, clock, progress, or run result. Empty and Blocked states explain the missing user input or runtime prerequisite.
 
+## 13A. Precision Workbench Anti-Slop contract
+
+The renderer uses a deliberate Windows desktop workbench direction. This is a product UI, not a marketing surface.
+
+- Use semantic design tokens for canvas, surfaces, borders, text, accent, success, warning, and error. New components must not introduce arbitrary colors, radii, shadows, or spacing values.
+- Use `Segoe UI Variable` with Windows-native fallbacks for UI text and `Cascadia Mono` for code, paths, and process output. No remote font loading.
+- Use a 4px spacing base, 6px/10px radii, borders before elevation, and shadow only for dialogs or a clearly elevated transient surface.
+- Do not use gradients, glassmorphism, decorative glow, oversized rounded cards, card-within-card layouts, decorative badges, or animation on non-interactive elements.
+- Prefer content hierarchy, alignment, whitespace, and typography before borders or color. Each screen has one primary task and one clear primary action.
+- Runtime, device, and API detail uses progressive disclosure. Advanced controls appear only when their parent task is available.
+- Motion is state-driven only: pending, selection, focus, success, error, blocked, and cancellation. Reduced-motion users receive equivalent state feedback without decorative animation.
+- Native `<select>` remains the control for option selection. Its closed state, focus state, option contrast, disabled state, forced-colors state, and keyboard behavior are tested on WebView2/Windows.
+- Every interactive control is at least 48px in its hit area, has an accessible name, and either has a real handler or a disabled explanation.
+- Browser mode remains a truthful migration shell. It never substitutes browser prompts, fabricated runtime counts, fake devices, or fake progress for native evidence.
+
 ## 14. Verification and evidence status
 
 | Gate | Command | Current rule |
@@ -194,11 +209,11 @@ Fixtures may exercise parsers, selectors, IPC, lease logic, and failure transiti
 
 | Requirement | Contract/ADR | Module | Test/evidence | Status |
 |---|---|---|---|---|
-| Offline Tauri launch | ADR-001, launcher contract | src-tauri, Run-AutomatePlus.bat | preflight/launcher smoke | Implemented; pack/CLI blocked |
-| Real discovery and stable IDs | FR-14, ADR-003 | src-tauri/src/adb.rs, contracts | ADB parser tests; device evidence | Implemented; physical evidence blocked |
+| Offline Tauri launch | ADR-001, launcher contract | backend, Run-AutomatePlus.bat | preflight/launcher smoke | Implemented; pack/CLI blocked |
+| Real discovery and stable IDs | FR-14, ADR-003 | backend/src/adb.rs, contracts | ADB parser tests; device evidence | Implemented; physical evidence blocked |
 | Farm strategies and leases | FR-15, ADR-004 | device-farm, runner core, Rust ports | scheduler/lease tests | Contract/component; Appium executor blocked |
 | Primary/follower recording | FR-16 | recorder contracts, native dispatch | observation tests | Contract/component; runtime blocked |
-| Runtime-context generation | FR-17 | packages/generators | no-fixed-port tests | Implemented |
+| Runtime-context generation | FR-17 | frontend/packages/generators | no-fixed-port tests | Implemented |
 | Runtime Manager | FR-12, runtime IPC 1.0 | runtime.rs, runtime_catalog.rs, RuntimeManagerContainer, launcher | component verifiers, responsive PNGs, offline/release gates | Implemented; native artifact/Cargo gates blocked |
 | Native folder/archive picker | `native.dialog.pick`, IPC 1.0 | Rust `rfd` boundary, desktop bridge, Sidebar, Runtime Manager | contract tests and manual Windows picker evidence | Implemented in contract; native host evidence pending |
 | Truthful UI | NFR-05/NFR-16 | DeviceFarmView, bridge/store | authenticity/build/viewport evidence | Implemented in shell |

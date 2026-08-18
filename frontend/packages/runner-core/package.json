@@ -1,0 +1,27 @@
+{
+  "name": "@automate-plus/runner-core",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./browser": {
+      "import": "./dist/browser.js",
+      "types": "./dist/browser.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@automate-plus/contracts": "file:../contracts",
+    "@automate-plus/ir-schema": "file:../ir-schema",
+    "@automate-plus/selector-engine": "file:../selector-engine"
+  }
+}

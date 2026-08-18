@@ -8,8 +8,16 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
-const DIST_DIR = path.resolve(ROOT_DIR, 'apps/desktop/dist');
+const DIST_DIR = path.resolve(ROOT_DIR, 'frontend/dist');
 const DEFAULT_PORT = 5173;
+const NPM_COMMAND = process.platform === 'win32' ? process.execPath : 'npm';
+const NPM_PREFIX = process.platform === 'win32'
+  ? [path.join(path.dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js')]
+  : [];
+
+function spawnNpm(args, options) {
+  return spawn(NPM_COMMAND, [...NPM_PREFIX, ...args], options);
+}
 
 const MIME_TYPES = {
   '.html': 'text/html; charset=utf-8',
@@ -70,10 +78,10 @@ async function ensureDistBuilt() {
   }
   console.log('[AutomatePlus] Building monorepo packages and desktop frontend bundle before initial launch...');
   return new Promise((resolve, reject) => {
-    const buildProc = spawn('npm', ['run', 'build'], {
+    const buildProc = spawnNpm(['run', 'build'], {
       cwd: ROOT_DIR,
       stdio: 'inherit',
-      shell: true,
+      shell: false,
     });
     buildProc.on('close', (code) => {
       if (code === 0 && fs.existsSync(indexHtml)) {
@@ -125,20 +133,29 @@ function serveStatic(req, res) {
 async function main() {
   const args = process.argv.slice(2);
   const useDev = args.includes('--dev');
+  const shouldOpen = !args.includes('--no-open');
   const portArg = args.find((a) => a.startsWith('--port='));
-  const requestedPort = portArg ? parseInt(portArg.split('=')[1], 10) : DEFAULT_PORT;
+  const requestedPortValue = portArg ? portArg.slice('--port='.length) : process.env.AUTOMATE_PLUS_PORT;
+  const requestedPort = requestedPortValue === undefined ? DEFAULT_PORT : Number(requestedPortValue);
+  if (!Number.isInteger(requestedPort) || requestedPort < 1 || requestedPort > 65535) {
+    console.error('[AutomatePlus] BLOCKED: port must be an integer between 1 and 65535.');
+    process.exitCode = 2;
+    return;
+  }
 
   if (useDev) {
     console.log('[AutomatePlus] Starting development server with Vite...');
     const port = await findAvailablePort(requestedPort);
-    const viteProc = spawn('npm', ['run', 'dev', '--workspace=@automate-plus/desktop', '--', '--port', String(port), '--host', '127.0.0.1'], {
+    const viteProc = spawnNpm(['--prefix', 'frontend', 'run', 'dev', '--', '--port', String(port), '--host', '127.0.0.1'], {
       cwd: ROOT_DIR,
       stdio: 'inherit',
-      shell: true,
+      shell: false,
     });
-    setTimeout(() => {
-      openBrowser(`http://127.0.0.1:${port}`);
-    }, 2500);
+    if (shouldOpen) {
+      setTimeout(() => {
+        openBrowser(`http://127.0.0.1:${port}`);
+      }, 2500);
+    }
     return;
   }
 
@@ -155,8 +172,12 @@ async function main() {
     console.log('  Mode:       Offline Desktop App / Migration Shell');
     console.log('  Status:     [READY] Application is live and running');
     console.log('======================================================\n');
-    console.log(`[AutomatePlus] Opening ${url} in your default browser...`);
-    openBrowser(url);
+    if (shouldOpen) {
+      console.log(`[AutomatePlus] Opening ${url} in your default browser...`);
+      openBrowser(url);
+    } else {
+      console.log('[AutomatePlus] Browser auto-open disabled by --no-open.');
+    }
     console.log('[AutomatePlus] Press Ctrl+C in this console window to stop.\n');
   });
 

@@ -186,13 +186,14 @@ Use semantic heading/list/grid/dialog/progress/status roles, focus-visible state
 
 ## 9. One-click distribution
 
-Run-AutomatePlus.bat at the repository root delegates to scripts/Run-AutomatePlus.bat. It:
+Run-AutomatePlus.bat at the repository root is the only user-facing launcher. It:
 
-1. sets the workspace and local working directory;
+1. resolves the workspace from its own path and sets the local working directory;
 2. starts an existing `AutomatePlus.exe` when present;
 3. otherwise starts the bundled `AutomatePlusBootstrap.exe` so the user can open Runtime Manager and provision packs;
 4. otherwise reports a setup blocker with exit code 2. An explicit `--build-dev` may run the local offline build preflight; it never silently changes acceptance mode;
-5. starts the browser-safe migration shell only when the user passes `--browser`, keeping Android/device capabilities Blocked and never fabricating evidence.
+5. starts the browser-safe migration shell only when the user passes `--browser`, keeping Android/device capabilities Blocked and never fabricating evidence;
+6. accepts `--doctor`, `--build-dev`, `--dev`, `--port`, `--no-open`, and `--no-pause` without forwarding arbitrary commands.
 
 Exit code 2 is a truthful Blocked prerequisite result for missing native prerequisites. Native preflight blockers are printed before the launcher exits. No network fallback is allowed.
 
@@ -204,7 +205,7 @@ Rex reviews requirements, Aria reviews contracts/persistence/IPC, Mason implemen
 
 | Requirement | Interface/ADR | Module | Evidence | Status |
 |---|---|---|---|---|
-| Native offline launch | ADR-001, launcher contract | src-tauri, Run-AutomatePlus.bat | preflight and launcher smoke | Implemented; blocked by local packs/CLI |
+| Native offline launch | ADR-001, launcher contract | backend, Run-AutomatePlus.bat | preflight and launcher smoke | Implemented; blocked by local packs/CLI |
 | Real device registry | FR-04/14, DeviceProfile | Rust adb/persistence, UI bridge | parser tests and ADB output | Implemented; physical acceptance blocked |
 | Multi-device replay | FR-15, FarmRunSpec/leases | contracts, runner core, Rust host | scheduler/lease tests | Contract/component; Appium execution blocked |
 | Primary/follower recording | FR-16, RecordingPlan/Observation | recorder contracts and native dispatch | observation tests | Contract/component; runtime blocked |
