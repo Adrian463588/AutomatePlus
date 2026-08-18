@@ -29,7 +29,7 @@ use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc, Mutex,
 };
-use tauri::State;
+use tauri::{State, Window};
 
 pub struct AppState {
     pub ports: PortLeaseManager,
@@ -37,6 +37,7 @@ pub struct AppState {
     pub database: Mutex<Option<Database>>,
     pub processes: ProcessSupervisor,
     pub runtime: RuntimeManager,
+    dialog_open: Mutex<bool>,
     instance_lock: Option<InstanceLock>,
 }
 
@@ -55,7 +56,59 @@ impl AppState {
             database: Mutex::new(database),
             processes: ProcessSupervisor::default(),
             runtime: RuntimeManager::new(workspace_root()),
+            dialog_open: Mutex::new(false),
             instance_lock,
+        }
+    }
+
+    async fn dispatch_dialog(&self, window: &Window, request: NativeRequest) -> NativeResponse {
+        if let Err(message) = request.validate() {
+            return NativeResponse::failure(request, "PROTOCOL_ERROR", message, json!({}));
+        }
+        let args = match request.decode_payload::<NativeDialogPickArgs>() {
+            Ok(args) => args,
+            Err(message) => {
+                return NativeResponse::failure(request, "PROTOCOL_ERROR", message, json!({}));
+            }
+        };
+        if let Err(message) = args.validate() {
+            return NativeResponse::failure(request, "PROTOCOL_ERROR", message, json!({}));
+        }
+
+        let mut gate = match self.dialog_open.lock() {
+            Ok(gate) => gate,
+            Err(_) => {
+                return NativeResponse::failure(
+                    request,
+                    "DIALOG_ERROR",
+                    "Native dialog state is unavailable.",
+                    json!({ "state": "blocked" }),
+                )
+            }
+        };
+        if *gate {
+            return NativeResponse::failure(
+                request,
+                "DIALOG_BUSY",
+                "Another native dialog is already open.",
+                json!({ "state": "busy" }),
+            );
+        }
+        *gate = true;
+        drop(gate);
+
+        let result = native_dialog::pick(window, args).await;
+        if let Ok(mut gate) = self.dialog_open.lock() {
+            *gate = false;
+        }
+        match result {
+            Ok(data) => NativeResponse::success(request, data),
+            Err(message) => NativeResponse::failure(
+                request,
+                "DIALOG_ERROR",
+                message,
+                json!({ "state": "blocked" }),
+            ),
         }
     }
 
@@ -370,31 +423,6 @@ impl AppState {
                     }),
                 )
             }
-            "native.dialog.pick" => {
-                let args = match request.decode_payload::<NativeDialogPickArgs>() {
-                    Ok(args) => args,
-                    Err(message) => {
-                        return NativeResponse::failure(
-                            request,
-                            "PROTOCOL_ERROR",
-                            message,
-                            json!({}),
-                        )
-                    }
-                };
-                if let Err(message) = args.validate() {
-                    return NativeResponse::failure(request, "PROTOCOL_ERROR", message, json!({}));
-                }
-                match native_dialog::pick(args) {
-                    Ok(data) => NativeResponse::success(request, data),
-                    Err(message) => NativeResponse::failure(
-                        request,
-                        "DIALOG_ERROR",
-                        message,
-                        json!({ "state": "blocked" }),
-                    ),
-                }
-            }
             _ => NativeResponse::failure(
                 request,
                 "PROTOCOL_ERROR",
@@ -660,8 +688,16 @@ fn format_blocked(health: &contracts::NativeHealth) -> String {
 }
 
 #[tauri::command]
-fn automate_plus_dispatch(state: State<'_, AppState>, request: NativeRequest) -> NativeResponse {
-    state.dispatch(request)
+async fn automate_plus_dispatch(
+    state: State<'_, AppState>,
+    window: Window,
+    request: NativeRequest,
+) -> NativeResponse {
+    if request.method == "native.dialog.pick" {
+        state.dispatch_dialog(&window, request).await
+    } else {
+        state.dispatch(request)
+    }
 }
 
 pub fn run() -> tauri::Result<()> {

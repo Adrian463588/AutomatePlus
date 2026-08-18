@@ -13,11 +13,11 @@ Runtime Manager responsive previews: [390×844](docs/assets/runtime-manager-prev
 
 Responsive previews: [390×844](docs/assets/sprint-2-preview-390x844.png) · [600×900](docs/assets/sprint-2-preview-600x900.png) · [768×1024](docs/assets/sprint-2-preview-768x1024.png) · [840×1024](docs/assets/sprint-2-preview-840x1024.png) · [1024×768](docs/assets/sprint-2-preview-1024x768.png) · [1280×800](docs/assets/sprint-2-preview-1280x800.png) · [1440×900](docs/assets/sprint-2-preview-1440x900.png)
 
-The previews are captured from the current built renderer in a fresh local browser profile. They show the truthful empty/blocked state: no project, target package, device, generated code, or synthetic run result is created until the user supplies real data and the native host provides it.
+The previews are captured from the current renderer in a fresh local browser profile with Playwright. They show the truthful empty/blocked state: no project, target package, device, generated code, or synthetic run result is created until the user supplies real data and the native host provides it. The current 390×844 and 1440×900 images include the Runtime Manager setup guidance and dark native-select treatment.
 
 ## Evidence and acceptance boundaries
 
-The current component evidence includes 159 passing TypeScript tests across 28 test files, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. Runtime Manager was rendered at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`.
+The current component evidence includes 161 passing TypeScript tests across 28 test files, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. A fresh Playwright audit rendered Runtime Manager and the main workspace at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`, every visible interactive control was at least 48 px high, and the clean reload had no application console errors.
 
 Native Tauri/Rust acceptance remains explicitly `Blocked` until the offline Cargo/Tauri dependency cache and verified runtime packs are available. Physical target preflight was run against two authorized devices with the installed NotiPlus package/activity and the real `Riwayat` semantic selector; AutomatePlus farm acceptance remains `Blocked` because the verified farm/Appium packs and native host IPC replay are not available. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
@@ -160,13 +160,15 @@ For the official one-click offline desktop path, double-click `Run-AutomatePlus.
 
 ### Runtime Manager and offline distribution
 
-The `Runtime` header button is implemented in the native Tauri/Rust host. It scans only the selected project root, the workspace root, `%LOCALAPPDATA%`, `%ProgramData%`, and bundled resources. The preflight card exposes `Check runtime`, `Open Runtime Manager`, and `Download missing`; the manager exposes `Scan local`, `Check runtime`, `Choose install path`, `Import archive`, `Verify all`, `Retry failed`, `Cancel`, and `Open folder`. Folder/archive actions use the Rust `rfd` native Windows picker, while the browser migration shell keeps them disabled with an explicit reason.
+The `Runtime` header button is implemented in the native Tauri/Rust host. It scans only the selected project root, the workspace root, `%LOCALAPPDATA%`, `%ProgramData%`, and bundled resources. The preflight card exposes `Check runtime`, `Open Runtime Manager`, and `Download missing`; the manager exposes `Scan local`, `Check runtime`, `Choose install path`, `Import archive`, `Verify all`, `Retry failed`, `Cancel`, and `Open folder`. Folder/archive actions use the asynchronous, parent-aware Rust `rfd` Windows picker with a single-dialog gate, while the browser migration shell keeps them disabled with an explicit setup guide.
 
-Runtime download is opt-in twice: the user accepts the license dialog and starts the action, and the process has `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`. There is no startup download, remote catalog fetch, hidden installer, telemetry, or cloud fallback:
+In the browser shell, `Create project` requires both a project name and a local workspace path before it can be submitted. `Browse workspace folder` remains disabled because a browser cannot truthfully open the native Windows picker; use `Open native setup guide` and run `Run-AutomatePlus.bat` for the native path.
+
+Runtime download requires an explicitly selected writable root, license acceptance, the process flag `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`, and a user click on `Download missing`. There is no startup download, remote catalog fetch, hidden installer, telemetry, or cloud fallback:
 
 ```powershell
 $env:AUTOMATEPLUS_RUNTIME_DOWNLOAD = '1'
-# Start AutomatePlus natively, open Runtime, review the catalog, then click Download all missing.
+# Start AutomatePlus natively, open Runtime, review the catalog, then click Download missing.
 .\automate-plus.bat
 ```
 

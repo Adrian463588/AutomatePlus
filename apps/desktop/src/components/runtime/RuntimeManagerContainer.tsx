@@ -44,7 +44,12 @@ export const RuntimeManagerContainer: React.FC<RuntimeManagerContainerProps> = (
   const [activeJob, setActiveJob] = useState<RuntimeJobState>();
   const [healthEvidence, setHealthEvidence] = useState<Record<string, RuntimeHealthEvidence>>({});
   const [busy, setBusy] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('Runtime Manager has not scanned the local roots yet.');
+  const [statusMessage, setStatusMessage] = useState(() => {
+    const initialHost = bridge.getRuntimeHostState();
+    return initialHost.mode === 'native'
+      ? 'Runtime Manager has not scanned the local roots yet.'
+      : initialHost.reason ?? 'Runtime Manager is blocked in browser mode.';
+  });
   const managerRef = useRef(bridge.getRuntimeManager());
 
   const installedPacks = useMemo<RuntimeInstalledPack[]>(
@@ -103,6 +108,12 @@ export const RuntimeManagerContainer: React.FC<RuntimeManagerContainerProps> = (
   }, []);
 
   useEffect(() => {
+    const currentHost = bridge.getRuntimeHostState();
+    setHost(currentHost);
+    if (currentHost.mode !== 'native') {
+      setStatusMessage(currentHost.reason ?? 'Runtime Manager is blocked in browser mode.');
+      return;
+    }
     void loadCatalog().then(() => scanLocal());
   }, [loadCatalog, scanLocal]);
 

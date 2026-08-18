@@ -63,7 +63,7 @@ Each capability manifest declares action support, strategy support, parallel-ses
 
 ### FR-01 — Project and session workspace
 
-Create and reopen local projects and Web, Android, or API sessions without network access. In the native host, workspace paths are selected with the versioned `native.dialog.pick` Windows folder dialog; cancelling preserves the previous value. Persist user-created metadata in the active local storage boundary and show readiness before recording or running. Browser migration mode may accept a manually entered path but cannot provide native picker or filesystem evidence.
+Create and reopen local projects and Web, Android, or API sessions without network access. In the native host, workspace paths are selected with the versioned `native.dialog.pick` Windows folder dialog; the parent-aware picker runs asynchronously, and cancelling preserves the previous value. Persist user-created metadata in the active local storage boundary and show readiness before recording or running. Browser migration mode may accept a manually entered path and show the native setup guide, but cannot provide native picker or filesystem evidence.
 
 ### FR-02 — Visual editor
 
@@ -107,7 +107,7 @@ Persist raw logs, normalized reports, screenshots, traces, videos, and metrics l
 
 ### FR-12 — Offline runtime manager
 
-Provide a native `Runtime Manager` that lists the metadata-only catalog, scans the selected project root plus known local/bundled roots, imports a local ZIP through `native.dialog.pick`, verifies installed packs, runs allowlisted health commands, and opens the active root. `Download all missing` is available only after explicit user license acceptance and an explicit download-mode opt-in; there is no startup download, remote catalog fetch, hidden installer, telemetry, or cloud fallback. Reuse requires exact `id + version + architecture + source SHA-256 + license acceptance + health evidence`; a different SHA is `NeedsReview` and is never overwritten automatically. Pack metadata must include an official HTTPS source, pinned version, size, SHA-256, SPDX/license reference, archive format, executable allowlist, and health command before it can be downloaded.
+Provide a native `Runtime Manager` that lists the metadata-only catalog, scans the selected project root plus known local/bundled roots, imports a local ZIP through `native.dialog.pick`, verifies installed packs, runs allowlisted health commands, and opens the active root. Browser mode must not report an unevaluated catalog as zero installed packs; it shows `Unavailable` and the native setup guide. `Download missing` is available only after explicit user license acceptance, `allowOnlineDownload: true`, and `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`; there is no startup download, remote catalog fetch, hidden installer, telemetry, or cloud fallback. Reuse requires exact `id + version + architecture + source SHA-256 + license acceptance + health evidence`; a different SHA is `NeedsReview` and is never overwritten automatically. Pack metadata must include an official HTTPS source, pinned version, size, SHA-256, SPDX/license reference, archive format, executable allowlist, and health command before it can be downloaded.
 
 ### FR-13 — Security
 
@@ -210,7 +210,7 @@ Rex reviews requirements, Aria reviews contracts/persistence/IPC, Mason implemen
 | Primary/follower recording | FR-16, RecordingPlan/Observation | recorder contracts and native dispatch | observation tests | Contract/component; runtime blocked |
 | Runtime-context generation | FR-07/17, capability manifest | generators | no-fixed-port/context tests | Implemented |
 | Runtime Manager and explicit offline distribution | FR-12, runtime IPC 1.0, catalog contract | Rust runtime manager, SQLite migration, Runtime Manager UI, launcher | runtime-manager/catalog/offline verifiers; release manifest gate | Implemented; artifact/Cargo prerequisites blocked |
-| Native workspace/runtime picker | `native.dialog.pick`, IPC 1.0 | Rust `rfd`, desktop bridge, Sidebar, Runtime Manager | picker component contract and native Windows manual evidence | Implemented in source; native evidence pending |
+| Native workspace/runtime picker | `native.dialog.pick`, IPC 1.0 | Async Rust `rfd`, desktop bridge, Sidebar, Runtime Manager | picker component contract and native Windows manual evidence | Async source implemented; native evidence pending |
 | Responsive truthful UI | NFR-05/09 | React farm workspace | build/authenticity/viewport evidence | Implemented in shell |
 
 ## 11. Acceptance boundary

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
 import { Globe, Smartphone, Server, SmartphoneNfc, CheckCircle2, XCircle, Clock, Plus, RefreshCw, X, FolderOpen, Loader2, Download, PackageCheck } from 'lucide-react';
+import { NativeSetupGuide } from '../common/NativeSetupGuide.js';
 
 type DialogKind = 'project' | 'session' | undefined;
 
@@ -16,6 +17,7 @@ export const Sidebar: React.FC = () => {
   const [projectSubmitBusy, setProjectSubmitBusy] = useState(false);
   const [projectSubmitError, setProjectSubmitError] = useState<string>();
   const dialogRef = useRef<HTMLDivElement>(null);
+  const browseButtonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!dialog) return;
@@ -51,12 +53,16 @@ export const Sidebar: React.FC = () => {
   };
 
   const browseProjectWorkspace = async () => {
-    const selectedPath = await browseWorkspaceFolder();
-    if (selectedPath) setWorkspacePath(selectedPath);
+    try {
+      const selectedPath = await browseWorkspaceFolder();
+      if (selectedPath) setWorkspacePath(selectedPath);
+    } finally {
+      window.setTimeout(() => browseButtonRef.current?.focus(), 0);
+    }
   };
 
   const submitProject = async () => {
-    if (projectSubmitBusy) return;
+    if (projectSubmitBusy || !projectName.trim() || !workspacePath.trim() || workspaceBrowse.status === 'busy') return;
     setProjectSubmitBusy(true);
     setProjectSubmitError(undefined);
     try {
@@ -72,6 +78,16 @@ export const Sidebar: React.FC = () => {
       setProjectSubmitBusy(false);
     }
   };
+  const projectFormReady = projectName.trim().length > 0 && workspacePath.trim().length > 0 && !projectSubmitBusy && workspaceBrowse.status !== 'busy';
+  const projectFormHint = projectSubmitBusy
+    ? 'Saving the project locally…'
+    : workspaceBrowse.status === 'busy'
+      ? 'Selecting a workspace folder…'
+      : !projectName.trim()
+        ? 'Enter a project name to continue.'
+        : !workspacePath.trim()
+          ? 'Choose or enter a local workspace path to continue.'
+          : undefined;
   const submitSession = async () => {
     await createSession(sessionName, sessionPlatform);
     if (sessionName.trim() && activeProject) { setSessionName(''); closeDialog(); }
@@ -85,7 +101,7 @@ export const Sidebar: React.FC = () => {
             <span id="workspace-heading">Workspace</span><span className="text-slate-500 font-mono">Local only</span>
           </div>
           <div className="flex gap-2">
-            <select aria-label="Select project" value={activeProject?.id ?? ''} onChange={(event) => void selectProject(event.target.value)} className="min-w-0 flex-1 bg-slate-950 text-slate-200 border border-slate-800 rounded-md py-2 px-2.5 text-xs font-medium focus:outline-none focus:border-indigo-500">
+            <select aria-label="Select project" value={activeProject?.id ?? ''} onChange={(event) => void selectProject(event.target.value)} className="ap-select min-w-0 flex-1 text-xs font-medium">
               <option value="">No project selected</option>
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
@@ -123,6 +139,7 @@ export const Sidebar: React.FC = () => {
                 <Download className="w-3.5 h-3.5" /> Download missing
               </button>
             </div>
+            {!runtimePreflight.canCheck && <NativeSetupGuide compact />}
           </div>
         </section>
 
@@ -143,7 +160,7 @@ export const Sidebar: React.FC = () => {
           <div className="rounded-md border border-slate-800 bg-slate-950/60 p-3 space-y-2">
             <div className="flex items-start gap-2 text-slate-500 leading-5"><span className="mt-1 h-2 w-2 rounded-full bg-slate-600 shrink-0" /> <span>{deviceDiscoveryMessage}</span></div>
             <button type="button" onClick={() => void discoverDevices()} className="flex items-center gap-1.5 px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-slate-700"><RefreshCw className="w-3.5 h-3.5" /> Check devices</button>
-            {devices.length > 0 && <select aria-label="Select Android device" value={activeDevice ?? ''} onChange={(event) => setActiveDevice(event.target.value)} className="w-full bg-slate-900 border border-slate-700 rounded px-2 py-1.5 text-slate-200">{devices.map((device) => <option key={device.id} value={device.id}>{device.model || device.id} · {device.status}</option>)}</select>}
+            {devices.length > 0 && <select aria-label="Select Android device" value={activeDevice ?? ''} onChange={(event) => setActiveDevice(event.target.value)} className="ap-select w-full">{devices.map((device) => <option key={device.id} value={device.id}>{device.model || device.id} · {device.status}</option>)}</select>}
             {devices.map((device) => <div key={device.id} className="flex items-center justify-between text-[10px] font-mono"><span className={device.status === 'device' ? 'text-emerald-300' : 'text-amber-300'}>{device.status}</span><span className="text-slate-500">{device.id}</span></div>)}
           </div>
         </section>
@@ -157,7 +174,7 @@ export const Sidebar: React.FC = () => {
       {dialog && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}>
         <div ref={dialogRef} className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="sidebar-dialog-title">
           <div className="flex items-center justify-between gap-3"><h2 id="sidebar-dialog-title" className="text-sm font-bold text-white">{dialog === 'project' ? 'Create project' : 'Create session'}</h2><button type="button" onClick={closeDialog} className="p-1.5 text-slate-400 hover:text-white rounded hover:bg-slate-800" aria-label="Close dialog"><X className="w-4 h-4" /></button></div>
-          {dialog === 'project' ? <form onSubmit={(event) => { event.preventDefault(); void submitProject(); }} aria-busy={projectSubmitBusy} className="space-y-3 mt-4"><label className="block text-slate-300">Project name<input required disabled={projectSubmitBusy} value={projectName} onChange={(event) => setProjectName(event.target.value)} className="field mt-1" /></label><label className="block text-slate-300">Workspace path<div className="flex gap-2 mt-1"><input required disabled={projectSubmitBusy} title={workspacePath || 'Enter a local workspace path.'} value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} className="field min-w-0 flex-1" /><button type="button" onClick={() => void browseProjectWorkspace()} disabled={!workspaceBrowse.canBrowse || workspaceBrowse.status === 'busy' || projectSubmitBusy} aria-busy={workspaceBrowse.status === 'busy'} title={workspaceBrowse.canBrowse ? 'Choose a local workspace folder using the native host.' : workspaceBrowse.message} className="button-muted min-h-12 shrink-0 px-3 disabled:cursor-not-allowed disabled:opacity-50">{workspaceBrowse.status === 'busy' ? <Loader2 className="w-4 h-4 animate-spin" /> : <FolderOpen className="w-4 h-4" />}<span className="sr-only">{workspaceBrowse.status === 'busy' ? 'Opening folder picker' : 'Browse workspace folder'}</span></button></div></label>{workspaceBrowse.message && <p role="status" aria-live="polite" className="text-xs text-slate-500">{workspaceBrowse.message}</p>}{projectSubmitError && <p role="alert" className="text-xs text-rose-300">{projectSubmitError}</p>}<div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} disabled={projectSubmitBusy} title={projectSubmitBusy ? 'Wait for the project save to finish.' : 'Cancel project creation'} className="button-muted disabled:cursor-not-allowed disabled:opacity-50">Cancel</button><button type="submit" disabled={projectSubmitBusy} title={projectSubmitBusy ? 'Project is being saved locally.' : 'Create project'} className="button-primary disabled:cursor-not-allowed disabled:opacity-50">{projectSubmitBusy ? 'Saving…' : 'Create project'}</button></div></form> : <form onSubmit={(event) => { event.preventDefault(); void submitSession(); }} className="space-y-3 mt-4"><label className="block text-slate-300">Session name<input required value={sessionName} onChange={(event) => setSessionName(event.target.value)} className="field mt-1" /></label><label className="block text-slate-300">Platform<select value={sessionPlatform} onChange={(event) => setSessionPlatform(event.target.value as 'web' | 'android' | 'api')} className="field mt-1"><option value="web">Web</option><option value="android">Android</option><option value="api">API</option></select></label><p className="text-xs text-slate-500">Targets, packages, URLs, secrets, and actions are entered explicitly after creation.</p><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} className="button-muted">Cancel</button><button type="submit" className="button-primary">Create session</button></div></form>}
+          {dialog === 'project' ? <form onSubmit={(event) => { event.preventDefault(); void submitProject(); }} aria-busy={projectSubmitBusy} className="mt-4 space-y-3"><label htmlFor="project-name" className="block text-slate-300">Project name<input id="project-name" required disabled={projectSubmitBusy} value={projectName} onChange={(event) => setProjectName(event.target.value)} className="field mt-1" /></label><label htmlFor="workspace-path" className="block text-slate-300">Workspace path<div className="mt-1 flex gap-2"><input id="workspace-path" required disabled={projectSubmitBusy} title={workspacePath || 'Enter a local workspace path.'} aria-describedby="workspace-picker-status" value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} className="field min-w-0 flex-1 truncate" /><button ref={browseButtonRef} type="button" onClick={() => void browseProjectWorkspace()} disabled={!workspaceBrowse.canBrowse || workspaceBrowse.status === 'busy' || projectSubmitBusy} aria-busy={workspaceBrowse.status === 'busy'} aria-describedby="workspace-picker-status" aria-label={workspaceBrowse.status === 'busy' ? 'Opening folder picker' : 'Browse workspace folder'} title={workspaceBrowse.canBrowse ? 'Choose a local workspace folder using the native host.' : workspaceBrowse.message} className="button-muted min-h-12 shrink-0 px-3 disabled:cursor-not-allowed disabled:opacity-50">{workspaceBrowse.status === 'busy' ? <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" /> : <FolderOpen className="w-4 h-4" />}</button></div></label>{workspaceBrowse.message && <p id="workspace-picker-status" role="status" aria-live="polite" className="text-xs text-slate-400">{workspaceBrowse.message}</p>}{projectFormHint && <p id="project-form-hint" role="status" className="text-xs text-amber-200">{projectFormHint}</p>}{!workspaceBrowse.canBrowse && <NativeSetupGuide compact />}{projectSubmitError && <p role="alert" className="text-xs text-rose-300">{projectSubmitError}</p>}<div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} disabled={projectSubmitBusy} title={projectSubmitBusy ? 'Wait for the project save to finish.' : 'Cancel project creation'} className="button-muted disabled:cursor-not-allowed disabled:opacity-50">Cancel</button><button type="submit" disabled={!projectFormReady} aria-describedby="project-form-hint" title={projectFormReady ? 'Create project in the selected local workspace.' : projectFormHint ?? 'Complete the project name and workspace path first.'} className="button-primary disabled:cursor-not-allowed disabled:opacity-50">{projectSubmitBusy ? 'Saving…' : 'Create project'}</button></div></form> : <form onSubmit={(event) => { event.preventDefault(); void submitSession(); }} className="mt-4 space-y-3"><label htmlFor="session-name" className="block text-slate-300">Session name<input id="session-name" required value={sessionName} onChange={(event) => setSessionName(event.target.value)} className="field mt-1" /></label><label htmlFor="session-platform" className="block text-slate-300">Platform<select id="session-platform" value={sessionPlatform} onChange={(event) => setSessionPlatform(event.target.value as 'web' | 'android' | 'api')} className="ap-select mt-1 w-full"><option value="web">Web</option><option value="android">Android</option><option value="api">API</option></select></label><p className="text-xs text-slate-500">Targets, packages, URLs, secrets, and actions are entered explicitly after creation.</p><div className="flex justify-end gap-2 pt-2"><button type="button" onClick={closeDialog} className="button-muted">Cancel</button><button type="submit" className="button-primary">Create session</button></div></form>}
         </div>
       </div>}
     </aside>

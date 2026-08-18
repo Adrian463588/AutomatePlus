@@ -27,6 +27,7 @@ import {
   type RuntimePackView,
   type RuntimeRootSnapshot,
 } from '../../services/runtimeManager.js';
+import { NativeSetupGuide } from '../common/NativeSetupGuide.js';
 
 export interface RuntimeManagerPanelProps extends RuntimeManagerCallbacks {
   host: RuntimeManagerHostState;
@@ -274,7 +275,7 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
   const chooseRootDisabled = !callbackConnected.onChooseInstallPath || !actionState('onChooseInstallPath').enabled || operationBusy;
   const importDisabled = !callbackConnected.onImportArchive || !actionState('onImportArchive').enabled || operationBusy;
   const verifyDisabled = !callbackConnected.onVerifyAll || !actionState('onVerifyAll').enabled || operationBusy || packs.length === 0;
-  const checkDisabled = !actionState('onVerifyAll').enabled || operationBusy || packs.length === 0 || !onCheckRuntime;
+  const checkDisabled = !actionState('onVerifyAll').enabled || operationBusy || !onCheckRuntime;
   const retryDisabled = !callbackConnected.onRetryFailed || !actionState('onRetryFailed').enabled || operationBusy || failedPacks.length === 0;
   const downloadDisabled = !callbackConnected.onDownloadMissing || !actionState('onDownloadMissing').enabled || operationBusy || missingPacks.length === 0;
   const cancelDisabled = !callbackConnected.onCancel || !activeJob || !ACTIVE_JOB_STATUSES.includes(activeJob.status) || !actionState('onCancel').enabled;
@@ -285,7 +286,16 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
   const importTitle = !callbackConnected.onImportArchive
     ? 'Archive import handler is not connected.'
     : disabledTitle('onImportArchive', pickerReady ? 'Choose a local runtime archive through the native picker.' : pickerBlockedReason);
-  const checkTitle = disabledTitle('onVerifyAll', onCheckRuntime ? 'Check installed runtime health through the native host.' : 'Native runtime check callback is not connected.');
+  const checkTitle = !onCheckRuntime
+    ? 'Native runtime check callback is not connected.'
+    : disabledTitle('onVerifyAll', 'Check catalog, local roots, SHA-256 records, and health through the native host.');
+  const catalogLabel = host.mode === 'browser' ? 'Unavailable' : packs.length === 0 ? 'Not evaluated' : `${packs.length} pack${packs.length === 1 ? '' : 's'}`;
+  const verifiedLabel = host.mode === 'browser' ? 'Unavailable' : packs.length === 0 ? 'Not evaluated' : `${verifiedCount} / ${packs.length}`;
+  const catalogStatusLabel = host.mode === 'browser'
+    ? 'Catalog unavailable until the native host is running.'
+    : packs.length === 0
+      ? 'Run Check runtime or Scan local to load native catalog evidence.'
+      : `${missingPacks.length} missing · ${reviewPacks.length} review · ${verifiedCount} ready`;
   const dialogEntries = licenseDialogPurpose === 'install' ? missingPacks : [];
 
   return (
@@ -300,7 +310,8 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
         </div>
         <div className={`flex min-h-12 items-center gap-2 rounded border px-3 py-2 text-[11px] ${nativeReady ? 'border-emerald-700/70 bg-emerald-950/30 text-emerald-200' : 'border-amber-700/70 bg-amber-950/30 text-amber-200'}`} role={nativeReady ? 'status' : 'alert'} aria-live="polite">
           {nativeReady ? <ShieldCheck className="h-4 w-4 shrink-0" aria-hidden="true" /> : <ShieldAlert className="h-4 w-4 shrink-0" aria-hidden="true" />}
-          <span>{nativeReady ? 'Native Tauri/Rust host ready' : blockedReason}</span>
+          <span>{nativeReady ? 'Native Tauri/Rust host connected; runtime health is checked explicitly.' : blockedReason}</span>
+          {!nativeReady && <NativeSetupGuide compact />}
         </div>
       </header>
 
@@ -312,12 +323,12 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
         </div>
         <div className="min-w-0 rounded border border-slate-800 bg-slate-950/80 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Catalog</p>
-          <p className="mt-2 text-sm font-semibold text-white">{packs.length} pack{packs.length === 1 ? '' : 's'}</p>
+          <p className="mt-2 text-sm font-semibold text-white">{catalogLabel}</p>
           <p className="mt-1 text-[10px] text-slate-500">Metadata comes from the bundled pinned catalog.</p>
         </div>
         <div className="min-w-0 rounded border border-slate-800 bg-slate-950/80 p-3">
           <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Verified local</p>
-          <p className="mt-2 text-sm font-semibold text-emerald-300">{verifiedCount} / {packs.length}</p>
+          <p className="mt-2 text-sm font-semibold text-emerald-300">{verifiedLabel}</p>
           <p className="mt-1 text-[10px] text-slate-500">SHA, license, architecture, and health must pass.</p>
         </div>
         <div className="min-w-0 rounded border border-slate-800 bg-slate-950/80 p-3">
@@ -335,7 +346,7 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
         <button type="button" onClick={() => setLicenseDialogPurpose('import')} disabled={importDisabled || !pickerReady} title={importTitle} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><Upload className="h-4 w-4" aria-hidden="true" />Import archive</button>
         <button type="button" onClick={() => void invokeAction('Runtime verification', () => onVerifyAll(packs.map((pack) => pack.entry.id)))} disabled={verifyDisabled} title={disabledTitle('onVerifyAll', packs.length === 0 ? 'A catalog scan is required first.' : 'Verify every catalog pack in the selected roots.')} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><ShieldCheck className="h-4 w-4" aria-hidden="true" />Verify all</button>
         <button type="button" onClick={() => void invokeAction('Retry failed runtime packs', () => onRetryFailed(failedPacks.map((pack) => pack.entry.id)))} disabled={retryDisabled} title={disabledTitle('onRetryFailed', failedPacks.length === 0 ? 'No failed pack is available for retry.' : 'Retry only packs with a recorded native failure.')} className="button-muted min-h-12 disabled:cursor-not-allowed disabled:opacity-50"><RefreshCw className="h-4 w-4" aria-hidden="true" />Retry failed</button>
-        <button type="button" onClick={() => setLicenseDialogPurpose('install')} disabled={downloadDisabled} title={disabledTitle('onDownloadMissing', missingPacks.length === 0 ? 'All catalog packs have a verified local match.' : 'Review licenses, then explicitly download missing packs.')} className="button-execute min-h-12 bg-indigo-600 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" aria-hidden="true" />Download all missing ({missingPacks.length})</button>
+        <button type="button" onClick={() => setLicenseDialogPurpose('install')} disabled={downloadDisabled} title={disabledTitle('onDownloadMissing', missingPacks.length === 0 ? 'No missing catalog pack is available for download.' : 'Accept licenses and run with AUTOMATEPLUS_RUNTIME_DOWNLOAD=1 before downloading missing packs.')} className="button-execute min-h-12 bg-indigo-600 hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"><Download className="h-4 w-4" aria-hidden="true" />{packs.length === 0 ? 'Download missing' : `Download missing (${missingPacks.length})`}</button>
         {activeJob && (
           <button type="button" onClick={() => void invokeAction('Runtime cancellation', () => onCancel(activeJob.jobId))} disabled={cancelDisabled} title={cancelDisabled ? 'No cancellable native runtime job is active.' : 'Cancel the active native runtime job.'} className="button-muted min-h-12 border-rose-700/70 text-rose-200 disabled:cursor-not-allowed disabled:opacity-50"><Square className="h-4 w-4 fill-current" aria-hidden="true" />Cancel</button>
         )}
@@ -363,13 +374,13 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
       <section className="min-w-0 flex-1 p-4" aria-labelledby="runtime-pack-list-heading">
         <div className="mb-3 flex min-w-0 flex-wrap items-center justify-between gap-2">
           <div className="flex min-w-0 items-center gap-2"><PackageCheck className="h-5 w-5 shrink-0 text-indigo-400" aria-hidden="true" /><h2 id="runtime-pack-list-heading" className="truncate text-sm font-semibold text-slate-200">Runtime catalog</h2></div>
-          <span className="text-[10px] text-slate-500">{missingPacks.length} missing · {reviewPacks.length} review · {verifiedCount} ready</span>
+          <span className="text-[10px] text-slate-400">{catalogStatusLabel}</span>
         </div>
         {packs.length === 0 ? (
           <div className="flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed border-slate-800 p-6 text-center" role="status">
             <AlertTriangle className="mb-2 h-8 w-8 text-amber-300" aria-hidden="true" />
-            <p className="font-semibold text-slate-300">No runtime catalog entries loaded</p>
-            <p className="mt-1 max-w-md text-[11px] leading-5 text-slate-500">Use the native Tauri/Rust host to load the bundled pinned catalog. Empty state does not imply runtimes are installed.</p>
+            <p className="font-semibold text-slate-300">{host.mode === 'browser' ? 'Native runtime catalog unavailable' : 'No runtime catalog entries loaded'}</p>
+            <p className="mt-1 max-w-md text-[11px] leading-5 text-slate-400">{host.mode === 'browser' ? 'Run AutomatePlus.exe to scan local roots, verify packs, and use the Windows folder picker. Browser mode does not inspect local files.' : 'Run Check runtime or Scan local to load the bundled pinned catalog. Empty state does not imply runtimes are installed.'}</p>
           </div>
         ) : (
           <ul className="grid min-w-0 gap-3 sm:grid-cols-2 2xl:grid-cols-3" role="list" aria-label="Runtime packs">
@@ -425,4 +436,3 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
     </main>
   );
 };
-

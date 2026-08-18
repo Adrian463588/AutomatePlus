@@ -281,6 +281,9 @@ impl RuntimeManager {
         if payload.get("licenseAccepted").and_then(Value::as_bool) != Some(true) {
             return Err("Runtime license acceptance is required before installation.".to_owned());
         }
+        if payload.get("allowOnlineDownload").and_then(Value::as_bool) != Some(true) {
+            return Err("Runtime download requires explicit online-download consent.".to_owned());
+        }
         if std::env::var("AUTOMATEPLUS_RUNTIME_DOWNLOAD")
             .ok()
             .as_deref()

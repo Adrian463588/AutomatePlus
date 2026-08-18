@@ -247,6 +247,7 @@ export class RuntimeManagerClient {
 
   async installStart(request: RuntimeInstallRequest, onJob?: RuntimeJobObserver): Promise<RuntimeInstallResponse> {
     if (!request.licenseAccepted) throw new RuntimeManagerBlockedError('Accept the pack license before starting installation.');
+    if (request.packIds.length === 0) throw new RuntimeManagerBlockedError('No missing runtime pack was selected for installation.');
     const response = await this.call('runtime.install.start', { packIds: [...request.packIds], licenseAccepted: true, allowOnlineDownload: true });
     await onJob?.(response.job);
     return response;
@@ -414,6 +415,7 @@ export function createRuntimeManagerAdapter(
     selectRoot: (rootPath) => call('runtime.root.select', { rootPath }),
     installStart: (packIds, licenseAccepted) => {
       if (!licenseAccepted) throw new RuntimeManagerBlockedError('Accept the pack license before starting installation.');
+      if (packIds.length === 0) throw new RuntimeManagerBlockedError('No missing runtime pack was selected for installation.');
       return call('runtime.install.start', { packIds: [...packIds], licenseAccepted: true, allowOnlineDownload: true });
     },
     installStatus: (jobId) => call('runtime.install.status', { jobId }),

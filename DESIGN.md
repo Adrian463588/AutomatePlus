@@ -10,7 +10,7 @@ Operating boundary: offline local control plane; explicit user-requested target 
 
 Tauri 2 + Rust is the active desktop host. The React/Vite application is the same renderer used by Tauri and remains a safe migration shell when opened in an ordinary browser. The previous .NET/WinUI implementation is retained as legacy reference source only; it is not built, launched, or required by the release path because the required .NET 8 toolchain is not available on the target workstation.
 
-The host has no implicit network dependency. A user may explicitly start an online target E2E profile for the declared acceptance websites/APIs; that traffic is target execution data, not cloud orchestration, telemetry, dependency installation, or a launcher fallback.
+The host has no implicit network dependency. A user may explicitly start an online target E2E profile for the declared acceptance websites/APIs or enable runtime onboarding with `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`; that traffic is target/artifact data, not cloud orchestration, telemetry, or a launcher fallback.
 
 Rust owns the privileged and stateful operations:
 
@@ -37,7 +37,7 @@ Browser mode cannot provide native evidence. It displays empty or Blocked states
 
 ### ADR-002 — Sidecar state crosses a versioned boundary
 
-Use IpcRequest/IpcResponse envelopes with protocolVersion "1.0", UUID correlationId, method, and typed payload. Tauri invokes the same dispatch contract through automate_plus_dispatch; a future packaged Node sidecar uses NDJSON over stdin/stdout. Unknown protocol versions or methods fail closed with a serialized error.
+Use IpcRequest/IpcResponse envelopes with protocolVersion "1.0", UUID correlationId, method, and typed payload. Tauri invokes the same dispatch contract through automate_plus_dispatch; the native dialog method is dispatched through an asynchronous parent-aware command so the WebView main thread remains responsive. A future packaged Node sidecar uses NDJSON over stdin/stdout. Unknown protocol versions or methods fail closed with a serialized error.
 
 ### ADR-003 — Device identity is not the ADB serial
 

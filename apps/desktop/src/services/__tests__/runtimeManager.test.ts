@@ -132,4 +132,12 @@ describe('[ComponentTest] RuntimeManagerClient injected invoke boundary', () => 
     expect(invokeMock).not.toHaveBeenCalled();
     expect(getRuntimeActionState({ mode: 'browser', status: 'blocked' }, 'onDownloadMissing')).toEqual({ enabled: false, reason: BROWSER_RUNTIME_BLOCKED_REASON });
   });
+
+  it('rejects an empty install selection instead of implicitly downloading the whole catalog', async () => {
+    const invokeMock = vi.fn();
+    const client = new RuntimeManagerClient(invokeMock as unknown as RuntimeManagerInvoke);
+
+    await expect(client.installStart({ packIds: [], licenseAccepted: true })).rejects.toThrow('No missing runtime pack was selected');
+    expect(invokeMock).not.toHaveBeenCalled();
+  });
 });

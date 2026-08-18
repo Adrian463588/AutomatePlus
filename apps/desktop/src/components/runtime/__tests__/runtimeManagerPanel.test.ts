@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { describe, expect, it } from 'vitest';
 import { RuntimeManagerPanel, type RuntimeManagerPanelProps } from '../RuntimeManagerPanel.js';
 import type { RuntimeCatalogEntry, RuntimePackView } from '../../../services/runtimeManager.js';
+import { NativeSetupGuide } from '../../common/NativeSetupGuide.js';
 
 const catalogEntry: RuntimeCatalogEntry = {
   id: 'node',
@@ -56,6 +57,13 @@ describe('[ComponentTest] RuntimeManagerPanel', () => {
     expect(html).not.toContain('Download all missing (1)');
   });
 
+  it('exposes a real native setup guide instead of a browser folder fallback', () => {
+    const html = renderToStaticMarkup(React.createElement(NativeSetupGuide));
+
+    expect(html).toContain('Open native setup guide');
+    expect(html).not.toContain('window.prompt');
+  });
+
   it('renders pack metadata, explicit action labels, and indeterminate progress without a fabricated percentage', () => {
     const pack: RuntimePackView = {
       entry: catalogEntry,
@@ -67,7 +75,7 @@ describe('[ComponentTest] RuntimeManagerPanel', () => {
 
     expect(html).toContain('node');
     expect(html).toContain('nodejs.org');
-    expect(html).toContain('Download all missing (0)');
+    expect(html).toContain('Download missing');
     expect(html).toContain('server did not provide a content length');
     expect(html).not.toContain('aria-valuenow');
   });
@@ -115,21 +123,21 @@ describe('[ComponentTest] RuntimeManagerPanel', () => {
     }));
 
     expect(html).toContain('Check runtime');
-    expect(html).toContain('Download all missing (1)');
+    expect(html).toContain('Download missing (1)');
     expect(buttonMarkup(html, 'Check runtime')).not.toContain('disabled=""');
-    expect(buttonMarkup(html, 'Download all missing (1)')).not.toContain('disabled=""');
+    expect(buttonMarkup(html, 'Download missing (1)')).not.toContain('disabled=""');
   });
 
-  it('blocks runtime checks and downloads when no catalog evidence is loaded', () => {
+  it('allows a native runtime check before catalog entries are loaded but keeps download disabled', () => {
     const html = renderToStaticMarkup(React.createElement(RuntimeManagerPanel, {
       ...props(),
       onCheckRuntime: () => undefined,
     }));
 
     expect(html).toContain('Check runtime');
-    expect(html).toContain('Download all missing (0)');
-    expect(buttonMarkup(html, 'Check runtime')).toContain('disabled=""');
-    expect(buttonMarkup(html, 'Download all missing (0)')).toContain('disabled=""');
+    expect(html).toContain('Download missing');
+    expect(buttonMarkup(html, 'Check runtime')).not.toContain('disabled=""');
+    expect(buttonMarkup(html, 'Download missing')).toContain('disabled=""');
   });
 
   it('renders unresolved catalog metadata as NeedsReview instead of fabricating artifact values', () => {
@@ -152,5 +160,3 @@ describe('[ComponentTest] RuntimeManagerPanel', () => {
     expect(html).not.toContain('0 B');
   });
 });
-
-

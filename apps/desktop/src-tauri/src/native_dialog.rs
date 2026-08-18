@@ -1,9 +1,10 @@
 use crate::contracts::{NativeDialogPickArgs, NativeDialogPickMode, PROTOCOL_VERSION};
-use rfd::FileDialog;
+use rfd::AsyncFileDialog;
 use serde_json::{json, Value};
 use std::path::{Path, PathBuf};
+use tauri::Window;
 
-pub fn pick(args: NativeDialogPickArgs) -> Result<Value, String> {
+pub async fn pick(window: &Window, args: NativeDialogPickArgs) -> Result<Value, String> {
     args.validate()?;
     let NativeDialogPickArgs {
         mode,
@@ -12,7 +13,7 @@ pub fn pick(args: NativeDialogPickArgs) -> Result<Value, String> {
         filters,
     } = args;
 
-    let mut dialog = FileDialog::new();
+    let mut dialog = AsyncFileDialog::new().set_parent(window);
     if let Some(title) = title {
         dialog = dialog.set_title(title.trim());
     }
@@ -32,8 +33,14 @@ pub fn pick(args: NativeDialogPickArgs) -> Result<Value, String> {
     }
 
     let selected = match &mode {
-        NativeDialogPickMode::Folder => dialog.pick_folder(),
-        NativeDialogPickMode::File => dialog.pick_file(),
+        NativeDialogPickMode::Folder => dialog
+            .pick_folder()
+            .await
+            .map(|handle| handle.path().to_path_buf()),
+        NativeDialogPickMode::File => dialog
+            .pick_file()
+            .await
+            .map(|handle| handle.path().to_path_buf()),
     };
     let canonical = selected
         .map(|path| canonical_selected_path(&path, &mode))
