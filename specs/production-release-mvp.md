@@ -28,7 +28,7 @@ cloud control plane.
 | Complete generator matrix | FR-07/17, capability manifests | `packages/generators` | `verify:generators` — 27 combinations | Verified |
 | Real web/API target checks | FR-03/05/08/11 | Explicit online E2E harness | SauceDemo, DemoQA, and Petstore probes; browser and ReqRes prerequisites blocked | Blocked |
 | Responsive accessible UI | NFR-05/09 | React renderer | UI contract, lint/build, responsive preview assets; live browser a11y retest pending | NeedsReview |
-| Safe publication | Change discipline | Reviewed allowlist and Git checks | Local/remote SHA match | Pending |
+| Safe publication | Change discipline | Reviewed allowlist and Git checks | Local/remote SHA match | Verified |
 
 ## Required behavior
 
