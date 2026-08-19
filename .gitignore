@@ -14,11 +14,15 @@ out/
 # Reference Research Material & Projects (DevSecOps - Do not push to remote)
 reference/
 **/reference/
+**/references/
+*.zip
 
 # Internal Reference Documentation (DevSecOps - Do not push to remote)
 docs/*.md
+docs/**/*.md
 docs/Sprint2/
 docs/Sprint2/**
+!docs/assets/**
 
 # Environment Variables & Secrets
 .env
