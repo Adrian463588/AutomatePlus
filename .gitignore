@@ -11,8 +11,14 @@ out/
 **/bin/
 **/obj/
 
-# Reference Research Material
+# Reference Research Material & Projects (DevSecOps - Do not push to remote)
 reference/
+**/reference/
+
+# Internal Reference Documentation (DevSecOps - Do not push to remote)
+docs/*.md
+docs/Sprint2/
+docs/Sprint2/**
 
 # Environment Variables & Secrets
 .env
