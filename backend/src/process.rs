@@ -21,8 +21,12 @@ impl ProcessSupervisor {
         let child = Command::new(path)
             .args(args)
             .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
+            // The supervisor does not consume child output. Piped stdout or
+            // stderr can fill the OS buffer when Appium is verbose and leave
+            // the worker blocked forever. Farm evidence is recorded from
+            // protocol responses and per-device artifacts instead.
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
             .spawn()
             .map_err(|error| error.to_string())?;
         let id = child.id();

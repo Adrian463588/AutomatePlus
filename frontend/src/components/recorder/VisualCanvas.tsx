@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { AlertTriangle, Circle, Globe, ShieldCheck, Smartphone, Square } from 'lucide-react';
+import { type LocatorStrategy } from '@automate-plus/ir-schema';
 import { useAppStore } from '../../store/appStore.js';
 import { ActionTimeline } from './ActionTimeline.js';
 import { DeviceFarmPanel } from './DeviceFarmPanel.js';
@@ -17,16 +18,36 @@ export const VisualCanvas: React.FC = () => {
   } = useAppStore();
   const [inputUrl, setInputUrl] = useState('');
   const [appPackage, setAppPackage] = useState('');
-  const [assertionStrategy, setAssertionStrategy] = useState<'testId' | 'role' | 'accessibilityId' | 'resourceId' | 'text'>('testId');
+  const [assertionStrategy, setAssertionStrategy] = useState<LocatorStrategy>('role');
   const [assertionLocator, setAssertionLocator] = useState('');
   const isAndroid = activeSession?.platform === 'android';
   const isApi = activeSession?.platform === 'api';
+  const assertionOptions: Array<{ value: LocatorStrategy; label: string }> = isAndroid
+    ? [
+      { value: 'accessibilityId', label: 'Accessibility ID' },
+      { value: 'resourceId', label: 'Resource ID' },
+      { value: 'text', label: 'Visible text' },
+      { value: 'xpath', label: 'XPath (last resort)' },
+    ]
+    : [
+      { value: 'role', label: 'Role (semantic)' },
+      { value: 'testId', label: 'Test ID (data-testid)' },
+      { value: 'id', label: 'HTML id' },
+      { value: 'label', label: 'Label' },
+      { value: 'text', label: 'Visible text' },
+      { value: 'css', label: 'CSS (explicit)' },
+      { value: 'xpath', label: 'XPath (last resort)' },
+    ];
 
   useEffect(() => {
     setInputUrl(activeSession?.ir.targetConfig.startUrl ?? '');
     setAppPackage(activeSession?.ir.targetConfig.appPackage ?? '');
     setAssertionLocator('');
   }, [activeSession?.id, activeSession?.ir.targetConfig.startUrl, activeSession?.ir.targetConfig.appPackage]);
+
+  useEffect(() => {
+    setAssertionStrategy(activeSession?.platform === 'android' ? 'accessibilityId' : 'role');
+  }, [activeSession?.id, activeSession?.platform]);
 
   const selectedDevice = devices.find((device) => device.id === activeDevice);
   const recordingBlockedReason = !activeSession
@@ -106,12 +127,8 @@ export const VisualCanvas: React.FC = () => {
         <div className="flex items-center gap-2">
           <label className="field-inline">
             <span className="text-[10px] text-slate-400">Locator</span>
-            <select id="assertion-locator-strategy" name="assertionStrategy" value={assertionStrategy} onChange={(event) => setAssertionStrategy(event.target.value as typeof assertionStrategy)} aria-label="Assertion locator strategy">
-              <option value="testId">testId</option>
-              <option value="role">role</option>
-              <option value="accessibilityId">accessibilityId</option>
-              <option value="resourceId">resourceId</option>
-              <option value="text">text</option>
+            <select id="assertion-locator-strategy" name="assertionStrategy" value={assertionStrategy} onChange={(event) => setAssertionStrategy(event.target.value as LocatorStrategy)} aria-label="Assertion locator strategy">
+              {assertionOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
             <input id="assertion-locator-value" name="assertionLocator" value={assertionLocator} onChange={(event) => setAssertionLocator(event.target.value)} aria-label="Assertion locator value" />
           </label>

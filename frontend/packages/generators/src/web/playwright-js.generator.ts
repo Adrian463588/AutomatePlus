@@ -9,13 +9,16 @@ export class PlaywrightJsGenerator extends BaseCodeGenerator {
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
     return [
-      `const { test, expect } = require('@playwright/test');`,
+      `import { test, expect } from '@playwright/test';`,
+      `import { mkdir } from 'node:fs/promises';`,
+      `import { basename } from 'node:path';`,
       ``,
-      `test.describe('${session.name}', () => {`,
+      `test.describe(${JSON.stringify(session.name)}, () => {`,
       `  test('should execute recorded test session', async ({ page }) => {`,
       `    test.setTimeout(60000);`,
-      session.targetConfig.startUrl
-        ? `    await page.goto('${session.targetConfig.startUrl}');`
+      `    await mkdir('screenshots', { recursive: true });`,
+      session.targetConfig.startUrl && !this.hasExplicitNavigate(session)
+        ? `    await page.goto(${JSON.stringify(session.targetConfig.startUrl)});`
         : '',
     ]
       .filter((l) => l !== '')
@@ -26,7 +29,8 @@ export class PlaywrightJsGenerator extends BaseCodeGenerator {
     const loc = this.getPrimaryLocator(action);
     const locatorCode = loc ? this.formatPlaywrightLocator(loc) : '';
     const val = this.getJsValue(action.value);
-    const expected = this.getJsValue(action.expectedValue ?? action.value);
+    const expected = this.getJsValue(this.getAssertionExpected(action));
+    if (['assertText', 'assertValue', 'assertUrl'].includes(action.action)) this.requireAssertionOperator(action, ['equals']);
 
     switch (action.action) {
       case 'navigate':
@@ -51,11 +55,11 @@ export class PlaywrightJsGenerator extends BaseCodeGenerator {
         return `    await ${locatorCode}.clear();`;
 
       case 'pressKey':
-        return `    await page.keyboard.press(${val || "'Enter'"});`;
+        return `    await page.keyboard.press(${JSON.stringify(this.getWebKeyValue(action.value))});`;
 
       case 'dragAndDrop': {
-        const targetLoc = action.dragTarget?.locators[0];
-        const targetCode = targetLoc ? this.formatPlaywrightLocator(targetLoc) : `page.locator('body')`;
+        const targetLoc = this.requireDragTarget(action);
+        const targetCode = this.formatPlaywrightLocator(targetLoc);
         return `    await ${locatorCode}.dragTo(${targetCode});`;
       }
 
@@ -69,7 +73,7 @@ export class PlaywrightJsGenerator extends BaseCodeGenerator {
         return `    await page.waitForTimeout(${action.timeoutMs ?? 1000});`;
 
       case 'takeScreenshot':
-        return `    await page.screenshot({ path: 'screenshots/' + ${val || "'screenshot.png'"} });`;
+        return `    await page.screenshot({ path: 'screenshots/' + basename(${action.value ? val : "'screenshot.png'"}) });`;
 
       case 'assertVisible':
         return `    await expect(${locatorCode}).toBeVisible();`;
@@ -101,20 +105,27 @@ export class PlaywrightJsGenerator extends BaseCodeGenerator {
   private formatPlaywrightLocator(loc: LocatorCandidate): string {
     switch (loc.strategy) {
       case 'testId':
-        return `page.getByTestId('${loc.value}')`;
+        return `page.getByTestId(${JSON.stringify(loc.value)})`;
       case 'role':
         return loc.name
-          ? `page.getByRole('${loc.role ?? 'button'}', { name: '${loc.name}' })`
-          : `page.getByRole('${loc.role ?? 'button'}')`;
+          ? `page.getByRole(${JSON.stringify(loc.role ?? 'button')}, { name: ${JSON.stringify(loc.name)} })`
+          : `page.getByRole(${JSON.stringify(loc.role ?? 'button')})`;
       case 'label':
-        return `page.getByLabel('${loc.value}')`;
+        return `page.getByLabel(${JSON.stringify(loc.value)})`;
+      case 'accessibilityId':
+        return `page.locator(${JSON.stringify(`[aria-label="${loc.value}"]`)})`;
+      case 'resourceId':
+        return `page.locator(${JSON.stringify(`[id="${loc.value}"]`)})`;
+      case 'name':
+        return `page.locator(${JSON.stringify(`[name="${loc.value}"]`)})`;
       case 'text':
-        return `page.getByText('${loc.value}')`;
+        return `page.getByText(${JSON.stringify(loc.value)})`;
       case 'xpath':
-        return `page.locator('xpath=${loc.value}')`;
+        return `page.locator(${JSON.stringify(`xpath=${loc.value}`)})`;
       case 'css':
+        return `page.locator(${JSON.stringify(loc.value)})`;
       case 'id':
-        return `page.locator('${loc.value}')`;
+        return `page.locator(${JSON.stringify(`#${loc.value}`)})`;
       default:
         return this.unsupportedLocator(loc);
     }

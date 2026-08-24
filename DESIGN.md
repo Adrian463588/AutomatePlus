@@ -184,7 +184,9 @@ The renderer uses a deliberate Windows desktop workbench direction. This is a pr
 - Use a 4px spacing base, 6px/10px radii, borders before elevation, and shadow only for dialogs or a clearly elevated transient surface.
 - Do not use gradients, glassmorphism, decorative glow, oversized rounded cards, card-within-card layouts, decorative badges, or animation on non-interactive elements.
 - Prefer content hierarchy, alignment, whitespace, and typography before borders or color. Each screen has one primary task and one clear primary action.
+- Bento surfaces are functional groupings, not a card wall: the active root/health summary has one larger anchor region, while related actions and evidence use compact adjacent regions. Empty space is intentional only when it preserves hierarchy; an editor column is never reserved for Runtime Manager or Device Farm.
 - Runtime, device, and API detail uses progressive disclosure. Advanced controls appear only when their parent task is available.
+- The desktop shell bounds the workspace between the header and terminal. Scroll ownership belongs to the active pane or sidebar content, so terminal output cannot cover a runtime, farm, recorder, or API control.
 - Motion is state-driven only: pending, selection, focus, success, error, blocked, and cancellation. Reduced-motion users receive equivalent state feedback without decorative animation.
 - Native `<select>` remains the control for option selection. Its closed state, focus state, option contrast, disabled state, forced-colors state, and keyboard behavior are tested on WebView2/Windows.
 - Every interactive control is at least 48px in its hit area, has an accessible name, and either has a real handler or a disabled explanation.

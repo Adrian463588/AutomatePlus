@@ -1,4 +1,5 @@
 import { ActionIR, LocatorCandidate } from '@automate-plus/ir-schema';
+import { rankLocators } from './scoring.js';
 
 export interface HealingResult {
   healed: boolean;
@@ -7,11 +8,19 @@ export interface HealingResult {
   remainingCandidates: LocatorCandidate[];
 }
 
+/**
+ * Orders only locators captured in ActionIR. Healing never invents a selector,
+ * coordinate, target, or device value.
+ */
+export function orderedHealingCandidates(action: ActionIR): LocatorCandidate[] {
+  return rankLocators(action.locators ?? [], action.platform);
+}
+
 export function findNextResilientLocator(
   action: ActionIR,
   failedLocatorValue: string
 ): HealingResult {
-  const locators = action.locators || [];
+  const locators = orderedHealingCandidates(action);
   if (locators.length === 0) {
     return { healed: false, remainingCandidates: [] };
   }

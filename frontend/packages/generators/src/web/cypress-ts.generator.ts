@@ -9,10 +9,10 @@ export class CypressTsGenerator extends BaseCodeGenerator {
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
     return [
-      `describe('${session.name}', () => {`,
+      `describe(${JSON.stringify(session.name)}, () => {`,
       `  it('should execute recorded cypress test session', () => {`,
-      session.targetConfig.startUrl
-        ? `    cy.visit('${session.targetConfig.startUrl}');`
+      session.targetConfig.startUrl && !this.hasExplicitNavigate(session)
+        ? `    cy.visit(${this.getCypressValue(session.targetConfig.startUrl)});`
         : '',
     ]
       .filter((l) => l !== '')
@@ -22,12 +22,13 @@ export class CypressTsGenerator extends BaseCodeGenerator {
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
     const loc = this.getPrimaryLocator(action);
     const locatorCode = loc ? this.formatCypressLocator(loc) : '';
-    const rawVal = this.getRawValue(action.value);
-    const expected = this.getRawValue(action.expectedValue ?? action.value);
+    const value = this.getCypressValue(action.value);
+    const expected = this.getCypressValue(this.getAssertionExpected(action));
+    if (['assertText', 'assertValue', 'assertUrl'].includes(action.action)) this.requireAssertionOperator(action, ['equals']);
 
     switch (action.action) {
       case 'navigate':
-        return `    cy.visit('${rawVal}');`;
+        return `    cy.visit(${value});`;
 
       case 'click':
         return `    ${locatorCode}.click();`;
@@ -42,17 +43,17 @@ export class CypressTsGenerator extends BaseCodeGenerator {
         return `    ${locatorCode}.trigger('mouseover');`;
 
       case 'fill':
-        return `    ${locatorCode}.clear().type('${rawVal}');`;
+        return `    ${locatorCode}.clear().type(${value});`;
 
       case 'clear':
         return `    ${locatorCode}.clear();`;
 
       case 'pressKey':
-        return `    ${locatorCode}.type('{${rawVal.toLowerCase() || 'enter'}}');`;
+        return `    ${(locatorCode || "cy.get('body')")}.type('{${this.getCypressKeyValue(action.value)}}');`;
 
       case 'dragAndDrop': {
-        const targetLoc = action.dragTarget?.locators[0];
-        const targetCode = targetLoc ? this.formatCypressLocator(targetLoc) : `cy.get('body')`;
+        const targetLoc = this.requireDragTarget(action);
+        const targetCode = this.formatCypressLocator(targetLoc);
         return `    ${locatorCode}.trigger('dragstart');\n    ${targetCode}.trigger('drop');`;
       }
 
@@ -66,7 +67,7 @@ export class CypressTsGenerator extends BaseCodeGenerator {
         return `    cy.wait(${action.timeoutMs ?? 1000});`;
 
       case 'takeScreenshot':
-        return `    cy.screenshot('${rawVal || 'screenshot'}');`;
+        return `    cy.screenshot(${action.value ? value : "'screenshot'"});`;
 
       case 'assertVisible':
         return `    ${locatorCode}.should('be.visible');`;
@@ -75,13 +76,13 @@ export class CypressTsGenerator extends BaseCodeGenerator {
         return `    ${locatorCode}.should('not.be.visible');`;
 
       case 'assertText':
-        return `    ${locatorCode}.should('have.text', '${expected}');`;
+        return `    ${locatorCode}.should('have.text', ${expected});`;
 
       case 'assertValue':
-        return `    ${locatorCode}.should('have.value', '${expected}');`;
+        return `    ${locatorCode}.should('have.value', ${expected});`;
 
       case 'assertUrl':
-        return `    cy.url().should('include', '${expected}');`;
+        return `    cy.url().should('eq', ${expected});`;
 
       default:
         return this.unsupportedAction(action);
@@ -98,15 +99,29 @@ export class CypressTsGenerator extends BaseCodeGenerator {
   private formatCypressLocator(loc: LocatorCandidate): string {
     switch (loc.strategy) {
       case 'testId':
-        return `cy.get('[data-testid="${loc.value}"]')`;
+        return `cy.get(${JSON.stringify(`[data-testid="${loc.value}"]`)})`;
       case 'text':
-        return `cy.contains('${loc.value}')`;
+        return `cy.contains(${JSON.stringify(loc.value)})`;
       case 'xpath':
-        return `cy.xpath('${loc.value}')`;
+        return this.unsupportedLocator(loc);
       case 'id':
-        return `cy.get('#${loc.value}')`;
+        return `cy.get(${JSON.stringify(`#${loc.value}`)})`;
       case 'css':
-        return `cy.get('${loc.value}')`;
+        return `cy.get(${JSON.stringify(loc.value)})`;
+      case 'role': {
+        const selector = `[role="${loc.role ?? 'button'}"]`;
+        return loc.name
+          ? `cy.get(${JSON.stringify(selector)}).contains(${JSON.stringify(loc.name)})`
+          : `cy.get(${JSON.stringify(selector)})`;
+      }
+      case 'label':
+        return `cy.get(${JSON.stringify(`[aria-label="${loc.value}"]`)})`;
+      case 'accessibilityId':
+        return `cy.get(${JSON.stringify(`[aria-label="${loc.value}"]`)})`;
+      case 'resourceId':
+        return `cy.get(${JSON.stringify(`[id="${loc.value}"]`)})`;
+      case 'name':
+        return `cy.get(${JSON.stringify(`[name="${loc.value}"]`)})`;
       default:
         return this.unsupportedLocator(loc);
     }

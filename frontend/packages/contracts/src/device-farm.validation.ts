@@ -2,6 +2,11 @@ import { DEVICE_FARM_CONTRACT_VERSION, FarmRunSpec } from './device-farm.interfa
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/iu;
 
+export const MAX_FARM_DEVICE_TARGETS = 64;
+export const MAX_FARM_ITERATIONS_PER_DEVICE = 50;
+export const MAX_FARM_TOTAL_ITERATIONS = 3_200;
+export const MAX_FARM_ACTIONS = 1_000;
+
 export function validateFarmRunSpec(specification: FarmRunSpec): string[] {
   const errors: string[] = [];
   if (specification.schemaVersion !== DEVICE_FARM_CONTRACT_VERSION) errors.push('schemaVersion is unsupported');
@@ -16,6 +21,9 @@ export function validateFarmRunSpec(specification: FarmRunSpec): string[] {
   if (specification.deviceIds && new Set(specification.deviceIds).size !== specification.deviceIds.length) {
     errors.push('deviceIds must be unique');
   }
+  if (specification.deviceIds && specification.deviceIds.length > MAX_FARM_DEVICE_TARGETS) {
+    errors.push(`deviceIds cannot contain more than ${MAX_FARM_DEVICE_TARGETS} devices`);
+  }
   if (!Number.isInteger(specification.maxParallelDevices) || specification.maxParallelDevices < 1) {
     errors.push('maxParallelDevices must be a positive integer');
   }
@@ -26,10 +34,16 @@ export function validateFarmRunSpec(specification: FarmRunSpec): string[] {
     if (!Number.isInteger(specification.totalIterations) || (specification.totalIterations ?? 0) < 1) {
       errors.push('totalIterations must be a positive integer for split-iterations');
     }
+    if ((specification.totalIterations ?? 0) > MAX_FARM_TOTAL_ITERATIONS) {
+      errors.push(`totalIterations cannot exceed ${MAX_FARM_TOTAL_ITERATIONS} per farm run`);
+    }
     if (specification.iterationsPerDevice !== undefined) errors.push('iterationsPerDevice is invalid for split-iterations');
   } else {
     if (!Number.isInteger(specification.iterationsPerDevice) || (specification.iterationsPerDevice ?? 0) < 1) {
       errors.push('iterationsPerDevice must be a positive integer');
+    }
+    if ((specification.iterationsPerDevice ?? 0) > MAX_FARM_ITERATIONS_PER_DEVICE) {
+      errors.push(`iterationsPerDevice cannot exceed ${MAX_FARM_ITERATIONS_PER_DEVICE} per device`);
     }
     if (specification.totalIterations !== undefined) errors.push('totalIterations is invalid for this strategy');
   }

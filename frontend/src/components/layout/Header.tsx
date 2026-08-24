@@ -13,29 +13,27 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
   const runReason = hasSession ? 'Run the current user-created session' : 'Create and select a session first';
 
   return (
-    <header className="app-header bg-slate-900 border-b border-slate-800 px-4 py-2 select-none">
+    <header className="app-header select-none">
       <div className="header-brand flex items-center gap-3 min-w-0">
-<div className="w-8 h-8 rounded-lg bg-cyan-700 flex items-center justify-center font-bold text-white shrink-0">A+</div>
+        <div className="header-mark shrink-0" aria-hidden="true">A+</div>
         <div className="min-w-0">
-          <div className="text-sm font-bold tracking-wide text-white flex items-center gap-2">
+          <div className="text-sm font-bold tracking-wide text-[var(--ap-text)] flex items-center gap-2">
             AutomatePlus
           </div>
-          <div className="text-[11px] text-slate-400 font-mono truncate">{activeProject?.name ?? 'No project selected'}</div>
+          <div className="text-[11px] text-[var(--ap-text-muted)] font-mono truncate">{activeProject?.name ?? 'No project selected'}</div>
         </div>
       </div>
 
-      <nav className="header-tabs flex items-center bg-slate-950/70 p-1 rounded-lg border border-slate-800" aria-label="Workspace view">
+      <nav className="header-tabs flex items-center" aria-label="Workspace view">
         <button
           type="button"
           onClick={() => setActiveTab('visual')}
           aria-pressed={activeTab === 'visual'}
           aria-label="Recorder"
           title="Recorder"
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-            activeTab === 'visual' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className="header-tab flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
         >
-          <Globe className="w-3.5 h-3.5 text-sky-400" />
+          <Globe className="w-3.5 h-3.5 text-cyan-300" />
           <span>Recorder</span>
         </button>
 
@@ -45,11 +43,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           aria-pressed={activeTab === 'runtime'}
           aria-label="Runtime Manager"
           title="Scan, import, verify, and explicitly download offline runtime packs"
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-            activeTab === 'runtime' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className="header-tab flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
         >
-          <HardDriveDownload className="w-3.5 h-3.5 text-cyan-400" />
+          <HardDriveDownload className="w-3.5 h-3.5 text-cyan-300" />
           <span>Runtime</span>
         </button>
 
@@ -59,11 +55,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           aria-pressed={activeTab === 'device_farm'}
           aria-label="Device Farm"
           title="Device Farm"
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-            activeTab === 'device_farm' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className="header-tab flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
         >
-          <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+          <Smartphone className="w-3.5 h-3.5 text-cyan-300" />
           <span>Device Farm</span>
         </button>
 
@@ -73,20 +67,18 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           aria-pressed={activeTab === 'api_builder'}
           aria-label="API Builder"
           title="API Builder"
-          className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-            activeTab === 'api_builder' ? 'bg-slate-800 text-white' : 'text-slate-400 hover:text-slate-200'
-          }`}
+          className="header-tab flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
         >
-          <Server className="w-3.5 h-3.5 text-amber-400" />
+          <Server className="w-3.5 h-3.5 text-cyan-300" />
           <span>API Builder</span>
         </button>
       </nav>
 
-      <div className="header-session flex items-center gap-2 font-mono text-xs text-slate-300 bg-slate-950/80 px-3 py-1.5 rounded-md border border-slate-800/80 min-w-0">
+      <div className="header-session flex items-center gap-2 font-mono text-xs min-w-0">
         <Layers className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-        <span className="font-semibold text-white truncate">{activeSession?.name ?? 'No active session'}</span>
+        <span className="font-semibold text-[var(--ap-text)] truncate">{activeSession?.name ?? 'No active session'}</span>
         {activeSession?.platform === 'android' && activeDevice && (
-          <span className="text-[10px] bg-emerald-950 text-emerald-300 border border-emerald-800/80 px-1.5 rounded flex items-center gap-1 shrink-0">
+          <span className="header-device-chip text-[10px] px-1.5 flex items-center gap-1 shrink-0">
             <Activity className="w-2.5 h-2.5" />{activeDevice}
           </span>
         )}
@@ -98,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           disabled={isRunning || !hasSession}
           onClick={() => void runTest('interactive')}
           title={runReason}
-          className="button-execute bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50"
+          className="button-execute bg-emerald-800 hover:bg-emerald-700 disabled:opacity-50"
         >
           <Play className="w-3.5 h-3.5 fill-current" />
           <span>In-app run</span>
@@ -109,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           disabled={isRunning || !hasSession}
           onClick={() => void runTest('native')}
           title={hasSession ? 'Requires a registered capability and native runtime' : runReason}
-          className="button-execute bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50"
+          className="button-execute bg-cyan-800 hover:bg-cyan-700 disabled:opacity-50"
         >
           <PlaySquare className="w-3.5 h-3.5" />
           <span>Native run</span>

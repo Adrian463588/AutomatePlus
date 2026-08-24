@@ -8,7 +8,7 @@ import {
   RunnerStatus,
 } from '@automate-plus/contracts';
 import { ActionIR, SessionIR } from '@automate-plus/ir-schema';
-import { findNextResilientLocator } from '@automate-plus/selector-engine';
+import { findNextResilientLocator, orderedHealingCandidates } from '@automate-plus/selector-engine';
 
 export class InteractivePlayer implements ITestRunner {
   private _status: RunnerStatus = 'queued';
@@ -120,34 +120,77 @@ export class InteractivePlayer implements ITestRunner {
   }
 
   private async executeStepWithHealing(step: ActionIR, onLog: RunLogCallback): Promise<boolean> {
+    const orderedStep: ActionIR = {
+      ...step,
+      ...(step.locators ? { locators: orderedHealingCandidates(step) } : {}),
+    };
+
     try {
-      await this.executeStep(step, onLog);
+      await this.executeStep(orderedStep, onLog);
       return false;
     } catch (primaryError: unknown) {
-      const failedSelector = step.locators?.[0]?.value ?? '';
-      const healing = findNextResilientLocator(step, failedSelector);
+      if (!isLocatorFailure(primaryError)) throw primaryError;
+
+      const failedSelector = orderedStep.locators?.[0]?.value ?? '';
+      const healing = findNextResilientLocator(orderedStep, failedSelector);
 
       if (!healing.chosenCandidate) {
         throw primaryError;
       }
 
-      const retryStep: ActionIR = {
-        ...step,
-        locators: [healing.chosenCandidate],
-      };
+      let lastError: unknown = primaryError;
+      const candidates = [healing.chosenCandidate, ...healing.remainingCandidates];
+      for (const [index, candidate] of candidates.entries()) {
+        const retryStep: ActionIR = { ...orderedStep, locators: [candidate] };
+        onLog({
+          timestamp: Date.now(),
+          type: 'stdout',
+          message: `[HEALING] Primary locator failed. Retrying with fallback ${index + 1}/${candidates.length}: ${candidate.strategy}="${candidate.value}"`,
+          data: {
+            healing: 'evidence-only-retry',
+            candidate: { strategy: candidate.strategy, value: candidate.value, score: candidate.score },
+          },
+        });
 
-      onLog({
-        timestamp: Date.now(),
-        type: 'stdout',
-        message: `[HEALING] Primary locator failed. Retrying with fallback: ${healing.chosenCandidate.strategy}="${healing.chosenCandidate.value}"`,
-      });
-
-      // A candidate is only a retry plan. The step is healed only when this
-      // real executor call completes successfully.
-      await this.executeStep(retryStep, onLog);
-      return true;
+        try {
+          await this.executeStep(retryStep, onLog);
+          onLog({
+            timestamp: Date.now(),
+            type: 'state',
+            message: `[HEALING PASS] Fallback locator succeeded: ${candidate.strategy}="${candidate.value}"`,
+            data: {
+              healing: 'passed-after-real-retry',
+              candidate: { strategy: candidate.strategy, value: candidate.value, score: candidate.score },
+            },
+          });
+          return true;
+        } catch (error: unknown) {
+          lastError = error;
+          onLog({
+            timestamp: Date.now(),
+            type: 'stdout',
+            message: `[HEALING RETRY FAILED] ${candidate.strategy}="${candidate.value}"`,
+            data: { healing: 'retry-failed', candidate: { strategy: candidate.strategy, value: candidate.value } },
+          });
+        }
+      }
+      throw lastError;
     }
   }
+}
+
+function isLocatorFailure(error: unknown): boolean {
+  if (!(error instanceof AutomationError)) return true;
+  return ![
+    'CAPABILITY_ERROR',
+    'RUNTIME_MISSING',
+    'DEVICE_UNAVAILABLE',
+    'PROJECT_PREREQUISITE_MISSING',
+    'CANCELLED',
+    'PATH_DENIED',
+    'PAYLOAD_TOO_LARGE',
+    'PROTOCOL_ERROR',
+  ].includes(error.code);
 }
 
 export interface InteractiveStepExecutor {

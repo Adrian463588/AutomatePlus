@@ -1,7 +1,7 @@
 import { createServer as createHttpServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
-import { ApiFunctionalRunner } from '../src/api-runner.js';
+import { ApiFunctionalRunner, MAX_API_RESPONSE_BYTES } from '../src/api-runner.js';
 import { SessionIR } from '@automate-plus/ir-schema';
 
 describe('API functional runner', () => {
@@ -211,5 +211,84 @@ describe('API functional runner', () => {
     } finally {
       await new Promise<void>((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
     }
+  });
+
+  it('fails closed when a target response exceeds the in-memory safety limit', async () => {
+    const session: SessionIR = {
+      id: 'api-session-large-response',
+      projectId: 'api-project-1',
+      name: 'Large response guard',
+      platform: 'api',
+      targetConfig: {},
+      environmentVariables: {},
+      steps: [
+        {
+          id: 'api-large-response-step',
+          stepNumber: 1,
+          platform: 'api',
+          action: 'httpRequest',
+          apiPayload: {
+            method: 'GET',
+            url: 'https://fixture.local/large',
+            headers: {},
+            queryParams: {},
+            bodyType: 'none',
+            extractedVariables: [],
+          },
+          timeoutMs: 1_000,
+          timestamp: 1,
+        },
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    const summary = await new ApiFunctionalRunner({
+      fetchImplementation: async () => new Response('x'.repeat(MAX_API_RESPONSE_BYTES + 1), { status: 200 }),
+    }).run(session, { executionMode: 'native' }, () => undefined);
+
+    expect(summary.status).toBe('failed');
+    expect(summary.error).toContain('safety limit');
+  });
+
+  it('rejects an oversized declared response before reading its body', async () => {
+    const session: SessionIR = {
+      id: 'api-session-declared-large-response',
+      projectId: 'api-project-1',
+      name: 'Declared response limit guard',
+      platform: 'api',
+      targetConfig: {},
+      environmentVariables: {},
+      steps: [
+        {
+          id: 'api-declared-large-response-step',
+          stepNumber: 1,
+          platform: 'api',
+          action: 'httpRequest',
+          apiPayload: {
+            method: 'GET',
+            url: 'https://fixture.local/declared-large',
+            headers: {},
+            queryParams: {},
+            bodyType: 'none',
+            extractedVariables: [],
+          },
+          timeoutMs: 1_000,
+          timestamp: 1,
+        },
+      ],
+      createdAt: 1,
+      updatedAt: 1,
+    };
+
+    const summary = await new ApiFunctionalRunner({
+      fetchImplementation: async () => new Response('{}', {
+        status: 200,
+        headers: { 'content-length': String(MAX_API_RESPONSE_BYTES + 1) },
+      }),
+    }).run(session, { executionMode: 'native' }, () => undefined);
+
+    expect(summary.status).toBe('failed');
+    expect(summary.error).toContain('safety limit');
   });
 });

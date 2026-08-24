@@ -113,8 +113,8 @@ export const DeviceFarmView: React.FC = () => {
         : 'Save device group.';
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-950/60 text-xs text-slate-200" aria-labelledby="device-farm-heading">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-4 py-3">
+    <section className="device-farm-workspace flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-950/60 text-xs text-slate-200" aria-labelledby="device-farm-heading">
+      <header className="ap-pane-header flex flex-wrap items-center justify-between gap-3 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <Smartphone className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden="true" />
           <div className="min-w-0">
@@ -135,8 +135,8 @@ export const DeviceFarmView: React.FC = () => {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto xl:flex-row">
-        <section className="flex min-h-0 min-w-0 flex-1 flex-col border-b border-slate-800 xl:border-b-0 xl:border-r" aria-labelledby="device-pool-heading">
+      <div className="device-farm-body flex min-h-0 flex-1 flex-col overflow-auto xl:flex-row">
+        <section className="device-farm-pool flex min-h-0 min-w-0 flex-1 flex-col border-b border-slate-800 xl:border-b-0 xl:border-r" aria-labelledby="device-pool-heading">
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 bg-slate-900/80 px-4 py-3">
             <h2 id="device-pool-heading" className="flex items-center gap-2 font-semibold text-slate-300"><Layers className="h-4 w-4 text-cyan-400" aria-hidden="true" />Device groups ({deviceGroups.length})</h2>
             {showGroupInput ? (
@@ -166,7 +166,7 @@ export const DeviceFarmView: React.FC = () => {
 
           <div className="grid min-h-0 flex-1 content-start gap-3 overflow-auto p-4 sm:grid-cols-2" role="list" aria-label="Discovered Android devices">
             {deviceProfiles.length === 0 ? (
-              <div className="col-span-full flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed border-slate-800 p-6 text-center text-slate-500" role="listitem">
+              <div className="col-span-full flex min-h-48 flex-col items-center justify-center border border-dashed border-slate-800 p-6 text-center text-slate-500" role="listitem">
                 <div role="status" aria-live="polite">
                   <AlertTriangle className="mb-2 h-8 w-8 text-amber-400" aria-hidden="true" />
                   <p className="font-semibold text-slate-300">No Android devices reported</p>
@@ -178,7 +178,7 @@ export const DeviceFarmView: React.FC = () => {
               const available = device.status === 'device';
               const isPrimary = primaryDeviceId === device.deviceId;
               return (
-                <article key={device.deviceId} role="listitem" className={`rounded-lg border p-4 ${selected ? 'border-cyan-500/70 bg-slate-900' : 'border-slate-800 bg-slate-900/60'} ${!available ? 'opacity-70' : ''}`}>
+                <article key={device.deviceId} role="listitem" className={`device-farm-card border p-4 ${selected ? 'border-cyan-500/70' : 'border-slate-800'} ${!available ? 'opacity-70' : ''}`}>
                   <div className="flex items-start gap-3">
                     <label className="flex min-h-12 min-w-12 shrink-0 items-start justify-center pt-0.5">
                       <input type="checkbox" checked={selected} disabled={!available || !nativeHostAvailable || isBusy} onChange={() => toggleDeviceSelection(device.deviceId)} className="mt-1 h-5 w-5 accent-cyan-500" aria-label={`Select ${device.model || device.adbSerial}`} title={!available ? `Device is ${device.status}; only authorized devices can be selected.` : !nativeHostAvailable ? hostMessage : isBusy ? 'Wait for the current recording or replay to finish.' : `Select ${device.model || device.adbSerial}`} />
@@ -200,7 +200,7 @@ export const DeviceFarmView: React.FC = () => {
           </div>
         </section>
 
-        <aside className="flex min-h-56 min-w-0 flex-1 flex-col bg-slate-950 p-4" aria-labelledby="mirror-heading">
+        <aside className="device-farm-mirror flex min-h-56 min-w-0 flex-1 flex-col bg-slate-950 p-4" aria-labelledby="mirror-heading">
           <div className="flex items-center gap-2 border-b border-slate-800 pb-3"><EyeOff className="h-4 w-4 text-slate-500" aria-hidden="true" /><h2 id="mirror-heading" className="font-semibold text-slate-300">Device mirror</h2></div>
           <div className="flex flex-1 flex-col items-center justify-center py-8 text-center text-slate-500" role="status" aria-live="polite">
             <p className="font-semibold text-slate-300">Live Android frames require the Tauri/Rust host</p>

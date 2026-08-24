@@ -46,9 +46,10 @@ export class PlaywrightJavaGenerator extends BaseCodeGenerator {
       `    }`,
       ``,
       `    @Test`,
-      `    void testSession() {`,
-      session.targetConfig.startUrl
-        ? `        page.navigate("${session.targetConfig.startUrl}");`
+      `    void testSession() throws java.io.IOException {`,
+      `        java.nio.file.Files.createDirectories(java.nio.file.Path.of("screenshots"));`,
+      session.targetConfig.startUrl && !this.hasExplicitNavigate(session)
+        ? `        page.navigate(${this.getJavaValue(session.targetConfig.startUrl)});`
         : '',
     ]
       .filter((l) => l !== '')
@@ -59,7 +60,8 @@ export class PlaywrightJavaGenerator extends BaseCodeGenerator {
     const loc = this.getPrimaryLocator(action);
     const locatorCode = loc ? this.formatJavaLocator(loc) : '';
     const val = this.getJavaValue(action.value);
-    const expected = this.getJavaValue(action.expectedValue ?? action.value);
+    const expected = this.getJavaValue(this.getAssertionExpected(action));
+    if (['assertText', 'assertValue', 'assertUrl'].includes(action.action)) this.requireAssertionOperator(action, ['equals']);
 
     switch (action.action) {
       case 'navigate':
@@ -84,11 +86,11 @@ export class PlaywrightJavaGenerator extends BaseCodeGenerator {
         return `        ${locatorCode}.clear();`;
 
       case 'pressKey':
-        return `        page.keyboard().press(${val});`;
+        return `        page.keyboard().press(${this.getJavaValue(this.getWebKeyValue(action.value))});`;
 
       case 'dragAndDrop': {
-        const targetLoc = action.dragTarget?.locators[0];
-        const targetCode = targetLoc ? this.formatJavaLocator(targetLoc) : `page.locator("body")`;
+        const targetLoc = this.requireDragTarget(action);
+        const targetCode = this.formatJavaLocator(targetLoc);
         return `        ${locatorCode}.dragTo(${targetCode});`;
       }
 
@@ -102,7 +104,7 @@ export class PlaywrightJavaGenerator extends BaseCodeGenerator {
         return `        page.waitForTimeout(${action.timeoutMs ?? 1000});`;
 
       case 'takeScreenshot':
-        return `        page.screenshot(new Page.ScreenshotOptions().setPath(java.nio.file.Paths.get("screenshots/" + ${val})));`;
+        return `        page.screenshot(new Page.ScreenshotOptions().setPath(java.nio.file.Path.of("screenshots", java.nio.file.Path.of(${action.value ? val : '"screenshot.png"'}).getFileName())));`;
 
       case 'assertVisible':
         return `        assertThat(${locatorCode}).isVisible();`;
@@ -134,27 +136,85 @@ export class PlaywrightJavaGenerator extends BaseCodeGenerator {
   private formatJavaLocator(loc: LocatorCandidate): string {
     switch (loc.strategy) {
       case 'testId':
-        return `page.getByTestId("${loc.value}")`;
+        return `page.getByTestId(${this.getJavaValue(loc.value)})`;
       case 'role':
-        return `page.getByRole(AriaRole.BUTTON)`;
+        return loc.name
+          ? `page.getByRole(${this.formatAriaRole(loc.role)}, new Page.GetByRoleOptions().setName(${this.getJavaValue(loc.name)}))`
+          : `page.getByRole(${this.formatAriaRole(loc.role)})`;
       case 'label':
-        return `page.getByLabel("${loc.value}")`;
+        return `page.getByLabel(${this.getJavaValue(loc.value)})`;
+      case 'accessibilityId':
+        return `page.locator(${this.getJavaValue(`[aria-label="${loc.value}"]`)})`;
+      case 'resourceId':
+        return `page.locator(${this.getJavaValue(`[id="${loc.value}"]`)})`;
+      case 'name':
+        return `page.locator(${this.getJavaValue(`[name="${loc.value}"]`)})`;
       case 'text':
-        return `page.getByText("${loc.value}")`;
+        return `page.getByText(${this.getJavaValue(loc.value)})`;
       case 'xpath':
-        return `page.locator("xpath=${loc.value}")`;
+        return `page.locator(${this.getJavaValue(`xpath=${loc.value}`)})`;
       case 'css':
+        return `page.locator(${this.getJavaValue(loc.value)})`;
       case 'id':
-        return `page.locator("${loc.value}")`;
+        return `page.locator(${this.getJavaValue(`#${loc.value}`)})`;
       default:
         return this.unsupportedLocator(loc);
     }
   }
 
+  private formatAriaRole(role?: string): string {
+    const normalized = (role ?? 'button').replace(/[^a-zA-Z0-9]/gu, '').toUpperCase();
+    const aliases: Record<string, string> = {
+      TEXTBOX: 'TEXTBOX',
+      COMBOBOX: 'COMBOBOX',
+      LISTBOX: 'LISTBOX',
+      MENUITEM: 'MENUITEM',
+      MENUITEMCHECKBOX: 'MENUITEMCHECKBOX',
+      MENUITEMRADIO: 'MENUITEMRADIO',
+      OPTION: 'OPTION',
+      PROGRESSBAR: 'PROGRESSBAR',
+      SCROLLBAR: 'SCROLLBAR',
+      SEARCHBOX: 'SEARCHBOX',
+      SPINBUTTON: 'SPINBUTTON',
+      SWITCH: 'SWITCH',
+      TAB: 'TAB',
+      TABPANEL: 'TABPANEL',
+      TREEITEM: 'TREEITEM',
+      BUTTON: 'BUTTON',
+      CHECKBOX: 'CHECKBOX',
+      DIALOG: 'DIALOG',
+      GRID: 'GRID',
+      GRIDCELL: 'GRIDCELL',
+      HEADING: 'HEADING',
+      LINK: 'LINK',
+      LIST: 'LIST',
+      LOG: 'LOG',
+      MARQUEE: 'MARQUEE',
+      MATH: 'MATH',
+      NOTE: 'NOTE',
+      RADIO: 'RADIO',
+      RADIOGROUP: 'RADIOGROUP',
+      ROW: 'ROW',
+      ROWGROUP: 'ROWGROUP',
+      SEPARATOR: 'SEPARATOR',
+      SLIDER: 'SLIDER',
+      STATUS: 'STATUS',
+      TABLE: 'TABLE',
+      TREE: 'TREE',
+      TOOLTIP: 'TOOLTIP',
+    };
+    const value = aliases[normalized];
+    if (!value) {
+      throw new Error(`Unsupported Playwright Java ARIA role '${role ?? ''}'.`);
+    }
+    return `AriaRole.${value}`;
+  }
+
   private toPascalCase(str: string): string {
-    return str
+    const pascal = str
       .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase())
       .replace(/^[a-z]/, (c) => c.toUpperCase())
       .replace(/[^a-zA-Z0-9]/g, '');
+    return /^[A-Za-z]/u.test(pascal) ? pascal : `Generated${pascal || 'Session'}`;
   }
 }

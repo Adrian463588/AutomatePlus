@@ -1,15 +1,19 @@
 # AutomatePlus (Sprint 2)
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-133%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-150%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
 
-The renderer follows the **Precision Workbench** contract: neutral dark surfaces, cyan as the primary action accent, semantic status colors, native controls, restrained state-driven motion, and no decorative gradients or glass effects. The runtime and device screens use the full available work area; generated-code space is reserved for Recorder and API Builder only.
+**Dibuat oleh Adrian Syah Abidin.**
+
+The renderer follows the **Precision Workbench** contract: neutral dark surfaces, cyan as the primary action accent, semantic status colors, native controls, restrained state-driven motion, and no decorative gradients or glass effects. Functional bento grouping is used only where it improves task hierarchy; the runtime and device screens use the full available work area, while generated-code space is reserved for Recorder and API Builder only.
 
 ![AutomatePlus blocked-state preview](docs/assets/runtime-manager-preview-1440x900.png)
+
+Fresh AntiSlop workbench previews: [Runtime Manager](docs/assets/precision-workbench-runtime-1440x900.png) · [Device Farm](docs/assets/precision-workbench-device-farm-1440x900.png)
 
 Runtime Manager responsive previews: [390×844](docs/assets/runtime-manager-preview-390x844.png) · [600×900](docs/assets/runtime-manager-preview-600x900.png) · [768×1024](docs/assets/runtime-manager-preview-768x1024.png) · [840×1024](docs/assets/runtime-manager-preview-840x1024.png) · [1024×768](docs/assets/runtime-manager-preview-1024x768.png) · [1280×800](docs/assets/runtime-manager-preview-1280x800.png) · [1440×900](docs/assets/runtime-manager-preview-1440x900.png)
 
@@ -19,11 +23,24 @@ The previews are captured from the current renderer in a fresh local browser pro
 
 ## Evidence and acceptance boundaries
 
-The current component evidence includes 133 passing TypeScript tests across 24 test files, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. A fresh Playwright audit rendered Runtime Manager and the main workspace at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`, every visible interactive control was at least 48 px high, and the clean reload had no application console errors.
+The current component evidence includes 150 passing unit tests, the generator package tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. A fresh Playwright audit rendered Runtime Manager and the main workspace at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`, every visible interactive control was at least 48 px high, and the clean reload had no application console errors.
 
-The API Builder was also exercised manually against the real ReqRes `GET /api/users?page=1` and Petstore `GET /v2/store/inventory` endpoints using an explicit user click. Both returned measured HTTP 200 responses; status and JSONPath assertions plus extraction were persisted into `SessionIR`, and the browser functional runner completed with `PASSED`. A real Petstore 404 was rendered as an HTTP error and returned the action to the ready state. This is explicit target-online browser evidence, not native offline acceptance.
+The Web generator gate is explicit: `npm run verify:web-generators` materializes all 13 Web framework/language combinations against real SauceDemo and DemoQA URLs, checks JavaScript syntax, TypeScript transpilation, Python compilation, runtime metadata, every action declared by each Web capability manifest, and assertion metadata fallback. The latest local report is `.automateplus/evidence/web-generators-1787593852298.json` (ignored local evidence). Its 26 target projects and 13 action/assertion contracts are `GeneratedAndParsed`; runner execution remains `Blocked`/`NeedsReview` until the verified local framework packages, browsers/drivers, Python wheels, Maven cache, and Robot executable are installed through Runtime Manager. This distinction is intentional: a generated source check is not a real-browser pass.
 
-Native Tauri/Rust acceptance remains explicitly `Blocked` until the offline Cargo/Tauri dependency cache and verified runtime packs are available. Physical target preflight was run against two authorized devices with the installed NotiPlus package/activity and the real `Riwayat` semantic selector; AutomatePlus farm acceptance remains `Blocked` because the verified farm/Appium packs and native host IPC replay are not available. An explicit Appium 2.10.3/UiAutomator2 3.5.5 probe reached a real device but was blocked by Android `INSTALL_FAILED_USER_RESTRICTED` while provisioning the driver helper APK; this is physical-device setup evidence, not a farm pass. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
+The API generator gate is `npm run verify:api-generators`. It materializes the HTTP TypeScript, HTTP JavaScript, HTTP Python, HTTP Java, and k6 JavaScript projects against the declared real ReqRes and Petstore endpoints, validates generated syntax/metadata, and records measured direct target checks only when `AUTOMATEPLUS_ONLINE_E2E=1` is explicitly set. ReqRes remains `Blocked` without `AUTOMATEPLUS_REQRES_API_KEY`; generated runner execution remains `Blocked` until the pinned Axios, Python, Maven, and k6 packs are installed and health-verified locally. HTTP JavaScript/TypeScript outputs are standalone ESM runners (`npm run build && node dist/...`) and do not depend on undeclared `describe`/`expect` globals.
+
+The Android generator gate is `npm run verify:android-generators`. It discovers an authorized ADB device at runtime, verifies the installed `com.notifplus/.MainActivity`, captures the live hierarchy hash, and ranks only observed semantic selectors. The live NotiPlus search field was empty during the audit, so `fill` is blocked unless an explicit test value is supplied; this prevents empty or fabricated generated actions:
+
+```powershell
+$env:AUTOMATEPLUS_ANDROID_GENERATOR_FILL_VALUE = 'NotiPlus'
+npm run verify:android-generators
+```
+
+With that explicit test input, Appium Java/Kotlin/TypeScript/JavaScript, Espresso Java/Kotlin, Robolectric Java/Kotlin, and Maestro YAML are `GeneratedAndParsed` across all 9 Android combinations and every action declared by each manifest. Every generated project includes `automateplus.manifest.json` and an exact-version `automateplus.runtime.json` lock. Appium runners require the leased device/Appium/port environment at execution time; Espresso and Robolectric retain the resolved target activity and require the real target Android Gradle project; Maestro retains its real `appId` and offline runtime-pack requirements. Physical replay remains a separate `Blocked` gate until a verified farm runtime pack and native IPC replay are available.
+
+The API Builder was exercised manually against the real Petstore `GET /v2/store/inventory` endpoint using an explicit user click; it returned measured HTTP 200, persisted status/header assertions into `SessionIR`, and the generated preview contained exactly one request after a repeated send. ReqRes is currently `Blocked` because the service requires `AUTOMATEPLUS_REQRES_API_KEY`; no credential is fabricated. A real Petstore 404 was rendered as an HTTP error and returned the action to the ready state. This is explicit target-online browser evidence, not native offline acceptance.
+
+Native Tauri/Rust acceptance remains explicitly `Blocked` until the offline Cargo/Tauri dependency cache and verified runtime packs are available. The latest target preflight found one authorized device (`RRCN3008VYE`) with the installed NotiPlus package/activity and a semantic selector observed from its live hierarchy; the second expected device was disconnected during the audit, so two-device farm acceptance is blocked. An explicit Appium 2.10.3/UiAutomator2 3.5.5 single-device probe reached the local server but was blocked by Android `SecurityException` for inaccessible secondary user `150`; no policy bypass was attempted. This is physical-device setup evidence, not a farm pass. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
 ### Sprint 2 Android device farm
 
@@ -223,6 +240,7 @@ npm run typecheck
 npm run verify:docs
 npm run verify:sidecar
 npm run verify:generators
+npm run verify:web-generators # 13 Web combinations x SauceDemo/DemoQA; real runner status is explicit
 npm run verify:ui-contract
 npm run verify:anti-slop
 npm run verify:k6:fixture # component-only loopback fixture
@@ -245,9 +263,18 @@ npm run verify:k6
 
 $env:AUTOMATEPLUS_ANDROID_E2E = '1'
 npm run e2e:android
+
+# Optional explicit Appium diagnostic; start a local Appium server first.
+$env:AUTOMATEPLUS_ANDROID_APPIUM_E2E = '1'
+# Default farm mode requires two authorized devices.
+npm run e2e:android:appium
+
+# Optional one-device diagnostic when only one authorized device is available.
+$env:AUTOMATEPLUS_ANDROID_APPIUM_MODE = 'single'
+npm run e2e:android:appium
 ```
 
-`e2e:online` records response status, shape, timing, and hashes without persisting response bodies. ReqRes is `Blocked` until its current `x-api-key` credential is supplied. `e2e:android` discovers serials at runtime, validates `com.notifplus/.MainActivity`, captures the real hierarchy on every authorized device, resolves the observed `Riwayat` text/content-description bounds, and taps only that live selector. Raw ADB checks do not count as native farm acceptance. Evidence is written to the ignored `.automateplus/evidence/` directory.
+`e2e:online` records response status, shape, timing, and hashes without persisting response bodies. ReqRes is `Blocked` until its current `x-api-key` credential is supplied. `e2e:android` discovers serials at runtime, validates `com.notifplus/.MainActivity`, captures the real hierarchy on every authorized device, resolves a semantic selector and clickable bounds from that live hierarchy, and taps only that live selector. Raw ADB checks do not count as native farm acceptance. `e2e:android:appium` is a separate opt-in diagnostic for a user-started loopback Appium server; it uses unique per-device ports and `noReset/fullReset=false`, but it never installs runtime packs or changes device policy. A device that rejects the UiAutomator2 helper APK or exposes an inaccessible Android secondary user remains `Blocked`. Evidence is written to the ignored `.automateplus/evidence/` directory.
 
 ---
 
@@ -295,6 +322,6 @@ flowchart LR
 
 ## ✍️ Author & Signature
 
-**Created by Adrian Syah Abidin**
+**Dibuat oleh Adrian Syah Abidin**
 
 *AutomatePlus — Next-Generation Low-Code Multiplatform Test Automation & Polyglot Generator Platform.*

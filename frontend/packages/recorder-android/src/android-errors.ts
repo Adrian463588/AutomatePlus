@@ -1,6 +1,7 @@
 export type AndroidBridgeErrorCode =
   | 'ADB_UNAVAILABLE'
   | 'ADB_COMMAND_FAILED'
+  | 'ADB_OUTPUT_LIMIT'
   | 'ADB_TIMEOUT'
   | 'CANCELLED'
   | 'DEVICE_REQUIRED'

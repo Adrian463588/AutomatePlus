@@ -79,6 +79,15 @@ One generated project is produced per framework/language. The host injects a `De
 
 Capability manifests declare supported strategies, parallel-session model, required packs, physical-device requirements, and project prerequisites. Unsupported combinations are rejected with `CapabilityError` or `Blocked`.
 
+Android `ActionIR` also permits semantic `scroll` steps. The Maestro generator maps
+those steps to its native scroll command; other Android generators advertise only
+the actions they can execute. A scroll step carries an explicit `scrollOffset` and
+is never synthesized from a coordinate or default device metric. The verified Appium
+worker executes explicit semantic/recorded-coordinate taps and long presses, resolves
+drag targets independently from the live hierarchy, maps scroll offsets to a real
+Appium `mobile: scrollGesture`, and persists screenshot bytes as hashed evidence.
+Pinch remains `Blocked` until a verified multi-pointer action contract is available.
+
 ## Acceptance scenarios
 
 1. Two real authorized devices run `all-devices` with two iterations each; every device has separate leases, ports, iteration IDs, logs, screenshots, and artifacts.

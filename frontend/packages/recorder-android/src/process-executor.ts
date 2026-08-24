@@ -5,6 +5,7 @@ export interface ProcessExecutionOptions {
   env?: NodeJS.ProcessEnv;
   signal?: AbortSignal;
   timeoutMs?: number;
+  maxOutputBytes?: number;
 }
 
 export interface ProcessExecutionResult {
@@ -14,7 +15,29 @@ export interface ProcessExecutionResult {
   stderr: string;
 }
 
-export type ProcessExecutionFailureCode = 'PROCESS_NOT_FOUND' | 'PROCESS_START_FAILED' | 'PROCESS_TIMEOUT' | 'CANCELLED';
+export type ProcessExecutionFailureCode =
+  | 'PROCESS_NOT_FOUND'
+  | 'PROCESS_START_FAILED'
+  | 'PROCESS_TIMEOUT'
+  | 'PROCESS_OUTPUT_LIMIT'
+  | 'CANCELLED';
+
+export const DEFAULT_MAX_PROCESS_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_CONFIGURED_PROCESS_OUTPUT_BYTES = 64 * 1024 * 1024;
+
+export function appendBoundedText(
+  current: string,
+  chunk: string,
+  maxBytes: number,
+): { value: string; truncated: boolean } {
+  const currentBytes = Buffer.byteLength(current, 'utf8');
+  const chunkBytes = Buffer.byteLength(chunk, 'utf8');
+  const availableBytes = Math.max(0, maxBytes - currentBytes);
+  if (chunkBytes <= availableBytes) return { value: current + chunk, truncated: false };
+  if (availableBytes === 0) return { value: current, truncated: true };
+  const boundedChunk = Buffer.from(chunk, 'utf8').subarray(0, availableBytes).toString('utf8');
+  return { value: current + boundedChunk, truncated: true };
+}
 
 export class ProcessExecutionError extends Error {
   public override readonly name = 'ProcessExecutionError';
@@ -43,6 +66,14 @@ export class SpawnProcessExecutor implements ProcessExecutor {
     options: ProcessExecutionOptions = {},
   ): Promise<ProcessExecutionResult> {
     return new Promise<ProcessExecutionResult>((resolve, reject) => {
+      const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_PROCESS_OUTPUT_BYTES;
+      if (!Number.isInteger(maxOutputBytes) || maxOutputBytes <= 0 || maxOutputBytes > MAX_CONFIGURED_PROCESS_OUTPUT_BYTES) {
+        reject(new ProcessExecutionError(
+          `Process output limit must be an integer between 1 and ${MAX_CONFIGURED_PROCESS_OUTPUT_BYTES} bytes.`,
+          'PROCESS_OUTPUT_LIMIT',
+        ));
+        return;
+      }
       const child = spawn(executable, [...args], {
         cwd: options.cwd,
         env: options.env ? { ...process.env, ...options.env } : process.env,
@@ -57,6 +88,7 @@ export class SpawnProcessExecutor implements ProcessExecutor {
       let timedOut = false;
       let aborted = false;
       let timeoutHandle: NodeJS.Timeout | undefined;
+      let outputLimitExceeded = false;
 
       const settle = (callback: () => void): void => {
         if (settled) return;
@@ -74,10 +106,14 @@ export class SpawnProcessExecutor implements ProcessExecutor {
       child.stdout.setEncoding('utf8');
       child.stderr.setEncoding('utf8');
       child.stdout.on('data', (chunk: string) => {
-        stdout += chunk;
+        const bounded = appendBoundedText(stdout, chunk, maxOutputBytes);
+        stdout = bounded.value;
+        outputLimitExceeded ||= bounded.truncated;
       });
       child.stderr.on('data', (chunk: string) => {
-        stderr += chunk;
+        const bounded = appendBoundedText(stderr, chunk, maxOutputBytes);
+        stderr = bounded.value;
+        outputLimitExceeded ||= bounded.truncated;
       });
       child.once('error', (error: NodeJS.ErrnoException) => {
         const failureCode: ProcessExecutionFailureCode = error.code === 'ENOENT' ? 'PROCESS_NOT_FOUND' : 'PROCESS_START_FAILED';
@@ -91,6 +127,13 @@ export class SpawnProcessExecutor implements ProcessExecutor {
           }
           if (timedOut) {
             reject(new ProcessExecutionError(`Process '${executable}' timed out.`, 'PROCESS_TIMEOUT'));
+            return;
+          }
+          if (outputLimitExceeded) {
+            reject(new ProcessExecutionError(
+              `Process '${executable}' exceeded the ${maxOutputBytes} byte stdout/stderr capture limit.`,
+              'PROCESS_OUTPUT_LIMIT',
+            ));
             return;
           }
           resolve({ exitCode: exitCode ?? -1, signal, stdout, stderr });

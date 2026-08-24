@@ -209,7 +209,7 @@ Rex reviews requirements, Aria reviews contracts/persistence/IPC, Mason implemen
 | Real device registry | FR-04/14, DeviceProfile | Rust adb/persistence, UI bridge | parser tests and ADB output | Implemented; physical acceptance blocked |
 | Multi-device replay | FR-15, FarmRunSpec/leases | contracts, runner core, Rust host | scheduler/lease tests, real-device evidence | Rust Appium worker and farm IPC implemented; native acceptance blocked by verified packs/Cargo cache |
 | Primary/follower recording | FR-16, RecordingPlan/Observation | recorder contracts and native dispatch | observation tests | Contract/component; runtime blocked |
-| Runtime-context generation | FR-07/17, capability manifest | generators | no-fixed-port/context tests | Implemented |
+| Runtime-context generation | FR-07/17, capability manifest | generators | no-fixed-port/context tests; `verify:web-generators`, `verify:api-generators`, and Android generator evidence | Implemented for generation; runner execution remains capability-gated |
 | Runtime Manager and explicit offline distribution | FR-12, runtime IPC 1.0, catalog contract | Rust runtime manager, SQLite migration, Runtime Manager UI, launcher | runtime-manager/catalog/offline verifiers; release manifest gate | Implemented; artifact/Cargo prerequisites blocked |
 | Native workspace/runtime picker | `native.dialog.pick`, IPC 1.0 | Async Rust `rfd`, desktop bridge, Sidebar, Runtime Manager | picker component contract and native Windows manual evidence | Async source implemented; native evidence pending |
 | Responsive truthful UI | NFR-05/09 | React farm workspace | build/authenticity/viewport evidence | Implemented in shell |

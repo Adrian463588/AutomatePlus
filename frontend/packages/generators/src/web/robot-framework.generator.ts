@@ -8,11 +8,15 @@ export class RobotFrameworkGenerator extends BaseCodeGenerator {
   public readonly supportedPlatforms = ['web'] as const;
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
-    const startUrl = session.targetConfig.startUrl || 'about:blank';
+    const startUrl = !this.hasExplicitNavigate(session) && session.targetConfig.startUrl
+      ? session.targetConfig.startUrl
+      : 'about:blank';
     return [
       `*** Settings ***`,
       `Documentation    Auto-generated test suite for ${session.name}`,
       `Library          SeleniumLibrary`,
+      `Library          OperatingSystem`,
+      `Suite Setup      Create Directory    screenshots`,
       `Test Setup       Open Browser    ${startUrl}    chrome`,
       `Test Teardown    Close Browser`,
       ``,
@@ -26,8 +30,9 @@ export class RobotFrameworkGenerator extends BaseCodeGenerator {
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
     const loc = this.getPrimaryLocator(action);
     const locatorCode = loc ? this.formatRobotLocator(loc) : '';
-    const rawVal = this.getRawValue(action.value);
-    const expected = this.getRawValue(action.expectedValue ?? action.value);
+    const rawVal = this.getRobotValue(action.value);
+    const expected = this.getRobotValue(this.getAssertionExpected(action));
+    if (['assertText', 'assertValue', 'assertUrl'].includes(action.action)) this.requireAssertionOperator(action, ['equals']);
 
     switch (action.action) {
       case 'navigate':
@@ -52,11 +57,11 @@ export class RobotFrameworkGenerator extends BaseCodeGenerator {
         return `    Clear Element Text    ${locatorCode}`;
 
       case 'pressKey':
-        return `    Press Keys    ${locatorCode || 'None'}    ${rawVal.toUpperCase() || 'RETURN'}`;
+        return `    Press Keys    ${locatorCode || 'None'}    ${this.getSeleniumKeyValue(action.value)}`;
 
       case 'dragAndDrop': {
-        const targetLoc = action.dragTarget?.locators[0];
-        const targetCode = targetLoc ? this.formatRobotLocator(targetLoc) : 'css=body';
+        const targetLoc = this.requireDragTarget(action);
+        const targetCode = this.formatRobotLocator(targetLoc);
         return `    Drag And Drop    ${locatorCode}    ${targetCode}`;
       }
 
@@ -67,7 +72,7 @@ export class RobotFrameworkGenerator extends BaseCodeGenerator {
         return `    Sleep    ${(action.timeoutMs ?? 1000) / 1000}s`;
 
       case 'takeScreenshot':
-        return `    Capture Page Screenshot    ${rawVal || 'screenshot.png'}`;
+        return `    Capture Page Screenshot    screenshots/${rawVal || 'screenshot.png'}`;
 
       case 'assertVisible':
         return `    Element Should Be Visible    ${locatorCode}`;
@@ -82,7 +87,7 @@ export class RobotFrameworkGenerator extends BaseCodeGenerator {
         return `    Element Attribute Value Should Be    ${locatorCode}    value    ${expected}`;
 
       case 'assertUrl':
-        return `    Location Should Contain    ${expected}`;
+        return `    Location Should Be    ${expected}`;
 
       default:
         return this.unsupportedAction(action);
@@ -104,9 +109,17 @@ export class RobotFrameworkGenerator extends BaseCodeGenerator {
       case 'name':
         return `name=${loc.value}`;
       case 'text':
-        return `xpath=//*[text()='${loc.value}']`;
+        return `xpath=//*[normalize-space(.)=${JSON.stringify(loc.value)}]`;
       case 'css':
         return `css=${loc.value}`;
+      case 'role':
+        return `css=[role="${loc.role ?? 'button'}"]`;
+      case 'label':
+        return `css=[aria-label="${loc.value}"]`;
+      case 'accessibilityId':
+        return `css=[aria-label="${loc.value}"]`;
+      case 'resourceId':
+        return `css=[id="${loc.value}"]`;
       default:
         return this.unsupportedLocator(loc);
     }

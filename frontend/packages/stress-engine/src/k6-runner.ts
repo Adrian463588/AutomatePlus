@@ -94,6 +94,22 @@ function metricValue(metric: K6SummaryMetric | undefined, key: keyof K6SummaryMe
   return typeof value === 'number' && Number.isFinite(value) ? value : 0;
 }
 
+const MAX_K6_DIAGNOSTIC_CHARS = 256 * 1024;
+const MAX_K6_LOG_CHUNK_CHARS = 16 * 1024;
+
+function appendDiagnosticTail(current: string, chunk: string): string {
+  if (chunk.length >= MAX_K6_DIAGNOSTIC_CHARS) return chunk.slice(-MAX_K6_DIAGNOSTIC_CHARS);
+  const combined = `${current}${chunk}`;
+  return combined.length > MAX_K6_DIAGNOSTIC_CHARS
+    ? combined.slice(-MAX_K6_DIAGNOSTIC_CHARS)
+    : combined;
+}
+
+function boundLiveLogChunk(chunk: string): string {
+  if (chunk.length <= MAX_K6_LOG_CHUNK_CHARS) return chunk;
+  return `${chunk.slice(0, MAX_K6_LOG_CHUNK_CHARS)}… [k6 log chunk truncated]`;
+}
+
 function validateOptions(options: K6StressOptions): void {
   if (!Number.isFinite(options.targetRps) || options.targetRps <= 0) {
     throw new CapabilityError('CapabilityError: targetRps must be greater than zero', { targetRps: options.targetRps });
@@ -149,8 +165,11 @@ export class K6StressRunner {
       MAX_VUS: String(options.maxVUs ?? 100),
     };
     const args = ['run', '--summary-export', summaryPath, scriptPath];
-    const stdout: string[] = [];
-    const stderr: string[] = [];
+    // Keep only a bounded diagnostic tail. The live log callback is already
+    // bounded by the renderer store, and retaining every k6 chunk here would
+    // make a long/verbose run grow the sidecar heap indefinitely.
+    let stdoutDiagnostic = '';
+    let stderrDiagnostic = '';
 
     onLog({
       timestamp: Date.now(),
@@ -173,12 +192,12 @@ export class K6StressRunner {
         cwd: root,
         environment,
         onStdout: (chunk) => {
-          stdout.push(chunk);
-          onLog({ timestamp: Date.now(), type: 'stdout', message: chunk.trimEnd() });
+          stdoutDiagnostic = appendDiagnosticTail(stdoutDiagnostic, chunk);
+          onLog({ timestamp: Date.now(), type: 'stdout', message: boundLiveLogChunk(chunk).trimEnd() });
         },
         onStderr: (chunk) => {
-          stderr.push(chunk);
-          onLog({ timestamp: Date.now(), type: 'stderr', message: chunk.trimEnd() });
+          stderrDiagnostic = appendDiagnosticTail(stderrDiagnostic, chunk);
+          onLog({ timestamp: Date.now(), type: 'stderr', message: boundLiveLogChunk(chunk).trimEnd() });
         },
       });
       completion = await this.activeProcess.completion;
@@ -190,7 +209,7 @@ export class K6StressRunner {
       throw new AutomationError('CANCELLED', 'k6 execution cancelled by user.');
     }
     if (completion.exitCode !== 0) {
-      const diagnostic = stderr.join('').trim() || stdout.join('').trim() || `exit code ${completion.exitCode}`;
+      const diagnostic = stderrDiagnostic.trim() || stdoutDiagnostic.trim() || `exit code ${completion.exitCode}`;
       throw new Error(`k6 exited unsuccessfully: ${diagnostic}`);
     }
 

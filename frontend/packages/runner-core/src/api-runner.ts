@@ -2,12 +2,15 @@ import {
   AutomationError,
   createRuntimeId,
   ITestRunner,
+  MAX_API_RESPONSE_BYTES,
   RunLogCallback,
   RunOptions,
   RunSummary,
   RunnerStatus,
 } from '@automate-plus/contracts';
 import { ActionIR, SecretRef, SessionIR } from '@automate-plus/ir-schema';
+
+export { MAX_API_RESPONSE_BYTES };
 
 export interface ApiResponseSnapshot {
   status: number;
@@ -20,6 +23,59 @@ export interface ApiResponseSnapshot {
 export interface ApiFunctionalRunnerOptions {
   secretResolver?: (reference: SecretRef) => Promise<string>;
   fetchImplementation?: typeof fetch;
+}
+
+async function readResponseBodyBounded(response: Response): Promise<string> {
+  const contentLength = response.headers.get('content-length');
+  const declaredLength = contentLength === null ? undefined : Number(contentLength);
+  if (declaredLength !== undefined && Number.isFinite(declaredLength) && declaredLength > MAX_API_RESPONSE_BYTES) {
+    throw new AutomationError(
+      'PAYLOAD_TOO_LARGE',
+      `HTTP response body exceeded the ${MAX_API_RESPONSE_BYTES} byte safety limit.`,
+      { maxBytes: MAX_API_RESPONSE_BYTES, declaredBytes: declaredLength },
+    );
+  }
+  if (!response.body) {
+    const body = await response.text();
+    if (new TextEncoder().encode(body).byteLength > MAX_API_RESPONSE_BYTES) {
+      throw new AutomationError(
+        'PAYLOAD_TOO_LARGE',
+        `HTTP response body exceeded the ${MAX_API_RESPONSE_BYTES} byte safety limit.`,
+        { maxBytes: MAX_API_RESPONSE_BYTES },
+      );
+    }
+    return body;
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      totalBytes += value.byteLength;
+      if (totalBytes > MAX_API_RESPONSE_BYTES) {
+        try {
+          await reader.cancel();
+        } catch {
+          // The response is already being rejected; cancellation is best effort.
+        }
+        throw new AutomationError(
+          'PAYLOAD_TOO_LARGE',
+          `HTTP response body exceeded the ${MAX_API_RESPONSE_BYTES} byte safety limit.`,
+          { maxBytes: MAX_API_RESPONSE_BYTES, receivedBytes: totalBytes },
+        );
+      }
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+    const finalChunk = decoder.decode();
+    if (finalChunk) chunks.push(finalChunk);
+    return chunks.join('');
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 function isSecretRef(value: unknown): value is SecretRef {
@@ -158,7 +214,7 @@ export class ApiFunctionalRunner implements ITestRunner {
         body: payload.bodyType === 'none' ? undefined : body,
         signal: controller.signal,
       });
-      const rawBody = await response.text();
+      const rawBody = await readResponseBodyBounded(response);
       let parsedBody: unknown = rawBody;
       try {
         parsedBody = rawBody.length === 0 ? null : JSON.parse(rawBody);

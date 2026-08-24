@@ -9,6 +9,9 @@ export const MonacoView: React.FC = () => {
     selectedFramework,
     selectedLanguage,
     setFrameworkAndLanguage,
+    generatedProject,
+    selectedGeneratedFile,
+    selectGeneratedFile,
     generatedCode,
     generationError,
     setFeedback,
@@ -18,8 +21,9 @@ export const MonacoView: React.FC = () => {
   const frameworks = [...new Set(sessionCapabilities.map((capability) => capability.framework))];
   const languages = [...new Set(sessionCapabilities.filter((capability) => capability.framework === selectedFramework).map((capability) => capability.language))];
   const extension = selectedLanguage === 'python' ? 'py' : selectedLanguage === 'java' ? 'java' : selectedLanguage === 'kotlin' ? 'kt' : selectedLanguage === 'yaml' ? 'yaml' : selectedLanguage === 'robot' ? 'robot' : selectedLanguage === 'javascript' ? 'js' : 'ts';
+  const selectedFileName = selectedGeneratedFile.split('/').pop() || `${(activeSession?.name || 'generated').toLowerCase().replace(/[^a-z0-9]+/g, '_')}.${extension}`;
   const hasCode = generatedCode.length > 0;
-  const fileName = `${(activeSession?.name || 'generated').toLowerCase().replace(/[^a-z0-9]+/g, '_')}.${extension}`;
+  const fileName = selectedFileName;
 
   const handleCopy = async () => {
     if (!hasCode) return;
@@ -79,20 +83,35 @@ export const MonacoView: React.FC = () => {
               {languages.map((language) => <option key={language} value={language}>{language}</option>)}
             </select>
           </label>
+          <label className="field-inline">
+            <span className="text-[10px] text-slate-500 font-bold uppercase">Generated file</span>
+            <select
+              id="generated-file"
+              name="generatedFile"
+              disabled={!generatedProject || generatedProject.files.length === 0}
+              value={selectedGeneratedFile}
+              onChange={(event) => selectGeneratedFile(event.target.value)}
+              aria-label="Generated project file"
+              title={generatedProject ? 'Choose a file from the generated project.' : 'Select a framework and language to generate a project.'}
+            >
+              <option value="">No generated file</option>
+              {(generatedProject?.files ?? []).map((file) => <option key={file.relativePath} value={file.relativePath}>{file.relativePath}</option>)}
+            </select>
+          </label>
         </div>
         <div className="flex items-center gap-1.5">
           <button type="button" disabled={!hasCode} onClick={() => void handleCopy()} title={hasCode ? 'Copy generated preview' : 'Generate a preview before copying'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40">
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
-          <button type="button" disabled={!hasCode} onClick={handleDownload} title={hasCode ? `Download ${fileName}` : 'Generate a preview before downloading'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40" aria-label="Download generated file">
+          <button type="button" disabled={!hasCode} onClick={handleDownload} title={hasCode ? `Download ${fileName}` : 'Generate a preview before downloading'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40" aria-label="Download selected generated file">
             <Download className="w-3.5 h-3.5" />
           </button>
         </div>
       </div>
       <div className="h-8 bg-slate-950/80 px-3 flex items-center justify-between border-b border-slate-800/80 text-[11px] text-slate-400 font-mono">
-        <div className="flex items-center gap-1.5"><FileCode className="w-3.5 h-3.5 text-cyan-400" /><span>{activeSession ? fileName : 'No generated file'}</span></div>
-        <span className="text-[10px] text-slate-400">{selectedFramework && selectedLanguage ? 'Capability preview' : 'Select a capability'}</span>
+        <div className="flex items-center gap-1.5"><FileCode className="w-3.5 h-3.5 text-cyan-400" /><span>{activeSession && hasCode ? fileName : 'No generated file'}</span></div>
+        <span className="text-[10px] text-slate-400">{generatedProject ? `${generatedProject.files.length} generated file(s)` : selectedFramework && selectedLanguage ? 'Capability preview' : 'Select a capability'}</span>
       </div>
       {generationError && <div className="p-3 border-b border-amber-900/60 bg-amber-950/30 text-amber-200" role="alert">{generationError}</div>}
       <div id="editor-title" className="flex-1 overflow-auto p-3 bg-slate-950 font-mono text-[11px] leading-relaxed text-slate-200 select-text">

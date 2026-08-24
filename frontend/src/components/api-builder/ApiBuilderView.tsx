@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, Plus, Send, Server, Trash2, X } from 'lucide-react';
+import { MAX_API_UI_RESPONSE_BYTES } from '@automate-plus/contracts';
 import { ActionIR } from '@automate-plus/ir-schema';
 import { ApiAssertionDraft, useAppStore } from '../../store/appStore.js';
 
@@ -17,6 +18,55 @@ interface ResponseSnapshot {
   durationMs: number;
   headers: Record<string, string>;
   data: unknown;
+  bodyTruncated: boolean;
+}
+
+interface BoundedResponseBody {
+  text: string;
+  truncated: boolean;
+}
+
+async function readResponseBodyBounded(response: Response): Promise<BoundedResponseBody> {
+  const contentLength = response.headers.get('content-length');
+  const declaredLength = contentLength === null ? undefined : Number(contentLength);
+  if (declaredLength !== undefined && Number.isFinite(declaredLength) && declaredLength > MAX_API_UI_RESPONSE_BYTES) {
+    throw new Error(`HTTP response body exceeds the ${MAX_API_UI_RESPONSE_BYTES} byte UI safety limit.`);
+  }
+  if (!response.body) {
+    const text = await response.text();
+    if (new TextEncoder().encode(text).byteLength > MAX_API_UI_RESPONSE_BYTES) {
+      throw new Error(`HTTP response body exceeds the ${MAX_API_UI_RESPONSE_BYTES} byte UI safety limit.`);
+    }
+    return { text, truncated: false };
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks: string[] = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const availableBytes = MAX_API_UI_RESPONSE_BYTES - totalBytes;
+      if (value.byteLength > availableBytes) {
+        if (availableBytes > 0) chunks.push(decoder.decode(value.slice(0, availableBytes)));
+        try {
+          await reader.cancel();
+        } catch {
+          // The response is already bounded and the stream may be closed.
+        }
+        return { text: chunks.join(''), truncated: true };
+      }
+      totalBytes += value.byteLength;
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+    const finalChunk = decoder.decode();
+    if (finalChunk) chunks.push(finalChunk);
+    return { text: chunks.join(''), truncated: false };
+  } finally {
+    reader.releaseLock();
+  }
 }
 
 const tabs: BuilderTab[] = ['body', 'headers', 'assertions', 'extract'];
@@ -62,8 +112,12 @@ export const ApiBuilderView: React.FC = () => {
     );
     setBodyContent(typeof request.apiPayload.bodyContent === 'string' ? request.apiPayload.bodyContent : '');
     setExtractions(request.apiPayload.extractedVariables);
+    const requestIndex = (activeSession?.ir.steps ?? []).reduce(
+      (index, step, stepIndex) => step.action === 'httpRequest' && step.apiPayload ? stepIndex : index,
+      -1,
+    );
     setAssertions(
-      (activeSession?.ir.steps ?? [])
+      (activeSession?.ir.steps ?? []).slice(requestIndex + 1)
         .filter(
           (step) =>
             step.action.startsWith('assert') &&
@@ -191,7 +245,8 @@ export const ApiBuilderView: React.FC = () => {
         body: body && methodAllowsBody ? body : undefined,
         signal: controller.signal,
       });
-      const raw = await response.text();
+      const boundedBody = await readResponseBodyBounded(response);
+      const raw = boundedBody.text;
       let data: unknown = raw;
       try {
         data = raw ? JSON.parse(raw) : null;
@@ -204,11 +259,12 @@ export const ApiBuilderView: React.FC = () => {
         durationMs: Math.round(performance.now() - startedAt),
         headers: Object.fromEntries(response.headers.entries()),
         data,
+        bodyTruncated: boundedBody.truncated,
       });
       setFeedback({
         kind: response.ok ? 'success' : 'error',
         message: response.ok
-          ? `Response received: ${response.status}.`
+          ? `Response received: ${response.status}${boundedBody.truncated ? `; body preview limited to ${MAX_API_UI_RESPONSE_BYTES} bytes.` : '.'}`
           : `Response received with HTTP error status ${response.status}.`,
       });
     } catch (error) {
@@ -336,6 +392,7 @@ export const ApiBuilderView: React.FC = () => {
             {lastResponse && <div className={`flex items-center gap-2 font-mono text-[11px] ${responseIsError ? 'text-rose-300' : 'text-emerald-300'}`} role="status" aria-live="polite">
               {responseIsError ? <AlertCircle className="w-3.5 h-3.5" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
               {lastResponse.status} {lastResponse.statusText}<span className="text-slate-400">{lastResponse.durationMs}ms</span>
+              {lastResponse.bodyTruncated && <span className="text-amber-300">preview limited</span>}
             </div>}
           </div>
           {requestError && <div className="border-b border-rose-900/60 bg-rose-950/40 px-4 py-2 text-rose-300" role="alert">{requestError}</div>}

@@ -3,6 +3,10 @@ import {
   DeviceProfile,
   DeviceRunResult,
   FarmRunSpec,
+  MAX_FARM_ACTIONS,
+  MAX_FARM_DEVICE_TARGETS,
+  MAX_FARM_ITERATIONS_PER_DEVICE,
+  MAX_FARM_TOTAL_ITERATIONS,
   MultiDeviceRunSummary,
   RunLogCallback,
 } from '@automate-plus/contracts';
@@ -63,6 +67,18 @@ export class MultiDeviceRunner {
     if (!Array.isArray(deviceIds) || deviceIds.length === 0) {
       throw new Error('DeviceFarmError: deviceIds must contain at least one discovered device.');
     }
+    if (deviceIds.length > MAX_FARM_DEVICE_TARGETS) {
+      throw new Error(`DeviceFarmError: deviceIds cannot contain more than ${MAX_FARM_DEVICE_TARGETS} devices per run.`);
+    }
+    if (new Set(deviceIds).size !== deviceIds.length) {
+      throw new Error('DeviceFarmError: deviceIds must be unique.');
+    }
+    if (session.steps.length === 0) {
+      throw new Error('DeviceFarmError: SessionIR must contain at least one recorded action.');
+    }
+    if (session.steps.length > MAX_FARM_ACTIONS) {
+      throw new Error(`DeviceFarmError: SessionIR cannot contain more than ${MAX_FARM_ACTIONS} actions per farm run.`);
+    }
     if (!Number.isInteger(spec.maxParallelDevices) || spec.maxParallelDevices < 1) {
       throw new Error('DeviceFarmError: maxParallelDevices must be a positive integer.');
     }
@@ -70,8 +86,13 @@ export class MultiDeviceRunner {
       if (!Number.isInteger(spec.totalIterations) || (spec.totalIterations ?? 0) < 1) {
         throw new Error('DeviceFarmError: totalIterations must be a positive integer for split-iterations.');
       }
+      if ((spec.totalIterations ?? 0) > MAX_FARM_TOTAL_ITERATIONS) {
+        throw new Error(`DeviceFarmError: totalIterations cannot exceed ${MAX_FARM_TOTAL_ITERATIONS} per farm run.`);
+      }
     } else if (!Number.isInteger(spec.iterationsPerDevice) || (spec.iterationsPerDevice ?? 0) < 1) {
       throw new Error('DeviceFarmError: iterationsPerDevice must be a positive integer for device replay.');
+    } else if ((spec.iterationsPerDevice ?? 0) > MAX_FARM_ITERATIONS_PER_DEVICE) {
+      throw new Error(`DeviceFarmError: iterationsPerDevice cannot exceed ${MAX_FARM_ITERATIONS_PER_DEVICE} per device.`);
     }
     if (!Number.isInteger(spec.iterationDelayMs) || spec.iterationDelayMs < 0) {
       throw new Error('DeviceFarmError: iterationDelayMs must be a non-negative integer.');
@@ -79,6 +100,11 @@ export class MultiDeviceRunner {
 
     // 1. Filter target devices from the current authorized snapshot.
     const selectedDevices = devices.filter((device) => device.status === 'device' && deviceIds.includes(device.deviceId));
+    if (selectedDevices.length !== deviceIds.length) {
+      const selectedIds = new Set(selectedDevices.map((device) => device.deviceId));
+      const missingIds = deviceIds.filter((deviceId) => !selectedIds.has(deviceId));
+      throw new Error(`DeviceFarmError: selected devices are not present and authorized in the latest ADB snapshot: ${missingIds.join(', ')}`);
+    }
     const targetDevices = spec.strategy === 'single' ? selectedDevices.slice(0, 1) : selectedDevices;
     if (targetDevices.length === 0) {
       throw new Error(`DeviceFarmError: No target devices available for execution.`);

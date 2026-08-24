@@ -84,4 +84,30 @@ describe('InteractivePlayer retry and healing', () => {
       true,
     );
   });
+
+  it('tries remaining captured candidates in rank order and passes only after a real retry succeeds', async () => {
+    const session = createHealingSession();
+    session.steps[0].locators = [
+      ...(session.steps[0].locators ?? []),
+      { strategy: 'text', value: 'Submit', score: 80 },
+    ];
+    const execute = vi
+      .fn<(step: ActionIR) => Promise<void>>()
+      .mockRejectedValueOnce(new Error('stale locator'))
+      .mockRejectedValueOnce(new Error('role locator rejected'))
+      .mockResolvedValueOnce(undefined);
+    const logs: string[] = [];
+
+    const summary = await new InteractivePlayer({ execute }).run(
+      session,
+      { executionMode: 'interactive' },
+      (event) => logs.push(event.message),
+    );
+
+    expect(summary.status).toBe('passed');
+    expect(execute).toHaveBeenCalledTimes(3);
+    expect(execute.mock.calls[2][0].locators?.[0].strategy).toBe('text');
+    expect(logs.some((message) => message.includes('[HEALING RETRY FAILED]'))).toBe(true);
+    expect(logs.some((message) => message.includes('[HEALING PASS]'))).toBe(true);
+  });
 });

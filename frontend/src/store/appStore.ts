@@ -7,6 +7,7 @@ import {
   DeviceGroup,
   DeviceProfile,
   FarmRunSpec,
+  GeneratedProject,
   MultiDeviceRunSummary,
   RunLogEvent,
   RunSummary,
@@ -56,6 +57,8 @@ interface AppState {
   capabilities: CapabilityManifest[];
   selectedFramework: string;
   selectedLanguage: string;
+  generatedProject?: GeneratedProject;
+  selectedGeneratedFile: string;
   generatedCode: string;
   generationError?: string;
   isRecording: boolean;
@@ -96,6 +99,7 @@ interface AppState {
   setActiveDevice: (deviceId: string) => void;
   updateTargetConfig: (targetConfig: SessionIR['targetConfig']) => Promise<void>;
   setFrameworkAndLanguage: (framework: string, language: string) => Promise<void>;
+  selectGeneratedFile: (relativePath: string) => void;
   regenerateCode: () => Promise<void>;
   addStep: (step: ActionIR) => Promise<void>;
   saveApiRequest: (request: ActionIR, assertions: ApiAssertionDraft[]) => Promise<void>;
@@ -138,9 +142,33 @@ function nextSteps(steps: ActionIR[]): ActionIR[] {
   return steps.map((step, index) => ({ ...step, stepNumber: index + 1 }));
 }
 
+const API_ASSERTION_ACTIONS = new Set<ActionIR['action']>([
+  'assertStatusCode',
+  'assertJsonPath',
+  'assertHeader',
+  'assertResponseTime',
+]);
+
+const MAX_UI_LOG_EVENTS = 1_000;
+const MAX_UI_LOG_MESSAGE_CHARS = 8_192;
+
+function appendRunLog(logs: RunLogEvent[], event: RunLogEvent): { logs: RunLogEvent[] } {
+  const boundedEvent = event.message.length > MAX_UI_LOG_MESSAGE_CHARS
+    ? {
+        ...event,
+        message: `${event.message.slice(0, MAX_UI_LOG_MESSAGE_CHARS)}… [log message truncated]`,
+      }
+    : event;
+  const retained = logs.length >= MAX_UI_LOG_EVENTS
+    ? logs.slice(-(MAX_UI_LOG_EVENTS - 1))
+    : logs;
+  return { logs: [...retained, boundedEvent] };
+}
+
 export const useAppStore = create<AppState>((set, get) => ({
   projects: [], activeProject: undefined, sessions: [], activeSession: undefined,
-  capabilities: [], selectedFramework: '', selectedLanguage: '', generatedCode: '', generationError: undefined,
+  capabilities: [], selectedFramework: '', selectedLanguage: '', generatedProject: undefined,
+  selectedGeneratedFile: '', generatedCode: '', generationError: undefined,
   isRecording: false, activeRecorderPlatform: 'web', devices: [],
   deviceProfiles: [], deviceGroups: [], selectedDeviceIds: [], primaryDeviceId: undefined,
   lastFarmSummary: undefined,
@@ -208,7 +236,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       });
       if (activeSession) await get().regenerateCode();
     } catch (error) {
-      set({ projects: [], activeProject: undefined, sessions: [], activeSession: undefined, devices: [], deviceProfiles: [], capabilities: [], generatedCode: '', feedback: { kind: 'blocked', message: `Local storage is unavailable: ${error instanceof Error ? error.message : String(error)}` } });
+      set({ projects: [], activeProject: undefined, sessions: [], activeSession: undefined, devices: [], deviceProfiles: [], capabilities: [], generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', feedback: { kind: 'blocked', message: `Local storage is unavailable: ${error instanceof Error ? error.message : String(error)}` } });
     }
   },
 
@@ -363,7 +391,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     try {
       await bridge.projectRepo.save(project);
       set({ projects: [...get().projects, project], activeProject: project, sessions: [], activeSession: undefined,
-        selectedFramework: '', selectedLanguage: '', generatedCode: '', feedback: { kind: 'success', message: `Project “${project.name}” created.` } });
+        selectedFramework: '', selectedLanguage: '', generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', feedback: { kind: 'success', message: `Project “${project.name}” created.` } });
       return true;
     } catch (error) {
       set({ feedback: { kind: 'error', message: `Project could not be saved: ${error instanceof Error ? error.message : String(error)}` } });
@@ -383,7 +411,7 @@ export const useAppStore = create<AppState>((set, get) => ({
         targetConfig: {}, environmentVariables: {}, steps: [], createdAt: now, updatedAt: now }, createdAt: now, updatedAt: now };
     await bridge.sessionRepo.save(session);
     set({ sessions: [...get().sessions, session], activeSession: session, selectedFramework: '', selectedLanguage: '',
-      generatedCode: '', activeTab: platform === 'api' ? 'api_builder' : 'visual',
+      generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', activeTab: platform === 'api' ? 'api_builder' : 'visual',
       feedback: { kind: 'success', message: `Session “${session.name}” created. Add a real target before running.` } });
   },
 
@@ -391,13 +419,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const project = await bridge.projectRepo.getById(projectId); if (!project) return;
     const sessions = await bridge.sessionRepo.getByProjectId(projectId);
     set({ activeProject: project, sessions, activeSession: sessions[0], selectedFramework: '', selectedLanguage: '',
-      generatedCode: '', generationError: undefined, activeTab: sessions[0]?.platform === 'api' ? 'api_builder' : 'visual',
+      generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', generationError: undefined, activeTab: sessions[0]?.platform === 'api' ? 'api_builder' : 'visual',
       feedback: sessions[0] ? emptyFeedback : { kind: 'blocked', message: 'Create a session before recording, running, or generating.' } });
   },
 
   selectSession: async (sessionId) => {
     const session = await bridge.sessionRepo.getById(sessionId); if (!session) return;
-    set({ activeSession: session, selectedFramework: '', selectedLanguage: '', generatedCode: '', generationError: undefined,
+    set({ activeSession: session, selectedFramework: '', selectedLanguage: '', generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', generationError: undefined,
       activeTab: session.platform === 'api' ? 'api_builder' : 'visual', feedback: emptyFeedback });
   },
 
@@ -418,18 +446,39 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().regenerateCode();
   },
 
+  selectGeneratedFile: (relativePath) => {
+    const project = get().generatedProject;
+    const file = project?.files.find((candidate) => candidate.relativePath === relativePath);
+    if (!file) return;
+    set({
+      selectedGeneratedFile: file.relativePath,
+      generatedCode: file.content,
+      generationError: undefined,
+      feedback: { kind: 'success', message: `Generated file selected: ${file.relativePath}.` },
+    });
+  },
+
   regenerateCode: async () => {
     const { activeSession, selectedFramework, selectedLanguage, capabilities } = get();
-    if (!activeSession || !selectedFramework || !selectedLanguage) { set({ generatedCode: '', generationError: undefined }); return; }
+    if (!activeSession || !selectedFramework || !selectedLanguage) {
+      set({ generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', generationError: undefined });
+      return;
+    }
     if (!capabilities.some((item) => item.platform === activeSession.platform && item.framework === selectedFramework && item.language === selectedLanguage)) {
-      set({ generatedCode: '', generationError: 'CapabilityError: no registered generator matches this session.' }); return;
+      set({ generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', generationError: 'CapabilityError: no registered generator matches this session.' }); return;
     }
     try {
       const project = await bridge.generateCode(activeSession.ir, selectedFramework, selectedLanguage);
       const entrypoint = project.files.find((file) => file.relativePath === project.entrypoint) ?? project.files[0];
-      set({ generatedCode: entrypoint?.content ?? '', generationError: undefined, feedback: { kind: 'success', message: 'Generated preview updated from the session IR.' } });
+      set({
+        generatedProject: project,
+        selectedGeneratedFile: entrypoint?.relativePath ?? '',
+        generatedCode: entrypoint?.content ?? '',
+        generationError: undefined,
+        feedback: { kind: 'success', message: `Generated project ready: ${project.files.length} file(s) from the session IR.` },
+      });
     } catch (error) {
-      set({ generatedCode: '', generationError: error instanceof Error ? error.message : String(error), feedback: { kind: 'blocked', message: 'Generation is blocked by the selected capability or session data.' } });
+      set({ generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', generationError: error instanceof Error ? error.message : String(error), feedback: { kind: 'blocked', message: 'Generation is blocked by the selected capability or session data.' } });
     }
   },
 
@@ -456,7 +505,19 @@ export const useAppStore = create<AppState>((set, get) => ({
           : undefined,
       timeoutMs: 5000, timestamp: Date.now(), optional: false,
     }));
-    const updatedSession: SessionRecord = { ...activeSession, ir: { ...activeSession.ir, steps: nextSteps([...activeSession.ir.steps, request, ...assertionSteps]), updatedAt: Date.now() }, updatedAt: Date.now() };
+    const apiBuilderStep = (step: ActionIR): boolean =>
+      (step.action === 'httpRequest' && Boolean(step.apiPayload)) || API_ASSERTION_ACTIONS.has(step.action);
+    const firstApiBuilderStepIndex = activeSession.ir.steps.findIndex(apiBuilderStep);
+    const replacementSteps = activeSession.ir.steps.flatMap((step, stepIndex) => {
+      if (stepIndex === firstApiBuilderStepIndex) return [request, ...assertionSteps];
+      return apiBuilderStep(step) ? [] : [step];
+    });
+    if (firstApiBuilderStepIndex < 0) replacementSteps.push(request, ...assertionSteps);
+    const updatedSession: SessionRecord = {
+      ...activeSession,
+      ir: { ...activeSession.ir, steps: nextSteps(replacementSteps), updatedAt: Date.now() },
+      updatedAt: Date.now(),
+    };
     await bridge.sessionRepo.save(updatedSession);
     set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session), feedback: { kind: 'success', message: 'Request, assertions, and extraction variables saved to the session IR.' } });
     await get().regenerateCode();
@@ -537,7 +598,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (activeSession.ir.steps.length === 0) { set({ feedback: { kind: 'blocked', message: 'Add at least one user-created action before running.' } }); return; }
     if (mode === 'native' && (!selectedFramework || !selectedLanguage)) { set({ feedback: { kind: 'blocked', message: 'Select a registered framework and language before a native run.' } }); return; }
     set({ isRunning: true, feedback: { kind: 'pending', message: mode === 'native' ? 'Native run requested; waiting for host runtime evidence…' : 'Interactive run requested…' } });
-    const onLog = (event: RunLogEvent) => set((state) => ({ logs: [...state.logs, event] }));
+    const onLog = (event: RunLogEvent) => set((state) => appendRunLog(state.logs, event));
     try {
       const summary = mode === 'interactive' ? await bridge.runInteractiveTest(activeSession.ir, onLog) : await bridge.runNativeTest(activeSession.ir, selectedFramework, selectedLanguage, onLog);
       const kind: FeedbackKind = summary.status === 'passed' ? 'success' : summary.status === 'cancelled' || summary.status === 'stopped' ? 'cancelled' : summary.status === 'blocked' ? 'blocked' : 'error';
@@ -549,7 +610,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { activeSession } = get();
     if (!activeSession || !Number.isInteger(iterations) || iterations < 1) { set({ feedback: { kind: 'blocked', message: 'A session and a positive loop count are required.' } }); return; }
     set({ isRunning: true, feedback: { kind: 'pending', message: 'Loop run requested…' } });
-    const onLog = (event: RunLogEvent) => set((state) => ({ logs: [...state.logs, event] }));
+    const onLog = (event: RunLogEvent) => set((state) => appendRunLog(state.logs, event));
     try { const summary = await bridge.runLooping(activeSession.ir, iterations, onLog); set({ isRunning: false, feedback: { kind: summary.failedIterations === 0 ? 'success' : 'error', message: `Loop finished: ${summary.successfulIterations}/${summary.totalIterations} iterations passed.` } }); }
     catch (error) { set({ isRunning: false, feedback: { kind: 'error', message: `Loop failed: ${error instanceof Error ? error.message : String(error)}` } }); }
   },
@@ -558,7 +619,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     const { activeSession } = get();
     if (!activeSession || activeSession.platform !== 'api' || !Number.isFinite(targetRps) || !Number.isFinite(durationSec) || targetRps <= 0 || durationSec <= 0 || (maxVus !== undefined && (!Number.isInteger(maxVus) || maxVus <= 0))) { set({ feedback: { kind: 'blocked', message: 'An API session and valid user-provided stress values are required.' } }); return; }
     set({ isRunning: true, feedback: { kind: 'pending', message: 'k6 run requested; no browser-side metrics will be synthesized.' } });
-    const onLog = (event: RunLogEvent) => set((state) => ({ logs: [...state.logs, event] }));
+    const onLog = (event: RunLogEvent) => set((state) => appendRunLog(state.logs, event));
     try { await bridge.runK6Stress(activeSession.ir, targetRps, durationSec, maxVus, onLog); set({ isRunning: false, feedback: { kind: 'success', message: 'k6 completed with host-provided evidence.' } }); }
     catch (error) { set({ isRunning: false, feedback: { kind: 'blocked', message: `k6 blocked: ${error instanceof Error ? error.message : String(error)}` } }); }
   },
@@ -578,7 +639,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       set({ feedback: { kind: 'blocked', message: 'Farm iterations, parallelism, and delay must be valid values.' } }); return;
     }
     set({ isRunning: true, feedback: { kind: 'pending', message: `Launching multi-device farm replay (${spec.strategy})…` } });
-    const onLog = (event: RunLogEvent) => set((state) => ({ logs: [...state.logs, event] }));
+    const onLog = (event: RunLogEvent) => set((state) => appendRunLog(state.logs, event));
     try {
       const summary = await bridge.runFarmTest(activeSession.ir, spec, onLog, (progress) => {
         set({ lastFarmSummary: progress });

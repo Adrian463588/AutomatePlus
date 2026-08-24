@@ -27,7 +27,7 @@ const ANDROID_ACTIONS_BY_FRAMEWORK: Record<string, string[]> = {
   ],
   espresso: ['tap', 'click', 'doubleTap', 'doubleClick', 'longPress', 'fill', 'clear', 'swipe', 'back', 'enter', 'sleep', 'assertVisible', 'assertText'],
   robolectric: ['tap', 'click', 'doubleTap', 'doubleClick', 'fill', 'clear', 'assertVisible', 'assertText'],
-  maestro: ['tap', 'click', 'doubleTap', 'doubleClick', 'longPress', 'fill', 'clear', 'back', 'scroll', 'swipe', 'sleep', 'takeScreenshot', 'assertVisible', 'assertText'],
+  maestro: ['tap', 'click', 'doubleTap', 'doubleClick', 'longPress', 'fill', 'clear', 'back', 'scroll', 'swipe', 'takeScreenshot', 'assertVisible', 'assertText'],
 };
 
 const API_ACTIONS_BY_FRAMEWORK: Record<string, string[]> = {
@@ -84,15 +84,15 @@ const parallelSessionModelFor = (
 
 const requiredRuntimePacksFor = (framework: string, language: string, platform: CapabilityManifest['platform']): readonly string[] => {
   if (platform === 'web') {
-    if (framework === 'playwright') return [language === 'python' ? 'python' : language === 'java' ? 'temurin-jdk' : 'nodejs', 'playwright', 'browser-chromium'];
-    if (framework === 'cypress') return ['nodejs', 'cypress', 'browser-chromium'];
-    if (framework === 'puppeteer') return ['nodejs', 'puppeteer', 'browser-chromium'];
+    if (framework === 'playwright') return [language === 'python' ? 'python' : language === 'java' ? 'temurin-jdk' : 'nodejs', 'playwright', 'browser-chromium', language === 'python' ? 'python-wheels' : language === 'java' ? 'maven-gradle-cache' : 'npm-cache'];
+    if (framework === 'cypress') return ['nodejs', 'cypress', 'browser-chromium', 'npm-cache'];
+    if (framework === 'puppeteer') return ['nodejs', 'puppeteer', 'browser-chromium', 'npm-cache'];
     if (framework === 'selenium') {
-      if (language === 'java') return ['temurin-jdk', 'selenium', 'browser-chromium'];
-      if (language === 'python') return ['python', 'selenium', 'browser-chromium'];
-      return ['nodejs', 'selenium', 'browser-chromium'];
+      if (language === 'java') return ['temurin-jdk', 'selenium', 'browser-chromium', 'maven-gradle-cache'];
+      if (language === 'python') return ['python', 'selenium', 'browser-chromium', 'python-wheels'];
+      return ['nodejs', 'selenium', 'browser-chromium', 'npm-cache'];
     }
-    if (framework === 'robot') return ['python', 'robotframework', 'selenium', 'browser-chromium'];
+    if (framework === 'robot') return ['python', 'robotframework', 'selenium', 'browser-chromium', 'python-wheels'];
   }
   if (platform === 'api') {
     if (framework === 'k6') return ['k6'];

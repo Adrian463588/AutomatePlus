@@ -9,7 +9,9 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
   public readonly supportedPlatforms = ['android'] as const;
 
   public generateHeader(session: SessionIR, options?: GeneratorOptions): string {
-    const className = this.toPascalCase(session.name) + 'Test';
+    const className = `${this.generatedClassName(session.name)}Test`;
+    const appPackage = this.requireAndroidPackage(session);
+    const appActivity = session.targetConfig.appActivity;
     return [
       `package com.automateplus.tests`,
       ``,
@@ -17,12 +19,12 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
       `import io.appium.java_client.android.options.UiAutomator2Options`,
       `import io.appium.java_client.AppiumBy`,
       `import org.openqa.selenium.By`,
+      `import org.openqa.selenium.OutputType`,
       `import org.openqa.selenium.WebElement`,
       `import org.openqa.selenium.support.ui.WebDriverWait`,
       `import org.openqa.selenium.support.ui.ExpectedConditions`,
       `import org.junit.jupiter.api.*`,
       `import org.junit.jupiter.api.Assertions.*`,
-      `import java.net.URL`,
       `import java.time.Duration`,
       ``,
       `class ${className} {`,
@@ -36,12 +38,8 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
       `        val options = UiAutomator2Options().apply {`,
       `            setPlatformName("Android")`,
       `            setAutomationName("UiAutomator2")`,
-      session.targetConfig.appPackage
-        ? `            setAppPackage("${session.targetConfig.appPackage}")`
-        : '',
-      session.targetConfig.appActivity
-        ? `            setAppActivity("${session.targetConfig.appActivity}")`
-        : '',
+      `            setAppPackage(${this.getJavaValue(appPackage)})`,
+      appActivity ? `            setAppActivity(${this.getJavaValue(appActivity)})` : '',
       `            setUdid(AutomatePlusRuntime.udid())`,
       `            setSystemPort(AutomatePlusRuntime.systemPort())`,
       `            setMjpegServerPort(AutomatePlusRuntime.mjpegServerPort())`,
@@ -54,15 +52,16 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
       `    @Test`,
       `    fun testRecordedSession() {`,
     ]
-      .filter((l) => l !== '')
+      .filter((line) => line !== '')
       .join('\n');
   }
 
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
     const loc = this.getPrimaryLocator(action);
     const byClause = loc ? this.formatAppiumBy(loc) : '';
-    const val = this.getJavaValue(action.value);
-    const expected = this.getJavaValue(action.expectedValue ?? action.value);
+    const value = this.getJavaValue(action.value);
+    const expected = this.getJavaValue(this.getAssertionExpected(action));
+    const step = action.stepNumber;
 
     switch (action.action) {
       case 'tap':
@@ -70,14 +69,31 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
         return `        wait.until(ExpectedConditions.elementToBeClickable(${byClause})).click()`;
 
       case 'doubleTap':
-      case 'doubleClick':
-        return `        val el = wait.until(ExpectedConditions.elementToBeClickable(${byClause}))\n        el.click()\n        el.click()`;
+      case 'doubleClick': {
+        const element = `element${step}`;
+        return [
+          `        val ${element} = wait.until(ExpectedConditions.elementToBeClickable(${byClause}))`,
+          `        ${element}.click()`,
+          `        ${element}.click()`,
+        ].join('\n');
+      }
 
-      case 'longPress':
-        return `        val el = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}))\n        driver.executeScript("mobile: longClickGesture", mapOf("elementId" to (el as org.openqa.selenium.remote.RemoteWebElement).id, "duration" to 1000))`;
+      case 'longPress': {
+        const element = `element${step}`;
+        return [
+          `        val ${element} = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}))`,
+          `        driver.executeScript("mobile: longClickGesture", mapOf("elementId" to (${element} as org.openqa.selenium.remote.RemoteWebElement).id, "duration" to 1000))`,
+        ].join('\n');
+      }
 
-      case 'fill':
-        return `        val elem = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}))\n        elem.clear()\n        elem.sendKeys(${val})`;
+      case 'fill': {
+        const element = `element${step}`;
+        return [
+          `        val ${element} = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}))`,
+          `        ${element}.clear()`,
+          `        ${element}.sendKeys(${value})`,
+        ].join('\n');
+      }
 
       case 'clear':
         return `        wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause})).clear()`;
@@ -90,8 +106,14 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
 
       case 'drag':
       case 'dragAndDrop': {
+        const source = `source${step}`;
+        const target = `target${step}`;
         const targetBy = this.formatAppiumBy(this.requireDragTarget(action));
-        return `        val src = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}))\n        val dst = wait.until(ExpectedConditions.visibilityOfElementLocated(${targetBy}))\n        driver.executeScript("mobile: dragGesture", mapOf("elementId" to (src as org.openqa.selenium.remote.RemoteWebElement).id, "endX" to dst.location.x, "endY" to dst.location.y))`;
+        return [
+          `        val ${source} = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}))`,
+          `        val ${target} = wait.until(ExpectedConditions.visibilityOfElementLocated(${targetBy}))`,
+          `        driver.executeScript("mobile: dragGesture", mapOf("elementId" to (${source} as org.openqa.selenium.remote.RemoteWebElement).id, "endX" to ${target}.location.x, "endY" to ${target}.location.y))`,
+        ].join('\n');
       }
 
       case 'back':
@@ -105,6 +127,16 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
 
       case 'sleep':
         return `        Thread.sleep(${action.timeoutMs ?? 1000})`;
+
+      case 'takeScreenshot': {
+        const name = `screenshotName${step}`;
+        return [
+          `        val raw${name} = String.valueOf(${value})`,
+          `        val ${name} = raw${name}.replace(Regex("[^A-Za-z0-9_-]"), "_").ifBlank { "screenshot" }`,
+          `        java.nio.file.Files.createDirectories(java.nio.file.Path.of("screenshots"))`,
+          `        java.nio.file.Files.copy(driver.getScreenshotAs(OutputType.FILE).toPath(), java.nio.file.Path.of("screenshots", ${name} + ".png"), java.nio.file.StandardCopyOption.REPLACE_EXISTING)`,
+        ].join('\n');
+      }
 
       case 'assertVisible':
         return `        assertTrue(wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause})).isDisplayed)`;
@@ -126,7 +158,7 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
       ``,
       `    @AfterEach`,
       `    fun tearDown() {`,
-      `        driver.quit()`,
+      `        if (::driver.isInitialized) driver.quit()`,
       `    }`,
       `}`,
     ].join('\n');
@@ -135,22 +167,21 @@ export class AppiumKotlinGenerator extends BaseCodeGenerator {
   private formatAppiumBy(loc: LocatorCandidate): string {
     switch (loc.strategy) {
       case 'resourceId':
-        return `By.id("${loc.value}")`;
+        return `By.id(${this.getJavaValue(loc.value)})`;
       case 'accessibilityId':
-        return `AppiumBy.accessibilityId("${loc.value}")`;
-      case 'text':
-        return `By.xpath("//*[@text='${loc.value}']")`;
+        return `AppiumBy.accessibilityId(${this.getJavaValue(loc.value)})`;
+      case 'text': {
+        const xpath = `//*[@text=${this.getXPathLiteral(loc.value)}]`;
+        return `By.xpath(${this.getJavaValue(xpath)})`;
+      }
+      case 'role': {
+        const selector = `new UiSelector().className(${JSON.stringify(loc.value)})`;
+        return `AppiumBy.androidUIAutomator(${this.getJavaValue(selector)})`;
+      }
       case 'xpath':
-        return `By.xpath("${loc.value}")`;
+        return `By.xpath(${this.getJavaValue(loc.value)})`;
       default:
         return this.unsupportedLocator(loc);
     }
-  }
-
-  private toPascalCase(str: string): string {
-    return str
-      .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase())
-      .replace(/^[a-z]/, (c) => c.toUpperCase())
-      .replace(/[^a-zA-Z0-9]/g, '');
   }
 }

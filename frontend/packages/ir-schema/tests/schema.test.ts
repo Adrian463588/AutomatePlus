@@ -258,4 +258,20 @@ describe('Automation IR Schema Validation', () => {
     expect(result.success).toBe(false);
     expect(result.errors?.some((error) => error.includes('descending score'))).toBe(true);
   });
+
+  it('should allow a real Android scroll action for Maestro generation', () => {
+    const result = validateActionIR({
+      id: 'f0eebc99-9c0b-4ef8-bb6d-6bb9bd380a66',
+      stepNumber: 1,
+      platform: 'android',
+      action: 'scroll',
+      scrollOffset: { deltaX: 0, deltaY: 800 },
+      timeoutMs: 5000,
+      timestamp: Date.now(),
+    });
+
+    expect(result.success).toBe(true);
+    expect(result.data?.action).toBe('scroll');
+    expect(result.data?.scrollOffset?.deltaY).toBe(800);
+  });
 });

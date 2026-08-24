@@ -11,6 +11,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
@@ -21,6 +22,13 @@ const FARM_PORT_COUNT: usize = 4;
 const APPIUM_START_TIMEOUT: Duration = Duration::from_secs(30);
 const APPIUM_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_RETAINED_RUNS: usize = 32;
+const MAX_FARM_DEVICE_TARGETS: usize = 64;
+const MAX_FARM_ITERATIONS_PER_DEVICE: u32 = 50;
+const MAX_FARM_TOTAL_ITERATIONS: u32 = 3_200;
+const MAX_FARM_ACTIONS: usize = 1_000;
+const MAX_ITERATION_EVIDENCE_BYTES: usize = 8 * 1024 * 1024;
+const MAX_APPIUM_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
+const MAX_SCREENSHOT_BYTES: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Default)]
 pub(crate) struct FarmRunManager {
@@ -85,9 +93,26 @@ impl FarmRunManager {
             return Err("Farm sessionId does not match the selected SessionIR.".to_owned());
         }
         let (package, activity) = session_target(&session)?;
+        let steps = session
+            .get("steps")
+            .and_then(Value::as_array)
+            .ok_or_else(|| "BLOCKED: SessionIR steps are missing or invalid.".to_owned())?;
+        if steps.is_empty() {
+            return Err("BLOCKED: Farm replay requires at least one recorded action.".to_owned());
+        }
+        if steps.len() > MAX_FARM_ACTIONS {
+            return Err(format!(
+                "BLOCKED: Farm replay supports at most {MAX_FARM_ACTIONS} actions per session to keep evidence bounded."
+            ));
+        }
         let requested_ids = spec.device_ids.clone().ok_or_else(|| {
             "Farm deviceIds must contain the latest real ADB snapshot.".to_owned()
         })?;
+        if requested_ids.len() > MAX_FARM_DEVICE_TARGETS {
+            return Err(format!(
+                "Farm deviceIds cannot contain more than {MAX_FARM_DEVICE_TARGETS} devices per run."
+            ));
+        }
         let by_id = devices
             .into_iter()
             .map(|device| (device.device_id.clone(), device))
@@ -184,6 +209,7 @@ impl FarmRunManager {
         }
 
         let manager = self.clone();
+        let session = Arc::new(session);
         let gate = Arc::new(ConcurrencyGate::new(
             spec.max_parallel_devices.min(targets.len() as u32) as usize,
         ));
@@ -192,7 +218,7 @@ impl FarmRunManager {
         {
             let manager = manager.clone();
             let gate = gate.clone();
-            let session = session.clone();
+            let session = Arc::clone(&session);
             let package = package.clone();
             let activity = activity.clone();
             let spec = spec.clone();
@@ -409,6 +435,9 @@ fn execute_device(
         }
         let adb = AdbClient::new(adb_path.clone());
         adb.verify_application(&device.adb_serial, package, activity)?;
+        if cancel.load(Ordering::SeqCst) {
+            return Err("CANCELLED: Farm run was cancelled after target validation.".to_owned());
+        }
         let (lease_id, leased_ports) =
             ports.reserve(farm_run_id, &device.device_id, FARM_PORT_COUNT)?;
         ports.activate(&lease_id)?;
@@ -427,7 +456,7 @@ fn execute_device(
             ],
         )?;
         appium_process_id = Some(process_id);
-        let client = AppiumClient::wait_for_server(appium_port)?;
+        let client = AppiumClient::wait_for_server(appium_port, cancel.as_ref())?;
         let session_id = client.create_session(
             package,
             activity,
@@ -449,13 +478,27 @@ fn execute_device(
                 break;
             }
             let iteration = execute_iteration(
-                client, session_id, package, activity, steps, &device, &cancel,
+                client,
+                session_id,
+                package,
+                activity,
+                steps,
+                &device,
+                &cancel,
+                &workspace,
+                farm_run_id,
             )?;
             let iteration_status = iteration
                 .get("status")
                 .and_then(Value::as_str)
                 .unwrap_or("failed");
-            result.iterations.push(iteration);
+            let iteration_evidence =
+                persist_iteration_evidence(&workspace, farm_run_id, &device, &iteration)?;
+            result.iterations.push(summarize_iteration(
+                &iteration,
+                iteration_number,
+                iteration_evidence,
+            ));
             result.completed_iterations += 1;
             match iteration_status {
                 "passed" => result.passed_iterations += 1,
@@ -524,6 +567,8 @@ fn execute_iteration(
     steps: &[Value],
     device: &DeviceProfile,
     cancel: &Arc<AtomicBool>,
+    workspace: &Path,
+    farm_run_id: &str,
 ) -> Result<Value, String> {
     let iteration_id = runtime_id("iteration");
     let started_at = now();
@@ -542,17 +587,27 @@ fn execute_iteration(
             .and_then(Value::as_str)
             .unwrap_or("unknown-action");
         match execute_action(client, session_id, package, activity, step, cancel) {
-            Ok(observation) => observations.push(json!({
-                "actionId": action_id,
-                "status": "passed",
-                "fallbackUsed": observation.fallback_used,
-                "resolvedLocator": observation.locator,
-                "hierarchyHash": observation.hierarchy_hash,
-                "durationMs": now().saturating_sub(step_started),
-                "timestamp": now(),
-                "deviceId": device.device_id,
-                "adbSerialSnapshot": device.adb_serial,
-            })),
+            Ok(observation) => {
+                let artifacts = persist_step_artifacts(
+                    workspace,
+                    farm_run_id,
+                    device,
+                    &iteration_id,
+                    observation.screenshot,
+                )?;
+                observations.push(json!({
+                    "actionId": action_id,
+                    "status": "passed",
+                    "fallbackUsed": observation.fallback_used,
+                    "resolvedLocator": observation.locator,
+                    "hierarchyHash": observation.hierarchy_hash,
+                    "artifacts": artifacts,
+                    "durationMs": now().saturating_sub(step_started),
+                    "timestamp": now(),
+                    "deviceId": device.device_id,
+                    "adbSerialSnapshot": device.adb_serial,
+                }));
+            }
             Err(error) => {
                 let status = if error.starts_with("CANCELLED:") {
                     "cancelled"
@@ -593,10 +648,139 @@ fn execute_iteration(
     }))
 }
 
+fn persist_step_artifacts(
+    workspace: &Path,
+    farm_run_id: &str,
+    device: &DeviceProfile,
+    iteration_id: &str,
+    screenshot: Option<Vec<u8>>,
+) -> Result<Vec<Value>, String> {
+    let Some(bytes) = screenshot else {
+        return Ok(Vec::new());
+    };
+    if bytes.is_empty() {
+        return Err("BLOCKED: Android screenshot returned no bytes.".to_owned());
+    }
+    let directory = workspace
+        .join(".automate-plus")
+        .join("evidence")
+        .join("farm")
+        .join(farm_run_id)
+        .join("devices")
+        .join(&device.device_id)
+        .join("iterations")
+        .join(iteration_id);
+    fs::create_dir_all(&directory).map_err(|error| {
+        format!("BLOCKED: Android screenshot evidence directory could not be created: {error}")
+    })?;
+    let artifact_id = runtime_id("artifact");
+    let path = directory.join(format!("{artifact_id}.png"));
+    fs::write(&path, &bytes).map_err(|error| {
+        format!("BLOCKED: Android screenshot evidence could not be written: {error}")
+    })?;
+    let digest = sha256_bytes(&bytes);
+    let relative_path = path
+        .strip_prefix(workspace)
+        .unwrap_or(&path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    if let Ok(database) = Database::open_at(workspace) {
+        let _ = database.record_artifact(
+            &artifact_id,
+            farm_run_id,
+            &relative_path,
+            &digest,
+            "image/png",
+        );
+    }
+    Ok(vec![json!({
+        "artifactId": artifact_id,
+        "kind": "android-screenshot",
+        "relativePath": relative_path,
+        "sha256": digest,
+    })])
+}
+
+fn persist_iteration_evidence(
+    workspace: &Path,
+    farm_run_id: &str,
+    device: &DeviceProfile,
+    iteration: &Value,
+) -> Result<Value, String> {
+    let iteration_id = iteration
+        .get("iterationId")
+        .and_then(Value::as_str)
+        .ok_or_else(|| {
+            "BLOCKED: Android iteration evidence is missing its iteration id.".to_owned()
+        })?;
+    let content = serde_json::to_vec_pretty(iteration).map_err(|error| {
+        format!("BLOCKED: Android iteration evidence could not be serialized: {error}")
+    })?;
+    if content.len() > MAX_ITERATION_EVIDENCE_BYTES {
+        return Err(format!(
+            "BLOCKED: Android iteration evidence exceeded the {MAX_ITERATION_EVIDENCE_BYTES} byte safety limit."
+        ));
+    }
+    let directory = workspace
+        .join(".automate-plus")
+        .join("evidence")
+        .join("farm")
+        .join(farm_run_id)
+        .join("devices")
+        .join(&device.device_id)
+        .join("iterations")
+        .join(iteration_id);
+    fs::create_dir_all(&directory).map_err(|error| {
+        format!("BLOCKED: Android iteration evidence directory could not be created: {error}")
+    })?;
+    let artifact_id = runtime_id("artifact");
+    let path = directory.join("evidence.json");
+    fs::write(&path, &content).map_err(|error| {
+        format!("BLOCKED: Android iteration evidence could not be written: {error}")
+    })?;
+    let digest = sha256_bytes(&content);
+    let relative_path = path
+        .strip_prefix(workspace)
+        .unwrap_or(&path)
+        .to_string_lossy()
+        .replace('\\', "/");
+    if let Ok(database) = Database::open_at(workspace) {
+        let _ = database.record_artifact(
+            &artifact_id,
+            farm_run_id,
+            &relative_path,
+            &digest,
+            "application/json",
+        );
+    }
+    Ok(json!({
+        "artifactId": artifact_id,
+        "kind": "android-iteration-evidence",
+        "relativePath": relative_path,
+        "sha256": digest,
+    }))
+}
+
+fn summarize_iteration(iteration: &Value, iteration_number: u32, evidence: Value) -> Value {
+    json!({
+        "iterationId": iteration.get("iterationId"),
+        "iterationNumber": iteration_number,
+        "deviceId": iteration.get("deviceId"),
+        "adbSerialSnapshot": iteration.get("adbSerialSnapshot"),
+        "status": iteration.get("status"),
+        "stepCount": iteration.get("steps").and_then(Value::as_array).map(Vec::len).unwrap_or(0),
+        "evidence": evidence,
+        "startedAt": iteration.get("startedAt"),
+        "completedAt": iteration.get("completedAt"),
+        "errorMessage": iteration.get("errorMessage"),
+    })
+}
+
 struct ActionObservation {
     locator: Option<Value>,
     fallback_used: bool,
     hierarchy_hash: Option<String>,
+    screenshot: Option<Vec<u8>>,
 }
 
 fn execute_action(
@@ -612,11 +796,23 @@ fn execute_action(
         .and_then(Value::as_str)
         .ok_or_else(|| "BLOCKED: Android action type is missing.".to_owned())?;
     let hierarchy_hash = Some(client.source_hash(session_id)?);
+    let screenshot = if action == "takeScreenshot" {
+        Some(client.screenshot(session_id)?)
+    } else {
+        None
+    };
     let (element, locator, fallback_used) = match action {
-        "assertHidden" => (None, None, false),
+        "assertHidden" | "takeScreenshot" | "scroll" => (None, None, false),
         "sleep" => (None, None, false),
         "back" | "home" | "enter" | "launchApp" | "closeApp" => (None, None, false),
-        _ => resolve_element(client, session_id, step, cancel, action == "waitFor")?,
+        _ => resolve_element(
+            client,
+            session_id,
+            step,
+            cancel,
+            action == "waitFor",
+            action,
+        )?,
     };
     match action {
         "tap" | "click" => {
@@ -723,8 +919,51 @@ fn execute_action(
                 .unwrap_or(300);
             client.pointer_swipe(session_id, start, end, duration)?;
         }
-        "drag" | "dragAndDrop" | "scroll" | "pinch" | "takeScreenshot" => {
-            return Err(format!("BLOCKED: Android action '{action}' is not implemented by the verified Appium worker."));
+        "drag" | "dragAndDrop" => {
+            let source = if let Some(element) = element {
+                client.element_center(session_id, &element)?
+            } else {
+                coordinates(step)?
+            };
+            let target_locators = step
+                .get("dragTarget")
+                .and_then(|target| target.get("locators"))
+                .and_then(Value::as_array)
+                .filter(|locators| !locators.is_empty())
+                .ok_or_else(|| {
+                    "BLOCKED: Android drag requires a real target locator.".to_owned()
+                })?;
+            let mut target_element = None;
+            let mut last_error = None;
+            for target_locator in target_locators {
+                match client.find_element(session_id, target_locator) {
+                    Ok(found) => {
+                        target_element = Some(found);
+                        break;
+                    }
+                    Err(error) => last_error = Some(error),
+                }
+            }
+            let target_element = target_element.ok_or_else(|| {
+                format!(
+                        "FAILED: Android drag target did not match the live UI hierarchy. {}",
+                        last_error.unwrap_or_else(
+                            || "No target locator candidates were provided.".to_owned()
+                        )
+                    )
+            })?;
+            let target = client.element_center(session_id, &target_element)?;
+            client.pointer_swipe(session_id, source, target, 500)?;
+        }
+        "scroll" => {
+            client.scroll_gesture(session_id, step.get("scrollOffset"))?;
+        }
+        "takeScreenshot" => {}
+        "pinch" => {
+            return Err(
+                "BLOCKED: Android pinch requires a verified multi-pointer Appium action contract."
+                    .to_owned(),
+            );
         }
         _ => {
             return Err(format!(
@@ -736,6 +975,7 @@ fn execute_action(
         locator,
         fallback_used,
         hierarchy_hash,
+        screenshot,
     })
 }
 
@@ -745,6 +985,7 @@ fn resolve_element(
     step: &Value,
     cancel: &Arc<AtomicBool>,
     wait: bool,
+    action: &str,
 ) -> Result<(Option<String>, Option<Value>, bool), String> {
     let timeout_ms = step
         .get("timeoutMs")
@@ -757,9 +998,37 @@ fn resolve_element(
                 "CANCELLED: Farm run was cancelled while resolving an Android locator.".to_owned(),
             );
         }
-        let locators = step.get("locators").and_then(Value::as_array).ok_or_else(|| {
-            "BLOCKED: Android action requires a semantic locator or an explicitly recorded coordinate.".to_owned()
-        })?;
+        let Some(locators) = step.get("locators").and_then(Value::as_array) else {
+            if matches!(
+                action,
+                "tap"
+                    | "click"
+                    | "doubleTap"
+                    | "doubleClick"
+                    | "longPress"
+                    | "drag"
+                    | "dragAndDrop"
+            ) {
+                let _ = coordinates(step)?;
+                return Ok((None, None, true));
+            }
+            return Err("BLOCKED: Android action requires a semantic locator or an explicitly recorded coordinate.".to_owned());
+        };
+        if locators.is_empty()
+            && matches!(
+                action,
+                "tap"
+                    | "click"
+                    | "doubleTap"
+                    | "doubleClick"
+                    | "longPress"
+                    | "drag"
+                    | "dragAndDrop"
+            )
+        {
+            let _ = coordinates(step)?;
+            return Ok((None, None, true));
+        }
         let mut last_error = None;
         for (index, locator) in locators.iter().enumerate() {
             match client.find_element(session_id, locator) {
@@ -1000,7 +1269,7 @@ struct AppiumClient {
 }
 
 impl AppiumClient {
-    fn wait_for_server(port: u16) -> Result<Self, String> {
+    fn wait_for_server(port: u16, cancel: &AtomicBool) -> Result<Self, String> {
         let http = Client::builder()
             .timeout(APPIUM_REQUEST_TIMEOUT)
             .build()
@@ -1012,6 +1281,11 @@ impl AppiumClient {
         let started = Instant::now();
         let mut last_error = String::from("Appium did not respond.");
         while started.elapsed() < APPIUM_START_TIMEOUT {
+            if cancel.load(Ordering::SeqCst) {
+                return Err(
+                    "CANCELLED: Farm run was cancelled while waiting for Appium.".to_owned(),
+                );
+            }
             match client.request(Method::GET, "/status", None) {
                 Ok(_) => return Ok(client),
                 Err(error) => last_error = error,
@@ -1044,6 +1318,15 @@ impl AppiumClient {
                         "appium:appPackage": package,
                         "appium:appActivity": activity,
                         "appium:noReset": true,
+                        "appium:fullReset": false,
+                        // NotiPlus is already installed and is validated with
+                        // ADB before session creation. Skipping Appium's
+                        // optional device-initialisation probes avoids
+                        // querying secondary Android users that are not
+                        // accessible to the shell account (for example
+                        // Secure Folder) while keeping the target and serial
+                        // checks fail-closed above.
+                        "appium:skipDeviceInitialization": true,
                         "appium:systemPort": system_port,
                         "appium:mjpegServerPort": mjpeg_port,
                         "appium:chromedriverPort": chromedriver_port
@@ -1181,6 +1464,23 @@ impl AppiumClient {
         ))
     }
 
+    fn window_size(&self, session_id: &str) -> Result<(u32, u32), String> {
+        let response = self.request(Method::GET, &session_path(session_id, "window/size"), None)?;
+        let value = response
+            .get("value")
+            .ok_or_else(|| "BLOCKED: Appium returned no Android window size.".to_owned())?;
+        let width = value.get("width").and_then(Value::as_u64).ok_or_else(|| {
+            "BLOCKED: Appium returned an invalid Android window width.".to_owned()
+        })?;
+        let height = value.get("height").and_then(Value::as_u64).ok_or_else(|| {
+            "BLOCKED: Appium returned an invalid Android window height.".to_owned()
+        })?;
+        if width == 0 || height == 0 || width > i32::MAX as u64 || height > i32::MAX as u64 {
+            return Err("BLOCKED: Android window size is outside the supported range.".to_owned());
+        }
+        Ok((width as u32, height as u32))
+    }
+
     fn pointer_tap(&self, session_id: &str, point: (i32, i32)) -> Result<(), String> {
         self.pointer_action(
             session_id,
@@ -1224,6 +1524,75 @@ impl AppiumClient {
                 json!({ "type": "pointerMove", "duration": duration_ms, "x": end.0, "y": end.1 }),
                 json!({ "type": "pointerUp", "button": 0 }),
             ],
+        )
+    }
+
+    fn scroll_gesture(&self, session_id: &str, offset: Option<&Value>) -> Result<(), String> {
+        let offset = offset.ok_or_else(|| {
+            "BLOCKED: Android scroll requires an explicit scrollOffset.".to_owned()
+        })?;
+        let delta_x = offset
+            .get("deltaX")
+            .and_then(Value::as_f64)
+            .ok_or_else(|| "BLOCKED: Android scroll deltaX is invalid.".to_owned())?;
+        let delta_y = offset
+            .get("deltaY")
+            .and_then(Value::as_f64)
+            .ok_or_else(|| "BLOCKED: Android scroll deltaY is invalid.".to_owned())?;
+        if !delta_x.is_finite() || !delta_y.is_finite() || (delta_x == 0.0 && delta_y == 0.0) {
+            return Err(
+                "BLOCKED: Android scroll offset must contain a finite non-zero delta.".to_owned(),
+            );
+        }
+        let (width, height) = self.window_size(session_id)?;
+        let (direction, distance, axis) = if delta_y.abs() >= delta_x.abs() {
+            (
+                if delta_y >= 0.0 { "down" } else { "up" },
+                delta_y.abs(),
+                height as f64,
+            )
+        } else {
+            (
+                if delta_x >= 0.0 { "right" } else { "left" },
+                delta_x.abs(),
+                width as f64,
+            )
+        };
+        let percent = (distance / axis).clamp(0.1, 1.0);
+        self.execute_script(
+            session_id,
+            "mobile: scrollGesture",
+            json!({
+                "left": 0,
+                "top": 0,
+                "width": width,
+                "height": height,
+                "direction": direction,
+                "percent": percent,
+            }),
+        )
+        .map(|_| ())
+    }
+
+    fn screenshot(&self, session_id: &str) -> Result<Vec<u8>, String> {
+        let response = self.request(Method::GET, &session_path(session_id, "screenshot"), None)?;
+        let encoded = response
+            .get("value")
+            .and_then(Value::as_str)
+            .ok_or_else(|| "BLOCKED: Appium returned no screenshot payload.".to_owned())?;
+        decode_base64(encoded)
+    }
+
+    fn execute_script(
+        &self,
+        session_id: &str,
+        script: &str,
+        argument: Value,
+    ) -> Result<Value, String> {
+        self.request(
+            Method::POST,
+            &session_path(session_id, "execute/sync"),
+            Some(json!({ "script": script, "args": [argument] })),
         )
     }
 
@@ -1307,16 +1676,40 @@ impl AppiumClient {
             .send()
             .map_err(|error| format!("BLOCKED: Local Appium request failed: {error}"))?;
         let status = response.status();
-        let text = response.text().map_err(|error| {
-            format!("BLOCKED: Local Appium response could not be read: {error}")
-        })?;
-        let value = serde_json::from_str::<Value>(&text)
+        if response
+            .content_length()
+            .is_some_and(|length| length > MAX_APPIUM_RESPONSE_BYTES as u64)
+        {
+            return Err(format!(
+                "BLOCKED: Local Appium response exceeded the {MAX_APPIUM_RESPONSE_BYTES} byte safety limit."
+            ));
+        }
+        let mut body = Vec::with_capacity(
+            response
+                .content_length()
+                .map(|length| (length as usize).min(64 * 1024))
+                .unwrap_or(16 * 1024),
+        );
+        response
+            .take((MAX_APPIUM_RESPONSE_BYTES + 1) as u64)
+            .read_to_end(&mut body)
+            .map_err(|error| {
+                format!("BLOCKED: Local Appium response could not be read: {error}")
+            })?;
+        if body.len() > MAX_APPIUM_RESPONSE_BYTES {
+            return Err(format!(
+                "BLOCKED: Local Appium response exceeded the {MAX_APPIUM_RESPONSE_BYTES} byte safety limit."
+            ));
+        }
+        let value = serde_json::from_slice::<Value>(&body)
             .map_err(|error| format!("BLOCKED: Appium returned invalid JSON: {error}"))?;
         if !status.is_success() {
+            let error = appium_error(&value);
             return Err(format!(
-                "FAILED: Appium HTTP {}: {}",
+                "{}: Appium HTTP {}: {}",
+                appium_error_status(&error),
                 status.as_u16(),
-                appium_error(&value)
+                error
             ));
         }
         if value
@@ -1324,7 +1717,12 @@ impl AppiumClient {
             .and_then(|item| item.get("error"))
             .is_some()
         {
-            return Err(format!("FAILED: Appium: {}", appium_error(&value)));
+            let error = appium_error(&value);
+            return Err(format!(
+                "{}: Appium: {}",
+                appium_error_status(&error),
+                error
+            ));
         }
         Ok(value)
     }
@@ -1353,6 +1751,7 @@ fn appium_locator(locator: &Value) -> Result<(&str, String), String> {
         "resourceId" | "id" => Ok(("id", value.to_owned())),
         "xpath" => Ok(("xpath", value.to_owned())),
         "text" | "name" => Ok(("-android uiautomator", format!("new UiSelector().text(\"{}\")", java_string(value)))),
+        "role" => Ok(("-android uiautomator", format!("new UiSelector().className(\"{}\")", java_string(value)))),
         _ => Err(format!("BLOCKED: Android locator strategy '{strategy}' is not supported by the verified Appium worker.")),
     }
 }
@@ -1397,6 +1796,26 @@ fn appium_error(value: &Value) -> String {
         .to_owned()
 }
 
+fn appium_error_status(error: &str) -> &'static str {
+    let normalized = error.to_ascii_lowercase();
+    if [
+        "securityexception",
+        "install_failed_user_restricted",
+        "user_restricted",
+        "device unauthorized",
+        "device offline",
+        "no such device",
+        "adbexec",
+    ]
+    .iter()
+    .any(|marker| normalized.contains(marker))
+    {
+        "BLOCKED"
+    } else {
+        "FAILED"
+    }
+}
+
 fn sha256_bytes(bytes: &[u8]) -> String {
     let mut hasher = Sha256::new();
     hasher.update(bytes);
@@ -1405,6 +1824,54 @@ fn sha256_bytes(bytes: &[u8]) -> String {
         .iter()
         .map(|byte| format!("{byte:02x}"))
         .collect()
+}
+
+fn decode_base64(value: &str) -> Result<Vec<u8>, String> {
+    if value.len() > MAX_APPIUM_RESPONSE_BYTES {
+        return Err(format!(
+            "BLOCKED: Appium screenshot payload exceeded the {MAX_APPIUM_RESPONSE_BYTES} byte safety limit."
+        ));
+    }
+    let mut output = Vec::with_capacity(value.len() * 3 / 4);
+    let mut accumulator = 0_u32;
+    let mut bits = 0_u8;
+    for byte in value.bytes() {
+        if byte.is_ascii_whitespace() || byte == b'=' {
+            continue;
+        }
+        let six_bits = match byte {
+            b'A'..=b'Z' => byte - b'A',
+            b'a'..=b'z' => byte - b'a' + 26,
+            b'0'..=b'9' => byte - b'0' + 52,
+            b'+' => 62,
+            b'/' => 63,
+            _ => {
+                return Err(
+                    "BLOCKED: Appium returned an invalid base64 screenshot payload.".to_owned(),
+                )
+            }
+        } as u32;
+        accumulator = (accumulator << 6) | six_bits;
+        bits += 6;
+        if bits >= 8 {
+            bits -= 8;
+            output.push(((accumulator >> bits) & 0xff) as u8);
+            if output.len() > MAX_SCREENSHOT_BYTES {
+                return Err(format!(
+                    "BLOCKED: Android screenshot exceeded the {MAX_SCREENSHOT_BYTES} byte safety limit."
+                ));
+            }
+            if bits == 0 {
+                accumulator = 0;
+            } else {
+                accumulator &= (1_u32 << bits) - 1;
+            }
+        }
+    }
+    if output.is_empty() {
+        return Err("BLOCKED: Appium returned an empty base64 screenshot payload.".to_owned());
+    }
+    Ok(output)
 }
 
 fn now() -> u64 {
@@ -1468,18 +1935,99 @@ pub(crate) fn validate_spec(spec: &FarmRunSpec) -> Result<(), String> {
     if device_ids.is_empty() || device_ids.iter().any(|id| id.trim().is_empty()) {
         return Err("Farm deviceIds must contain at least one real device id.".to_owned());
     }
+    if device_ids.len() > MAX_FARM_DEVICE_TARGETS {
+        return Err(format!(
+            "Farm deviceIds cannot contain more than {MAX_FARM_DEVICE_TARGETS} devices per run."
+        ));
+    }
     let unique = device_ids.iter().collect::<HashSet<_>>();
     if unique.len() != device_ids.len() {
         return Err("Farm deviceIds must be unique.".to_owned());
     }
     if spec.strategy == "split-iterations" {
-        if spec.total_iterations.unwrap_or(0) == 0 {
+        let total_iterations = spec.total_iterations.unwrap_or(0);
+        if total_iterations == 0 {
             return Err(
                 "totalIterations must be greater than zero for split-iterations.".to_owned(),
             );
         }
+        if total_iterations > MAX_FARM_TOTAL_ITERATIONS {
+            return Err(format!(
+                "totalIterations cannot exceed {MAX_FARM_TOTAL_ITERATIONS} per farm run."
+            ));
+        }
     } else if spec.iterations_per_device.unwrap_or(0) == 0 {
         return Err("iterationsPerDevice must be greater than zero for device replay.".to_owned());
+    } else if spec.iterations_per_device.unwrap_or(0) > MAX_FARM_ITERATIONS_PER_DEVICE {
+        return Err(format!(
+            "iterationsPerDevice cannot exceed {MAX_FARM_ITERATIONS_PER_DEVICE} per device."
+        ));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{appium_error_status, appium_locator, decode_base64, validate_spec};
+    use crate::contracts::FarmRunSpec;
+
+    #[test]
+    fn classifies_device_policy_and_transport_errors_as_blocked() {
+        assert_eq!(
+            appium_error_status(
+                "java.lang.SecurityException: Shell does not have permission to access user 150"
+            ),
+            "BLOCKED"
+        );
+        assert_eq!(
+            appium_error_status("INSTALL_FAILED_USER_RESTRICTED: install canceled by user"),
+            "BLOCKED"
+        );
+        assert_eq!(appium_error_status("device offline"), "BLOCKED");
+    }
+
+    #[test]
+    fn preserves_real_action_failures_as_failed() {
+        assert_eq!(
+            appium_error_status("NoSuchElementError: Riwayat was not found"),
+            "FAILED"
+        );
+    }
+
+    #[test]
+    fn decodes_real_appium_base64_payload_without_accepting_invalid_bytes() {
+        assert_eq!(decode_base64("aGVsbG8=").expect("base64"), b"hello");
+        assert!(decode_base64("not base64!").is_err());
+    }
+
+    #[test]
+    fn maps_observed_android_class_to_a_real_uiautomator_locator() {
+        let (strategy, value) = appium_locator(&serde_json::json!({
+            "strategy": "role",
+            "value": "android.widget.Button"
+        }))
+        .expect("class locator");
+        assert_eq!(strategy, "-android uiautomator");
+        assert_eq!(
+            value,
+            "new UiSelector().className(\"android.widget.Button\")"
+        );
+    }
+
+    #[test]
+    fn rejects_unbounded_farm_iterations_before_starting_workers() {
+        let spec = FarmRunSpec {
+            schema_version: 1,
+            session_id: "session".to_owned(),
+            strategy: "all-devices".to_owned(),
+            device_group_id: None,
+            device_ids: Some(vec!["device".to_owned()]),
+            iterations_per_device: Some(51),
+            total_iterations: None,
+            max_parallel_devices: 1,
+            iteration_delay_ms: 0,
+            failure_policy: "continue-other-devices".to_owned(),
+        };
+        assert!(validate_spec(&spec).is_err());
+    }
 }

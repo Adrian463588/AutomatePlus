@@ -20,6 +20,11 @@ export class HttpPythonGenerator extends BaseCodeGenerator {
       `    last_response = None`,
       `    last_response_time_ms = 0`,
       ``,
+      `    def require_response():`,
+      `        if last_response is None:`,
+      `            raise AssertionError("API assertion requires a preceding httpRequest step.")`,
+      `        return last_response`,
+      ``,
       `    def read_json_path(value, path):`,
       `        current = value`,
       `        for key in path.lstrip('$.').split('.'):` ,
@@ -38,7 +43,7 @@ export class HttpPythonGenerator extends BaseCodeGenerator {
       const dataStr = bodyContent === undefined ? 'None' : this.getPythonValue(bodyContent);
 
       const extractionLines = (extractedVariables || []).map(
-        (v) => `    variables[${this.getPythonValue(v.variableName)}] = read_json_path(last_response.json(), ${this.getPythonValue(v.jsonPath)})`
+        (v) => `    variables[${this.getPythonValue(v.variableName)}] = read_json_path(require_response().json(), ${this.getPythonValue(v.jsonPath)})`
       );
       const requestStartedAt = `request_started_at_step_${action.stepNumber}`;
 
@@ -58,20 +63,20 @@ export class HttpPythonGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertStatusCode') {
-      return `    assert last_response.status_code == ${this.requireExpectedNumber(action, 100, 599)}`;
+      return `    assert require_response().status_code == ${this.requireExpectedNumber(action, 100, 599)}`;
     }
 
     if (action.action === 'assertJsonPath') {
       const path = action.attributeName || action.assertion?.jsonPath || '';
-      return `    assert read_json_path(last_response.json(), ${this.getPythonValue(path)}) == ${this.getPythonValue(action.expectedValue)}`;
+      return `    assert read_json_path(require_response().json(), ${this.getPythonValue(path)}) == ${this.getPythonValue(action.expectedValue)}`;
     }
 
     if (action.action === 'assertHeader') {
-      return `    assert ${this.getPythonValue(action.expectedValue)} in last_response.headers.get(${this.getPythonValue(action.attributeName)}, "")`;
+      return `    assert ${this.getPythonValue(action.expectedValue)} in require_response().headers.get(${this.getPythonValue(action.attributeName)}, "")`;
     }
 
     if (action.action === 'assertResponseTime') {
-      return `    assert last_response_time_ms <= ${this.requireExpectedNumber(action, 1)}`;
+      return `    require_response()\n    assert last_response_time_ms <= ${this.requireExpectedNumber(action, 1)}`;
     }
 
     if (action.action === 'sleep') {

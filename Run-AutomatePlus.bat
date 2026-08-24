@@ -11,6 +11,7 @@ set "BROWSER_DEV=0"
 set "NO_OPEN=0"
 set "PORT="
 set "AUTOMATE_PLUS_PORT="
+set "INVALID_ARGS=0"
 
 :parse_args
 if "%~1"=="" goto args_parsed
@@ -48,7 +49,7 @@ if /I "!ARG!"=="--no-open" (
 )
 if /I "!ARG!"=="--port" goto port_value_arg
 if /I "!ARG:~0,7!"=="--port=" goto port_arg
-goto invalid_args
+goto invalid_arg_seen
 
 :port_value_arg
 shift
@@ -63,8 +64,12 @@ if "!PORT!"=="" goto invalid_args
 shift
 goto parse_args
 
+:invalid_arg_seen
+set "INVALID_ARGS=1"
+shift
+goto parse_args
+
 :args_parsed
-set "INVALID_ARGS=0"
 if "!DOCTOR!"=="1" if not "!MODE!"=="native" set "INVALID_ARGS=1"
 if "!DOCTOR!"=="1" if "!BUILD_DEV!"=="1" set "INVALID_ARGS=1"
 if "!DOCTOR!"=="1" if "!BROWSER_DEV!"=="1" set "INVALID_ARGS=1"

@@ -1,5 +1,5 @@
 import { ActionIR, LocatorCandidate, SessionIR } from '@automate-plus/ir-schema';
-import { GeneratorOptions } from '@automate-plus/contracts';
+import { CapabilityError, GeneratorOptions } from '@automate-plus/contracts';
 import { BaseCodeGenerator } from '../base.generator.js';
 
 export class MaestroYamlGenerator extends BaseCodeGenerator {
@@ -8,17 +8,17 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
   public readonly supportedPlatforms = ['android'] as const;
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
-    const appId = this.requireTargetField(session, 'appPackage');
+    const appId = this.requireAndroidPackage(session);
     return [
-      `appId: ${appId}`,
+      `appId: ${this.yamlString(appId)}`,
       `---`,
       `- launchApp`,
     ].join('\n');
   }
 
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
-    const rawVal = this.getRawValue(action.value);
-    const expected = this.getRawValue(action.expectedValue ?? action.value);
+    const rawValue = this.getRawValue(action.value);
+    const expected = this.getRawValue(this.getAssertionExpected(action));
 
     switch (action.action) {
       case 'tap':
@@ -33,7 +33,7 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
         return `- longPressOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}`;
 
       case 'fill':
-        return `- tapOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}\n- inputText: "${rawVal}"`;
+        return `- tapOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}\n- inputText: ${this.yamlString(rawValue)}`;
 
       case 'clear':
         return `- tapOn:\n    ${this.formatMaestroSelector(this.requireLocator(action))}\n- eraseText`;
@@ -44,20 +44,37 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
       case 'scroll':
         return `- scroll`;
 
-      case 'swipe':
-        return this.unsupportedAction(action);
+      case 'swipe': {
+        const vector = action.swipeVector;
+        if (!vector) return this.unsupportedAction(action);
+        return [
+          `- swipe:`,
+          `    start: ${vector.startX}, ${vector.startY}`,
+          `    end: ${vector.endX}, ${vector.endY}`,
+          `    duration: ${vector.durationMs}`,
+        ].join('\n');
+      }
 
       case 'sleep':
-        return `- delay: ${action.timeoutMs ?? 1000}`;
+        return `- waitForAnimationToEnd:\n    timeout: ${action.timeoutMs ?? 1000}`;
 
-      case 'takeScreenshot':
-        return `- takeScreenshot: ${rawVal || 'screenshot'}`;
+      case 'takeScreenshot': {
+        const name = rawValue.replace(/[^A-Za-z0-9_-]/gu, '_') || 'screenshot';
+        if (rawValue.includes('${')) {
+          throw new CapabilityError('Maestro screenshot names must be concrete file names, not secret references.', {
+            framework: this.framework,
+            language: this.language,
+            action: action.action,
+          });
+        }
+        return `- takeScreenshot: ${this.yamlString(name)}`;
+      }
 
       case 'assertVisible':
         return `- assertVisible:\n    ${this.formatMaestroSelector(this.requireLocator(action))}`;
 
       case 'assertText':
-        return `- assertVisible:\n    ${this.formatMaestroSelector(this.requireLocator(action))}\n- assertVisible: "${expected}"`;
+        return `- assertVisible:\n    ${this.formatMaestroTextAssertion(this.requireLocator(action), expected)}`;
 
       default:
         return this.unsupportedAction(action);
@@ -71,11 +88,27 @@ export class MaestroYamlGenerator extends BaseCodeGenerator {
   private formatMaestroSelector(loc: LocatorCandidate): string {
     switch (loc.strategy) {
       case 'resourceId':
-        return `id: "${loc.value}"`;
+        return `id: ${this.yamlString(loc.value)}`;
+      case 'accessibilityId':
       case 'text':
-        return `text: "${loc.value}"`;
+        return `text: ${this.yamlString(loc.value)}`;
       default:
         return this.unsupportedLocator(loc);
     }
+  }
+
+  private formatMaestroTextAssertion(loc: LocatorCandidate, expected: string): string {
+    const exactText = `^${expected.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&')}$`;
+    if (loc.strategy === 'resourceId') {
+      return `id: ${this.yamlString(loc.value)}\n    text: ${this.yamlString(exactText)}`;
+    }
+    if (loc.strategy === 'text' || loc.strategy === 'accessibilityId') {
+      return `text: ${this.yamlString(exactText)}`;
+    }
+    return this.unsupportedLocator(loc);
+  }
+
+  private yamlString(value: string): string {
+    return JSON.stringify(value);
   }
 }

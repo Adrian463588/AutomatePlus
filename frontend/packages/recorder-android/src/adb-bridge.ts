@@ -260,6 +260,9 @@ export class AdbBridge implements IDeviceBridge {
         if (error.failureCode === 'PROCESS_TIMEOUT') {
           throw new AndroidBridgeError('ADB_TIMEOUT', error.message, { blocked: true, deviceId, cause: error });
         }
+        if (error.failureCode === 'PROCESS_OUTPUT_LIMIT') {
+          throw new AndroidBridgeError('ADB_OUTPUT_LIMIT', error.message, { blocked: true, deviceId, cause: error });
+        }
         throw new AndroidBridgeError('ADB_UNAVAILABLE', error.message, {
           blocked: true,
           deviceId,

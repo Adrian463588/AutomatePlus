@@ -19,6 +19,28 @@ describe('Selector Engine Scoring & Ranking', () => {
     expect(ranked[ranked.length - 1].strategy).toBe('xpath');
   });
 
+  it('should rank Android resource IDs above class-name roles', () => {
+    const candidates: LocatorCandidate[] = [
+      { strategy: 'role', value: 'android.widget.Button', score: 100 },
+      { strategy: 'text', value: 'Allow', score: 90 },
+      { strategy: 'resourceId', value: 'com.example:id/allow', score: 80 },
+    ];
+
+    const ranked = rankLocators(candidates, 'android');
+
+    expect(ranked.map((locator) => locator.strategy)).toEqual(['resourceId', 'text', 'role']);
+  });
+
+  it('removes duplicate candidates while preserving the strongest distinct fallback set', () => {
+    const ranked = rankLocators([
+      { strategy: 'text', value: ' Submit ', score: 90 },
+      { strategy: 'text', value: 'Submit', score: 80 },
+      { strategy: 'css', value: '#submit', score: 70 },
+    ], 'web');
+
+    expect(ranked.map((locator) => locator.value)).toEqual(['Submit', '#submit']);
+  });
+
   it('should penalize dynamic generated IDs with random hash digits', () => {
     const candidates: LocatorCandidate[] = [
       { strategy: 'id', value: 'btn-92847192837', score: 0 },

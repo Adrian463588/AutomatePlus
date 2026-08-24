@@ -9,6 +9,7 @@ const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const evidenceRoot = join(root, '.automateplus', 'evidence');
 const enabled = process.env.AUTOMATEPLUS_ONLINE_E2E === '1';
 const timeoutMs = 20_000;
+const MAX_TARGET_RESPONSE_BYTES = 4 * 1024 * 1024;
 
 const targets = {
   sauceDemo: 'https://www.saucedemo.com/',
@@ -28,8 +29,12 @@ async function request(name, url, { headers = {}, validate } = {}) {
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
     const response = await fetch(url, { headers, signal: controller.signal });
-    const body = await response.text();
+    const bodyResult = await readBodyBounded(response, MAX_TARGET_RESPONSE_BYTES);
+    const body = bodyResult.text;
     const checks = validate ? validate(response, body) : [];
+    if (bodyResult.truncated) {
+      checks.push({ name: 'response body safety limit', passed: false, detail: `response exceeded ${MAX_TARGET_RESPONSE_BYTES} bytes` });
+    }
     const passed = response.ok && checks.every((check) => check.passed);
     return {
       name,
@@ -52,6 +57,45 @@ async function request(name, url, { headers = {}, validate } = {}) {
     };
   } finally {
     clearTimeout(timer);
+  }
+}
+
+async function readBodyBounded(response, maxBytes) {
+  const contentLength = response.headers.get('content-length');
+  const declaredLength = contentLength === null ? undefined : Number(contentLength);
+  if (declaredLength !== undefined && Number.isFinite(declaredLength) && declaredLength > maxBytes) {
+    return { text: '', truncated: true };
+  }
+  if (!response.body) {
+    const text = await response.text();
+    return { text, truncated: Buffer.byteLength(text) > maxBytes };
+  }
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+  const chunks = [];
+  let totalBytes = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      const availableBytes = maxBytes - totalBytes;
+      if (value.byteLength > availableBytes) {
+        if (availableBytes > 0) chunks.push(decoder.decode(value.slice(0, availableBytes)));
+        try {
+          await reader.cancel();
+        } catch {
+          // Best effort after the response has exceeded the safety limit.
+        }
+        return { text: chunks.join(''), truncated: true };
+      }
+      totalBytes += value.byteLength;
+      chunks.push(decoder.decode(value, { stream: true }));
+    }
+    const finalChunk = decoder.decode();
+    if (finalChunk) chunks.push(finalChunk);
+    return { text: chunks.join(''), truncated: false };
+  } finally {
+    reader.releaseLock();
   }
 }
 

@@ -1,9 +1,20 @@
 use crate::contracts::{DeviceProfile, Resolution, CONTRACT_VERSION};
 use sha2::{Digest, Sha256};
 use std::collections::HashMap;
+use std::io::{self, Read};
 use std::path::{Path, PathBuf};
-use std::process::Command;
+use std::process::{Command, ExitStatus, Stdio};
+use std::thread;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+const MAX_ADB_STREAM_BYTES: usize = 512 * 1024;
+
+struct BoundedCommandOutput {
+    status: ExitStatus,
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    truncated: bool,
+}
 
 pub struct AdbClient {
     path: PathBuf,
@@ -15,10 +26,12 @@ impl AdbClient {
     }
 
     pub fn discover(&self) -> Result<Vec<DeviceProfile>, String> {
-        let output = Command::new(&self.path)
-            .args(["devices", "-l"])
-            .output()
-            .map_err(|error| format!("Unable to execute ADB: {error}"))?;
+        let output = run_bounded_command(&self.path, &["devices".to_owned(), "-l".to_owned()])?;
+        if output.truncated {
+            return Err(format!(
+                "ADB discovery output exceeded the {MAX_ADB_STREAM_BYTES} byte safety limit."
+            ));
+        }
         if !output.status.success() {
             return Err(String::from_utf8_lossy(&output.stderr).trim().to_owned());
         }
@@ -35,10 +48,23 @@ impl AdbClient {
         if serial.trim().is_empty() || package.trim().is_empty() || activity.trim().is_empty() {
             return Err("BLOCKED: Android package, activity, and serial are required.".to_owned());
         }
-        let package_result = Command::new(&self.path)
-            .args(["-s", serial, "shell", "pm", "path", package])
-            .output()
-            .map_err(|error| format!("BLOCKED: Unable to verify Android package: {error}"))?;
+        let package_result = run_bounded_command(
+            &self.path,
+            &[
+                "-s".to_owned(),
+                serial.to_owned(),
+                "shell".to_owned(),
+                "pm".to_owned(),
+                "path".to_owned(),
+                package.to_owned(),
+            ],
+        )
+        .map_err(|error| format!("BLOCKED: Unable to verify Android package: {error}"))?;
+        if package_result.truncated {
+            return Err(format!(
+                "BLOCKED: Android package verification output exceeded the {MAX_ADB_STREAM_BYTES} byte safety limit."
+            ));
+        }
         if !package_result.status.success()
             || !String::from_utf8_lossy(&package_result.stdout).contains("package:")
         {
@@ -46,19 +72,25 @@ impl AdbClient {
                 "BLOCKED: Android package '{package}' is not installed on serial '{serial}'."
             ));
         }
-        let resolved = Command::new(&self.path)
-            .args([
-                "-s",
-                serial,
-                "shell",
-                "cmd",
-                "package",
-                "resolve-activity",
-                "--brief",
-                package,
-            ])
-            .output()
-            .map_err(|error| format!("BLOCKED: Unable to resolve Android activity: {error}"))?;
+        let resolved = run_bounded_command(
+            &self.path,
+            &[
+                "-s".to_owned(),
+                serial.to_owned(),
+                "shell".to_owned(),
+                "cmd".to_owned(),
+                "package".to_owned(),
+                "resolve-activity".to_owned(),
+                "--brief".to_owned(),
+                package.to_owned(),
+            ],
+        )
+        .map_err(|error| format!("BLOCKED: Unable to resolve Android activity: {error}"))?;
+        if resolved.truncated {
+            return Err(format!(
+                "BLOCKED: Android activity resolution output exceeded the {MAX_ADB_STREAM_BYTES} byte safety limit."
+            ));
+        }
         if !resolved.status.success() {
             return Err(format!(
                 "BLOCKED: Android activity '{activity}' could not be resolved for package '{package}' on serial '{serial}'."
@@ -217,13 +249,18 @@ struct DeviceDetails {
 
 fn query_device_details(adb: &Path, serial: &str) -> DeviceDetails {
     let mut details = DeviceDetails::default();
-    let Ok(output) = Command::new(adb)
-        .args(["-s", serial, "shell", "getprop"])
-        .output()
-    else {
+    let Ok(output) = run_bounded_command(
+        adb,
+        &[
+            "-s".to_owned(),
+            serial.to_owned(),
+            "shell".to_owned(),
+            "getprop".to_owned(),
+        ],
+    ) else {
         return details;
     };
-    if output.status.success() {
+    if output.status.success() && !output.truncated {
         let properties = parse_getprop(&String::from_utf8_lossy(&output.stdout));
         details.model = properties.get("ro.product.model").cloned();
         details.manufacturer = properties.get("ro.product.manufacturer").cloned();
@@ -244,15 +281,69 @@ fn query_device_details(adb: &Path, serial: &str) -> DeviceDetails {
 }
 
 fn run_shell(adb: &Path, serial: &str, args: &[&str]) -> Option<String> {
-    let output = Command::new(adb)
-        .args(["-s", serial, "shell"])
-        .args(args)
-        .output()
-        .ok()?;
+    let mut command_args = vec!["-s".to_owned(), serial.to_owned(), "shell".to_owned()];
+    command_args.extend(args.iter().map(|argument| (*argument).to_owned()));
+    let output = run_bounded_command(adb, &command_args).ok()?;
     output
         .status
         .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+        .then_some(output)
+        .filter(|output| !output.truncated)
+        .map(|output| String::from_utf8_lossy(&output.stdout).into_owned())
+}
+
+fn run_bounded_command(path: &Path, args: &[String]) -> Result<BoundedCommandOutput, String> {
+    let mut child = Command::new(path)
+        .args(args)
+        .stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|error| error.to_string())?;
+
+    let stdout = child
+        .stdout
+        .take()
+        .ok_or_else(|| "ADB stdout pipe was not created.".to_owned())?;
+    let stderr = child
+        .stderr
+        .take()
+        .ok_or_else(|| "ADB stderr pipe was not created.".to_owned())?;
+    let stdout_reader = thread::spawn(|| read_bounded_stream(stdout));
+    let stderr_reader = thread::spawn(|| read_bounded_stream(stderr));
+    let status = child.wait().map_err(|error| error.to_string())?;
+    let (stdout, stdout_truncated) = stdout_reader
+        .join()
+        .map_err(|_| "ADB stdout reader panicked.".to_owned())??;
+    let (stderr, stderr_truncated) = stderr_reader
+        .join()
+        .map_err(|_| "ADB stderr reader panicked.".to_owned())??;
+
+    Ok(BoundedCommandOutput {
+        status,
+        stdout,
+        stderr,
+        truncated: stdout_truncated || stderr_truncated,
+    })
+}
+
+fn read_bounded_stream(mut stream: impl Read) -> io::Result<(Vec<u8>, bool)> {
+    let mut retained = Vec::with_capacity(MAX_ADB_STREAM_BYTES.min(64 * 1024));
+    let mut buffer = [0_u8; 16 * 1024];
+    let mut truncated = false;
+    loop {
+        let read = stream.read(&mut buffer)?;
+        if read == 0 {
+            break;
+        }
+        let remaining = MAX_ADB_STREAM_BYTES.saturating_sub(retained.len());
+        let retained_bytes = read.min(remaining);
+        retained.extend_from_slice(&buffer[..retained_bytes]);
+        if retained_bytes < read {
+            truncated = true;
+        }
+    }
+    Ok((retained, truncated))
 }
 
 fn parse_getprop(text: &str) -> HashMap<String, String> {
@@ -310,7 +401,11 @@ fn now() -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_density, parse_devices, parse_getprop, parse_resolution, stable_device_id};
+    use super::{
+        parse_density, parse_devices, parse_getprop, parse_resolution, read_bounded_stream,
+        stable_device_id, MAX_ADB_STREAM_BYTES,
+    };
+    use std::io::Cursor;
 
     #[test]
     fn parses_real_adb_rows_without_seeded_devices() {
@@ -348,5 +443,13 @@ mod tests {
             parse_density("Physical density: 420\n".to_owned()),
             Some(420)
         );
+    }
+
+    #[test]
+    fn bounds_adb_stream_capture_without_stopping_the_reader() {
+        let input = vec![b'x'; MAX_ADB_STREAM_BYTES + 128];
+        let (retained, truncated) = read_bounded_stream(Cursor::new(input)).expect("read");
+        assert_eq!(retained.len(), MAX_ADB_STREAM_BYTES);
+        assert!(truncated);
     }
 }

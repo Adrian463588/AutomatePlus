@@ -78,8 +78,8 @@ function createApiSession(): SessionIR {
 
 describe('API generator contract', () => {
   it.each([
-    ['typescript', 'process.env["API-KEY"] ?? \'\'', 'expect(lastResponseTimeMs).toBeLessThanOrEqual(750)'],
-    ['javascript', 'process.env["API-KEY"] ?? \'\'', 'expect(lastResponseTimeMs).toBeLessThanOrEqual(750)'],
+    ['typescript', 'process.env["API-KEY"] ?? \'\'', 'assert.ok(lastResponseTimeMs <= 750)'],
+    ['javascript', 'process.env["API-KEY"] ?? \'\'', 'assert.ok(lastResponseTimeMs <= 750)'],
     ['python', 'os.getenv("API-KEY", \'\')', 'assert last_response_time_ms <= 750'],
     ['java', 'System.getenv("API-KEY")', 'assertTrue(lastResponseTimeMs <= 750);'],
   ] as const)('escapes API values and implements response-time assertions for %s', async (language, secretExpression, responseTimeExpression) => {
@@ -88,15 +88,28 @@ describe('API generator contract', () => {
 
     expect(code).toContain(secretExpression);
     expect(code).toContain(responseTimeExpression);
-    if (language === 'typescript' || language === 'javascript') {
-      expect(code).toContain('quoted \'name\'');
-    }
+    if (language === 'typescript' || language === 'javascript') expect(code).toContain("value'with");
     expect(code).toContain('existing=a%27b');
     expect(code).toContain(language === 'java' ? '.queryParam(' : 'params');
     expect(code).not.toContain('kind:');
     expect(code).not.toContain("url: 'https://example.test/api/quote?existing=a%27b'");
     expect(code).not.toContain("variables['token.value']");
     expect(code).not.toContain('unsupportedAction');
+  });
+
+  it.each(['typescript', 'javascript'] as const)('generates a standalone ESM runner for %s', async (language) => {
+    const project = await GeneratorFactory.getGenerator('http', language).generateFullProject(createApiSession());
+    const code = project.files[0].content;
+    const packageJson = JSON.parse(project.files.find((file) => file.relativePath === 'package.json')?.content ?? '{}');
+
+    expect(packageJson.type).toBe('module');
+    expect(packageJson.scripts.test).toMatch(language === 'typescript' ? /npm run build/u : /node tests\//u);
+    expect(code).toContain('async function main()');
+    expect(code).toContain('main().catch');
+    expect(code).toContain("from 'axios'");
+    expect(code).not.toContain('describe(');
+    expect(code).not.toContain('expect(');
+    expect(code).not.toContain('require(\'axios\')');
   });
 
   it('keeps the HTTP capability manifest and implementation aligned for response time', () => {
@@ -147,5 +160,22 @@ describe('API generator contract', () => {
     expect(code).not.toContain('|| 20');
     expect(code).not.toContain('|| 100');
     expect(code).toContain('encodeURIComponent');
+  });
+
+  it('maps k6 secret references to __ENV instead of the Node process environment', async () => {
+    const project = await GeneratorFactory.getGenerator('k6', 'javascript').generateFullProject({
+      ...createApiSession(),
+      steps: [{
+        ...requestAction,
+        apiPayload: {
+          ...requestAction.apiPayload,
+          headers: { Authorization: { kind: 'secret', key: 'API-KEY' } },
+        },
+      }],
+    });
+    const code = project.files[0].content;
+
+    expect(code).toContain('__ENV["API-KEY"] ?? \'\'');
+    expect(code).not.toContain('process.env["API-KEY"]');
   });
 });

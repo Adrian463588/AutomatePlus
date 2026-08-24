@@ -16,6 +16,7 @@ import {
   ValidationResult,
   CapabilityError,
 } from '@automate-plus/contracts';
+import { selectBestLocator } from '@automate-plus/selector-engine';
 import { createCapabilityManifest } from './capabilities.js';
 
 export abstract class BaseCodeGenerator implements ICodeGenerator {
@@ -134,7 +135,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
 
     if (this.language === 'typescript' || this.language === 'javascript') {
       const dependency = this.runtimeDependency();
-      return [
+      const files: GeneratedFile[] = [
         manifestFile,
         {
           relativePath: 'package.json',
@@ -144,24 +145,37 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
               name: projectName,
               private: true,
               type: 'module',
-              scripts: { test: this.testCommand(entrypoint) },
+              scripts: {
+                ...(this.language === 'typescript' && ['appium', 'puppeteer', 'selenium'].includes(this.framework)
+                  ? { build: 'tsc -p tsconfig.json' }
+                  : {}),
+                test: this.testCommand(entrypoint),
+              },
               dependencies: dependency ? { [dependency.name]: dependency.version } : {},
-              devDependencies: this.language === 'typescript' ? { typescript: '5.7.2' } : {},
+              devDependencies: this.language === 'typescript'
+                ? { '@types/node': '22.10.2', typescript: '5.7.2' }
+                : {},
             },
             null,
             2,
           ),
         },
-        this.runtimeLockFile(),
       ];
+      if (this.language === 'typescript') files.push(this.typescriptConfigFile());
+      files.push(this.runtimeLockFile(entrypoint));
+      return files;
     }
 
     if (this.language === 'python' || this.language === 'robot') {
       return [
         manifestFile,
         { relativePath: 'requirements.txt', language: 'text', content: `${this.pythonDependency()}\n` },
-        this.runtimeLockFile(),
+        this.runtimeLockFile(entrypoint),
       ];
+    }
+
+    if (this.language === 'yaml') {
+      return [manifestFile, this.runtimeLockFile(entrypoint)];
     }
 
     if (this.language === 'java') {
@@ -169,7 +183,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
         return [
           manifestFile,
           { relativePath: 'build.gradle.kts', language: 'kotlin', content: this.androidGradleFile() },
-          this.runtimeLockFile(),
+          this.runtimeLockFile(entrypoint),
         ];
       }
       return [
@@ -179,7 +193,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
           language: 'xml',
           content: this.javaBuildFile(projectName),
         },
-        this.runtimeLockFile(),
+        this.runtimeLockFile(entrypoint),
       ];
     }
 
@@ -193,7 +207,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
             ? this.androidGradleFile()
             : this.kotlinBuildFile(),
         },
-        this.runtimeLockFile(),
+        this.runtimeLockFile(entrypoint),
       ];
     }
 
@@ -212,8 +226,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     return dependencies[this.framework];
   }
 
-  private runtimeLockFile(): GeneratedFile {
-    const dependency = this.runtimeDependency();
+  private runtimeLockFile(entrypoint: string): GeneratedFile {
     return {
       relativePath: 'automateplus.runtime.json',
       language: 'json',
@@ -226,12 +239,44 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
         requiredRuntimePacks: this.manifest.requiredRuntimePacks,
         requiredRuntimes: this.manifest.requiredRuntimes,
         installMode: 'offline-after-explicit-install',
-        dependencyVersions: dependency ? { [dependency.name]: dependency.version } : {},
+        runCommand: this.testCommand(entrypoint),
+        dependencyVersions: this.dependencyVersions(),
+      }, null, 2),
+    };
+  }
+
+  private typescriptConfigFile(): GeneratedFile {
+    const types = this.framework === 'cypress' ? ['cypress', 'node'] : undefined;
+    return {
+      relativePath: 'tsconfig.json',
+      language: 'json',
+      content: JSON.stringify({
+        compilerOptions: {
+          target: 'ES2022',
+          module: 'NodeNext',
+          moduleResolution: 'NodeNext',
+          strict: true,
+          esModuleInterop: true,
+          skipLibCheck: true,
+          outDir: 'dist',
+          ...(types ? { types } : {}),
+        },
+        include: ['tests/**/*.ts'],
       }, null, 2),
     };
   }
 
   private testCommand(entrypoint: string): string {
+    if (this.language === 'python') return `python -m pytest ${entrypoint}`;
+    if (this.language === 'robot') return `robot ${entrypoint}`;
+    if (this.language === 'java') return 'mvn -o -q test';
+    if (this.language === 'kotlin') return 'gradle --offline test';
+    if (this.language === 'typescript' && ['appium', 'http', 'puppeteer', 'selenium'].includes(this.framework)) {
+      return `npm run build && node dist/${entrypoint.replace(/\.ts$/u, '.js')}`;
+    }
+    if (this.language === 'javascript' && ['appium', 'puppeteer', 'selenium'].includes(this.framework)) {
+      return `node ${entrypoint}`;
+    }
     switch (this.framework) {
       case 'playwright':
         return `playwright test ${entrypoint}`;
@@ -247,10 +292,98 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   }
 
   private pythonDependency(): string {
-    if (this.framework === 'robot') return 'robotframework==7.1.1\nrobotframework-seleniumlibrary==6.6.1';
-    if (this.framework === 'playwright') return 'pytest-playwright==1.49.1';
-    if (this.framework === 'selenium') return 'selenium==4.27.1';
-    return 'requests==2.32.3';
+    if (this.framework === 'robot') return 'robotframework==7.1.1\nrobotframework-seleniumlibrary==6.6.1\nselenium==4.27.1';
+    if (this.framework === 'playwright') return 'pytest==8.3.4\nplaywright==1.49.1\npytest-playwright==1.49.1';
+    if (this.framework === 'selenium') return 'pytest==8.3.4\nselenium==4.27.1';
+    return 'pytest==8.3.4\nrequests==2.32.3';
+  }
+
+  private dependencyVersions(): Record<string, string> {
+    const dependency = this.runtimeDependency();
+    if (this.language === 'python' || this.language === 'robot') {
+      return Object.fromEntries(
+        this.pythonDependency()
+          .split('\n')
+          .filter(Boolean)
+          .map((line) => {
+            const [name, version] = line.split('==');
+            return [name, version];
+          }),
+      );
+    }
+    if (this.language === 'java') {
+      if (this.framework === 'espresso' || this.framework === 'robolectric') return this.androidDependencyVersions();
+      const dependency = this.javaDependency();
+      return {
+        [dependency.coordinate]: dependency.version,
+        'org.junit.jupiter:junit-jupiter': '5.11.3',
+      };
+    }
+    if (this.language === 'kotlin') {
+      if (this.framework === 'espresso' || this.framework === 'robolectric') return this.androidDependencyVersions();
+      const dependency = this.kotlinDependency();
+      return {
+        [dependency.coordinate]: dependency.version,
+        'org.jetbrains.kotlin:kotlin-test': '2.0.21',
+      };
+    }
+    return {
+      ...(dependency ? { [dependency.name]: dependency.version } : {}),
+      ...(this.language === 'typescript' ? { typescript: '5.7.2', '@types/node': '22.10.2' } : {}),
+    };
+  }
+
+  private javaDependency(): { coordinate: string; version: string } {
+    const dependencies: Record<string, { coordinate: string; version: string }> = {
+      appium: { coordinate: 'io.appium:java-client', version: '9.4.0' },
+      http: { coordinate: 'io.rest-assured:rest-assured', version: '5.5.0' },
+      playwright: { coordinate: 'com.microsoft.playwright:playwright', version: '1.49.1' },
+      selenium: { coordinate: 'org.seleniumhq.selenium:selenium-java', version: '4.27.0' },
+    };
+    const dependency = dependencies[this.framework];
+    if (!dependency) {
+      throw new CapabilityError(`Framework '${this.framework}' does not have a pinned Java dependency contract.`, {
+        framework: this.framework,
+        language: this.language,
+      });
+    }
+    return dependency;
+  }
+
+  private kotlinDependency(): { coordinate: string; version: string } {
+    const dependencies: Record<string, { coordinate: string; version: string }> = {
+      appium: { coordinate: 'io.appium:java-client', version: '9.4.0' },
+      http: { coordinate: 'io.rest-assured:rest-assured', version: '5.5.0' },
+    };
+    const dependency = dependencies[this.framework];
+    if (!dependency) {
+      throw new CapabilityError(`Framework '${this.framework}' does not have a pinned Kotlin dependency contract.`, {
+        framework: this.framework,
+        language: this.language,
+      });
+    }
+    return dependency;
+  }
+
+  private androidDependencyVersions(): Record<string, string> {
+    const plugin = this.framework === 'espresso' ? 'com.android.test' : 'com.android.library';
+    return {
+      [`plugin:${plugin}`]: '8.7.3',
+      'plugin:org.jetbrains.kotlin.android': '2.0.21',
+      ...(this.framework === 'espresso'
+        ? {
+          'androidx.test:runner': '1.6.2',
+          'androidx.test:rules': '1.6.1',
+          'androidx.test.espresso:espresso-core': '3.6.1',
+          'androidx.test.ext:junit': '1.2.1',
+        }
+        : {
+          'junit:junit': '4.13.2',
+          'org.robolectric:robolectric': '4.14.1',
+          'androidx.test:core': '1.6.1',
+          'androidx.test.espresso:espresso-core': '3.6.1',
+        }),
+    };
   }
 
   private javaBuildFile(projectName: string): string {
@@ -304,9 +437,9 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   private generatedEntrypoint(session: SessionIR, fileName: string): string {
     if (this.language === 'java' || this.language === 'kotlin') {
       const sourceRoot = this.framework === 'espresso'
-        ? 'app/src/androidTest/java'
+        ? `app/src/androidTest/${this.language === 'kotlin' ? 'kotlin' : 'java'}`
         : this.framework === 'robolectric'
-          ? 'app/src/test/java'
+          ? `src/test/${this.language === 'kotlin' ? 'kotlin' : 'java'}`
           : this.language === 'kotlin'
             ? 'src/test/kotlin'
             : 'src/test/java';
@@ -315,7 +448,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     return `tests/${fileName}`;
   }
 
-  private generatedClassName(value: string): string {
+  protected generatedClassName(value: string): string {
     const pascal = value
       .replace(/[^a-zA-Z0-9]+(.)/g, (_, character: string) => character.toUpperCase())
       .replace(/^[a-z]/u, (character) => character.toUpperCase())
@@ -329,7 +462,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
       if (/(^|\n)\s*(\/\/|#)\s*Action:/u.test(file.content)) {
         errors.push(`${file.relativePath} contains an unsupported action comment fallback`);
       }
-      if (/\bTODO\b|50%,50%|isRoot\(\)|By\.xpath\("\/\*"\)/u.test(file.content)) {
+      if (/\bTODO\b|50%,50%|isRoot\(\)|By\.xpath\("\/\*"\)|\bunresolved\b|-(?:maven|gradle)-artifact\b/u.test(file.content)) {
         errors.push(`${file.relativePath} contains fabricated generator output`);
       }
     }
@@ -361,7 +494,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   }
 
   protected requireDragTarget(action: ActionIR): LocatorCandidate {
-    const locator = action.dragTarget?.locators[0];
+    const locator = selectBestLocator(action.dragTarget?.locators, action.platform);
     if (!locator) {
       throw new CapabilityError(`Action '${action.action}' requires an explicit drag target locator.`, {
         framework: this.framework,
@@ -407,6 +540,59 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     return value;
   }
 
+  protected requireAndroidPackage(session: SessionIR): string {
+    const value = this.requireTargetField(session, 'appPackage');
+    if (!/^[A-Za-z_][A-Za-z0-9_]*(?:\.[A-Za-z_][A-Za-z0-9_]*)*$/u.test(value)) {
+      throw new CapabilityError('Android generation requires a valid package identifier from targetConfig.appPackage.', {
+        framework: this.framework,
+        language: this.language,
+        field: 'appPackage',
+        value,
+      });
+    }
+    return value;
+  }
+
+  protected requireJavaActivityClass(session: SessionIR): string {
+    const value = this.requireTargetField(session, 'appActivity');
+    if (!/^(?:[A-Za-z_][A-Za-z0-9_]*\.)+[A-Z_$][A-Za-z0-9_$]*$/u.test(value)) {
+      throw new CapabilityError(
+        'Espresso and Robolectric require a fully qualified Java/Kotlin activity class. Android component notation such as .MainActivity cannot be converted safely.',
+        {
+          framework: this.framework,
+          language: this.language,
+          field: 'appActivity',
+          value,
+        },
+      );
+    }
+    return value;
+  }
+
+  protected getAndroidResourceReference(session: SessionIR, locator: LocatorCandidate): string {
+    const resourceName = locator.value.split('/').pop() ?? '';
+    if (!/^[A-Za-z_][A-Za-z0-9_]*$/u.test(resourceName)) {
+      throw new CapabilityError('Android resourceId must end with a valid compiled resource name.', {
+        framework: this.framework,
+        language: this.language,
+        locator: locator.value,
+      });
+    }
+    return `${this.requireAndroidPackage(session)}.R.id.${resourceName}`;
+  }
+
+  protected getXPathLiteral(value: string): string {
+    if (!value.includes("'")) return `'${value}'`;
+    if (!value.includes('"')) return `"${value}"`;
+    const parts = value.split("'");
+    const expressions: string[] = [];
+    parts.forEach((part, index) => {
+      expressions.push(`'${part}'`);
+      if (index < parts.length - 1) expressions.push('"\'"');
+    });
+    return `concat(${expressions.join(', ')})`;
+  }
+
   private validateSessionInput(session: SessionIR): void {
     const parsed = SessionIRSchema.safeParse(session);
     if (!parsed.success) {
@@ -425,9 +611,9 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     }
 
     if (session.platform === 'android') {
-      this.requireTargetField(session, 'appPackage');
+      this.requireAndroidPackage(session);
       if (this.framework === 'espresso' || this.framework === 'robolectric') {
-        this.requireTargetField(session, 'appActivity');
+        this.requireJavaActivityClass(session);
       }
     }
 
@@ -456,8 +642,11 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   }
 
   protected getPrimaryLocator(action: ActionIR): LocatorCandidate | undefined {
-    if (!action.locators || action.locators.length === 0) return undefined;
-    return action.locators[0];
+    return selectBestLocator(action.locators, action.platform);
+  }
+
+  protected hasExplicitNavigate(session: SessionIR): boolean {
+    return session.steps.some((step) => step.action === 'navigate');
   }
 
   protected getRuntimeContext(options?: GeneratorOptions): RuntimeContextSpec {
@@ -471,32 +660,157 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     return context;
   }
 
-  protected getRawValue(val?: string | SecretRef): string {
-    if (!val) return '';
+  protected getRawValue(val?: string | number | boolean | null | SecretRef): string {
+    if (val === undefined || val === null) return '';
     if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') {
-      return `\${secret.${val.key}}`;
+      return `\${${val.key}}`;
     }
-    return typeof val === 'string' ? val : '';
+    return String(val);
   }
 
-  protected getJsValue(val?: string | SecretRef): string {
-    if (!val) return "''";
+  protected getRobotValue(val?: string | number | boolean | null | SecretRef): string {
+    if (val === undefined) return '';
+    if (val === null) return 'None';
+    if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') return `%{${val.key}}`;
+    return String(val);
+  }
+
+  protected getAssertionExpected(action: ActionIR): string | number | boolean | null | SecretRef | undefined {
+    return action.assertion?.expected ?? action.expectedValue ?? action.value;
+  }
+
+  protected getAssertionOperator(action: ActionIR): string {
+    return action.assertion?.operator ?? 'equals';
+  }
+
+  protected requireAssertionOperator(action: ActionIR, supported: readonly string[]): string {
+    const operator = this.getAssertionOperator(action);
+    if (!supported.includes(operator)) {
+      throw new CapabilityError(
+        `Assertion operator '${operator}' is not implemented by ${this.framework}/${this.language} for action '${action.action}'.`,
+        { framework: this.framework, language: this.language, action: action.action, operator, supported },
+      );
+    }
+    return operator;
+  }
+
+  protected getWebKeyValue(val?: string | SecretRef): string {
+    const raw = this.getRawValue(val).trim();
+    const normalized = raw.toUpperCase().replace(/[\s-]/gu, '');
+    const aliases: Record<string, string> = {
+      ENTER: 'Enter',
+      RETURN: 'Enter',
+      TAB: 'Tab',
+      ESC: 'Escape',
+      ESCAPE: 'Escape',
+      BACKSPACE: 'Backspace',
+      DELETE: 'Delete',
+      DEL: 'Delete',
+      SPACE: ' ',
+      ARROWUP: 'ArrowUp',
+      ARROWDOWN: 'ArrowDown',
+      ARROWLEFT: 'ArrowLeft',
+      ARROWRIGHT: 'ArrowRight',
+      HOME: 'Home',
+      END: 'End',
+      PAGEUP: 'PageUp',
+      PAGEDOWN: 'PageDown',
+      CTRL: 'Control',
+      CONTROL: 'Control',
+      SHIFT: 'Shift',
+      ALT: 'Alt',
+      META: 'Meta',
+    };
+    if (aliases[normalized]) return aliases[normalized];
+    if ([...raw].length === 1) return raw;
+    throw new CapabilityError(`Unsupported web key '${raw}'.`, {
+      framework: this.framework,
+      language: this.language,
+      value: raw,
+    });
+  }
+
+  protected getSeleniumKeyValue(val?: string | SecretRef): string {
+    const webKey = this.getWebKeyValue(val);
+    const aliases: Record<string, string> = {
+      Enter: 'ENTER',
+      Tab: 'TAB',
+      Escape: 'ESCAPE',
+      Backspace: 'BACK_SPACE',
+      Delete: 'DELETE',
+      ' ': 'SPACE',
+      ArrowUp: 'ARROW_UP',
+      ArrowDown: 'ARROW_DOWN',
+      ArrowLeft: 'ARROW_LEFT',
+      ArrowRight: 'ARROW_RIGHT',
+      Home: 'HOME',
+      End: 'END',
+      PageUp: 'PAGE_UP',
+      PageDown: 'PAGE_DOWN',
+      Control: 'CONTROL',
+      Shift: 'SHIFT',
+      Alt: 'ALT',
+      Meta: 'META',
+    };
+    return aliases[webKey] ?? webKey;
+  }
+
+  protected getCypressKeyValue(val?: string | SecretRef): string {
+    const webKey = this.getWebKeyValue(val);
+    const aliases: Record<string, string> = {
+      Enter: 'enter',
+      Tab: 'tab',
+      Escape: 'esc',
+      Backspace: 'backspace',
+      Delete: 'del',
+      ' ': 'space',
+      ArrowUp: 'upArrow',
+      ArrowDown: 'downArrow',
+      ArrowLeft: 'leftArrow',
+      ArrowRight: 'rightArrow',
+      Home: 'home',
+      End: 'end',
+      PageUp: 'pageup',
+      PageDown: 'pagedown',
+      Control: 'ctrl',
+      Shift: 'shift',
+      Alt: 'alt',
+      Meta: 'meta',
+    };
+    return aliases[webKey] ?? webKey;
+  }
+
+  protected getJsValue(val?: string | number | boolean | null | SecretRef): string {
+    if (val === undefined) return "''";
+    if (val === null) return 'null';
     if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') {
       return `process.env[${JSON.stringify(val.key)}] ?? ''`;
     }
     return JSON.stringify(val);
   }
 
-  protected getPythonValue(val?: string | SecretRef): string {
-    if (!val) return "''";
+  protected getCypressValue(val?: string | number | boolean | null | SecretRef): string {
+    if (val === undefined) return "''";
+    if (val === null) return 'null';
     if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') {
-      return `os.getenv(${JSON.stringify(val.key)}, '')`;
+      return `Cypress.env(${JSON.stringify(val.key)})`;
     }
     return JSON.stringify(val);
   }
 
-  protected getJavaValue(val?: string | SecretRef): string {
-    if (!val) return '""';
+  protected getPythonValue(val?: string | number | boolean | null | SecretRef): string {
+    if (val === undefined) return "''";
+    if (val === null) return 'None';
+    if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') {
+      return `os.getenv(${JSON.stringify(val.key)}, '')`;
+    }
+    if (typeof val === 'boolean') return val ? 'True' : 'False';
+    return JSON.stringify(val);
+  }
+
+  protected getJavaValue(val?: string | number | boolean | null | SecretRef): string {
+    if (val === undefined) return '""';
+    if (val === null) return 'null';
     if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') {
       return `System.getenv(${JSON.stringify(val.key)})`;
     }

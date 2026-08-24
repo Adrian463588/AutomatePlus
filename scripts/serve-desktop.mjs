@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import net from 'node:net';
-import { exec, spawn } from 'node:child_process';
+import { exec, execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,16 +48,6 @@ function isPortAvailable(port, host = '127.0.0.1') {
   });
 }
 
-async function findAvailablePort(startPort, host = '127.0.0.1', maxTries = 20) {
-  for (let i = 0; i < maxTries; i++) {
-    const port = startPort + i;
-    if (await isPortAvailable(port, host)) {
-      return port;
-    }
-  }
-  throw new Error(`Could not find an available port starting from ${startPort}`);
-}
-
 function openBrowser(url) {
   const startCmd = process.platform === 'win32'
     ? `start "" "${url}"`
@@ -69,6 +59,18 @@ function openBrowser(url) {
       console.warn(`[AutomatePlus] Could not automatically open browser: ${err.message}`);
     }
   });
+}
+
+function stopOwnedProcessTree(child) {
+  if (typeof child.pid !== 'number') return;
+  if (process.platform === 'win32') {
+    const taskkill = path.join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+    execFile(taskkill, ['/PID', String(child.pid), '/T', '/F'], (error) => {
+      if (error && !child.killed) child.kill();
+    });
+    return;
+  }
+  if (!child.killed) child.kill('SIGTERM');
 }
 
 async function ensureDistBuilt() {
@@ -145,22 +147,66 @@ async function main() {
 
   if (useDev) {
     console.log('[AutomatePlus] Starting development server with Vite...');
-    const port = await findAvailablePort(requestedPort);
+    // Development mode must be single-instance. Picking the next free port
+    // silently leaves the previous Vite process alive and makes repeated
+    // launches accumulate orphaned Node processes. Vite already has
+    // strictPort enabled, so fail clearly when the requested port is busy.
+    const port = requestedPort;
+    if (!(await isPortAvailable(port))) {
+      console.error(`[AutomatePlus] BLOCKED: development port ${port} is already in use.`);
+      console.error('[AutomatePlus] Stop the existing AutomatePlus dev server before starting another one.');
+      process.exitCode = 2;
+      return;
+    }
+
     const viteProc = spawnNpm(['--prefix', 'frontend', 'run', 'dev', '--', '--port', String(port), '--host', '127.0.0.1'], {
       cwd: ROOT_DIR,
       stdio: 'inherit',
       shell: false,
     });
+
+    let shuttingDown = false;
+    const stopVite = () => {
+      if (shuttingDown) return;
+      shuttingDown = true;
+      // Windows does not reliably deliver POSIX signals to child process
+      // trees. Terminate the owned npm/Vite tree and wait for its close event.
+      stopOwnedProcessTree(viteProc);
+    };
+
+    process.once('SIGINT', stopVite);
+    process.once('SIGTERM', stopVite);
+
     if (shouldOpen) {
       setTimeout(() => {
-        openBrowser(`http://127.0.0.1:${port}`);
+        if (!shuttingDown && !viteProc.killed) {
+          openBrowser(`http://127.0.0.1:${port}`);
+        }
       }, 2500);
     }
+
+    const exitCode = await new Promise((resolve) => {
+      viteProc.once('error', (error) => {
+        console.error(`[AutomatePlus] Vite process failed: ${error.message}`);
+        resolve(1);
+      });
+      viteProc.once('close', (code) => resolve(typeof code === 'number' ? code : 1));
+    });
+
+    process.removeListener('SIGINT', stopVite);
+    process.removeListener('SIGTERM', stopVite);
+    process.exitCode = shuttingDown ? 0 : exitCode;
     return;
   }
 
   await ensureDistBuilt();
-  const port = await findAvailablePort(requestedPort);
+  const port = requestedPort;
+  if (!(await isPortAvailable(port))) {
+    console.error(`[AutomatePlus] BLOCKED: browser port ${port} is already in use.`);
+    console.error('[AutomatePlus] Stop the existing AutomatePlus server or choose another explicit --port value.');
+    process.exitCode = 2;
+    return;
+  }
 
   const server = http.createServer(serveStatic);
   server.listen(port, '127.0.0.1', () => {

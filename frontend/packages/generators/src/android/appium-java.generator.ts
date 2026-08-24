@@ -9,7 +9,9 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
   public readonly supportedPlatforms = ['android'] as const;
 
   public generateHeader(session: SessionIR, options?: GeneratorOptions): string {
-    const className = this.toPascalCase(session.name) + 'Test';
+    const className = `${this.generatedClassName(session.name)}Test`;
+    const appPackage = this.requireAndroidPackage(session);
+    const appActivity = session.targetConfig.appActivity;
     return [
       `package com.automateplus.tests;`,
       ``,
@@ -17,15 +19,13 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
       `import io.appium.java_client.android.options.UiAutomator2Options;`,
       `import io.appium.java_client.AppiumBy;`,
       `import org.openqa.selenium.By;`,
+      `import org.openqa.selenium.OutputType;`,
       `import org.openqa.selenium.WebElement;`,
-      `import org.openqa.selenium.interactions.PointerInput;`,
-      `import org.openqa.selenium.interactions.Sequence;`,
       `import org.openqa.selenium.support.ui.WebDriverWait;`,
       `import org.openqa.selenium.support.ui.ExpectedConditions;`,
       `import org.junit.jupiter.api.*;`,
       `import java.net.URL;`,
       `import java.time.Duration;`,
-      `import java.util.Collections;`,
       `import static org.junit.jupiter.api.Assertions.*;`,
       ``,
       `public class ${className} {`,
@@ -39,12 +39,8 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
       `        UiAutomator2Options options = new UiAutomator2Options();`,
       `        options.setPlatformName("Android");`,
       `        options.setAutomationName("UiAutomator2");`,
-      session.targetConfig.appPackage
-        ? `        options.setAppPackage("${session.targetConfig.appPackage}");`
-        : '',
-      session.targetConfig.appActivity
-        ? `        options.setAppActivity("${session.targetConfig.appActivity}");`
-        : '',
+      `        options.setAppPackage(${this.getJavaValue(appPackage)});`,
+      appActivity ? `        options.setAppActivity(${this.getJavaValue(appActivity)});` : '',
       `        options.setUdid(requiredDeviceUdid());`,
       `        options.setSystemPort(requiredSystemPort());`,
       `        options.setMjpegServerPort(requiredMjpegServerPort());`,
@@ -57,15 +53,16 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
       `    @Test`,
       `    public void testRecordedSession() {`,
     ]
-      .filter((l) => l !== '')
+      .filter((line) => line !== '')
       .join('\n');
   }
 
-  public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
+  public generateStep(action: ActionIR, session: SessionIR, _options?: GeneratorOptions): string {
     const loc = this.getPrimaryLocator(action);
     const byClause = loc ? this.formatAppiumBy(loc) : '';
-    const val = this.getJavaValue(action.value);
-    const expected = this.getJavaValue(action.expectedValue ?? action.value);
+    const value = this.getJavaValue(action.value);
+    const expected = this.getJavaValue(this.getAssertionExpected(action));
+    const step = action.stepNumber;
 
     switch (action.action) {
       case 'tap':
@@ -73,14 +70,31 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
         return `        wait.until(ExpectedConditions.elementToBeClickable(${byClause})).click();`;
 
       case 'doubleTap':
-      case 'doubleClick':
-        return `        WebElement el = wait.until(ExpectedConditions.elementToBeClickable(${byClause}));\n        el.click();\n        el.click();`;
+      case 'doubleClick': {
+        const element = `element${step}`;
+        return [
+          `        WebElement ${element} = wait.until(ExpectedConditions.elementToBeClickable(${byClause}));`,
+          `        ${element}.click();`,
+          `        ${element}.click();`,
+        ].join('\n');
+      }
 
-      case 'longPress':
-        return `        WebElement el = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}));\n        // perform long press gesture on element\n        driver.executeScript("mobile: longClickGesture", java.util.Map.of("elementId", ((org.openqa.selenium.remote.RemoteWebElement) el).getId(), "duration", 1000));`;
+      case 'longPress': {
+        const element = `element${step}`;
+        return [
+          `        WebElement ${element} = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}));`,
+          `        driver.executeScript("mobile: longClickGesture", java.util.Map.of("elementId", ((org.openqa.selenium.remote.RemoteWebElement) ${element}).getId(), "duration", 1000));`,
+        ].join('\n');
+      }
 
-      case 'fill':
-        return `        WebElement elem = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}));\n        elem.clear();\n        elem.sendKeys(${val});`;
+      case 'fill': {
+        const element = `element${step}`;
+        return [
+          `        WebElement ${element} = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}));`,
+          `        ${element}.clear();`,
+          `        ${element}.sendKeys(${value});`,
+        ].join('\n');
+      }
 
       case 'clear':
         return `        wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause})).clear();`;
@@ -93,8 +107,14 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
 
       case 'drag':
       case 'dragAndDrop': {
+        const source = `source${step}`;
+        const target = `target${step}`;
         const targetBy = this.formatAppiumBy(this.requireDragTarget(action));
-        return `        WebElement src = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}));\n        WebElement dst = wait.until(ExpectedConditions.visibilityOfElementLocated(${targetBy}));\n        driver.executeScript("mobile: dragGesture", java.util.Map.of("elementId", ((org.openqa.selenium.remote.RemoteWebElement) src).getId(), "endX", dst.getLocation().getX(), "endY", dst.getLocation().getY()));`;
+        return [
+          `        WebElement ${source} = wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause}));`,
+          `        WebElement ${target} = wait.until(ExpectedConditions.visibilityOfElementLocated(${targetBy}));`,
+          `        driver.executeScript("mobile: dragGesture", java.util.Map.of("elementId", ((org.openqa.selenium.remote.RemoteWebElement) ${source}).getId(), "endX", ${target}.getLocation().getX(), "endY", ${target}.getLocation().getY()));`,
+        ].join('\n');
       }
 
       case 'back':
@@ -107,7 +127,20 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
         return `        driver.executeScript("mobile: pressKey", java.util.Map.of("keycode", 66));`;
 
       case 'sleep':
-        return `        try { Thread.sleep(${action.timeoutMs ?? 1000}); } catch (InterruptedException ignored) {}`;
+        return `        try { Thread.sleep(${action.timeoutMs ?? 1000}); } catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new RuntimeException(error); }`;
+
+      case 'takeScreenshot': {
+        const name = `screenshotName${step}`;
+        return [
+          `        String raw${name} = String.valueOf(${value});`,
+          `        String ${name} = raw${name}.replaceAll("[^A-Za-z0-9_-]", "_");`,
+          `        if (${name}.isBlank()) ${name} = "screenshot";`,
+          `        try {`,
+          `            java.nio.file.Files.createDirectories(java.nio.file.Path.of("screenshots"));`,
+          `            java.nio.file.Files.copy(driver.getScreenshotAs(OutputType.FILE).toPath(), java.nio.file.Path.of("screenshots", ${name} + ".png"), java.nio.file.StandardCopyOption.REPLACE_EXISTING);`,
+          `        } catch (java.io.IOException error) { throw new RuntimeException("Failed to save Android screenshot", error); }`,
+        ].join('\n');
+      }
 
       case 'assertVisible':
         return `        assertTrue(wait.until(ExpectedConditions.visibilityOfElementLocated(${byClause})).isDisplayed());`;
@@ -138,22 +171,21 @@ export class AppiumJavaGenerator extends BaseCodeGenerator {
   private formatAppiumBy(loc: LocatorCandidate): string {
     switch (loc.strategy) {
       case 'resourceId':
-        return `By.id("${loc.value}")`;
+        return `By.id(${this.getJavaValue(loc.value)})`;
       case 'accessibilityId':
-        return `AppiumBy.accessibilityId("${loc.value}")`;
-      case 'text':
-        return `By.xpath("//*[@text='${loc.value}']")`;
+        return `AppiumBy.accessibilityId(${this.getJavaValue(loc.value)})`;
+      case 'text': {
+        const xpath = `//*[@text=${this.getXPathLiteral(loc.value)}]`;
+        return `By.xpath(${this.getJavaValue(xpath)})`;
+      }
+      case 'role': {
+        const selector = `new UiSelector().className(${JSON.stringify(loc.value)})`;
+        return `AppiumBy.androidUIAutomator(${this.getJavaValue(selector)})`;
+      }
       case 'xpath':
-        return `By.xpath("${loc.value}")`;
+        return `By.xpath(${this.getJavaValue(loc.value)})`;
       default:
         return this.unsupportedLocator(loc);
     }
-  }
-
-  private toPascalCase(str: string): string {
-    return str
-      .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase())
-      .replace(/^[a-z]/, (c) => c.toUpperCase())
-      .replace(/[^a-zA-Z0-9]/g, '');
   }
 }

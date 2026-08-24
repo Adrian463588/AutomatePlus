@@ -3,18 +3,25 @@ import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { firstObservedNodeWithBounds } from './android-live-selector.mjs';
 import { readRuntimePackReport, findVerifiedPack } from './runtime-pack-check.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const evidenceRoot = join(root, '.automateplus', 'evidence');
 const enabled = process.env.AUTOMATEPLUS_ANDROID_E2E === '1';
+const deviceMode = process.env.AUTOMATEPLUS_ANDROID_E2E_MODE ?? 'farm';
 const packageName = 'com.notifplus';
 const activity = 'com.notifplus/.MainActivity';
 const hierarchyPath = '/sdcard/automateplus-notifplus-hierarchy.xml';
 
 function sha256(text) { return createHash('sha256').update(text).digest('hex'); }
 function run(adb, args) {
-  const result = spawnSync(adb, args, { encoding: 'utf8', windowsHide: true, timeout: 30_000 });
+  const result = spawnSync(adb, args, {
+    encoding: 'utf8',
+    windowsHide: true,
+    timeout: 30_000,
+    maxBuffer: 10 * 1024 * 1024,
+  });
   return { code: result.status ?? 1, stdout: result.stdout ?? '', stderr: result.stderr ?? '' };
 }
 function blocked(reason) {
@@ -29,20 +36,6 @@ function parseDevices(stdout) {
     return [{ serial: match[1], status: match[2], model: attributes.model?.replaceAll('_', ' ') }];
   });
 }
-function selectorCenter(hierarchy, selectorText) {
-  const escaped = selectorText.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
-  const node = new RegExp(
-    `<node\\b(?=[^>]*(?:text|content-desc)="${escaped}")[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"[^>]*>`,
-    'u',
-  ).exec(hierarchy);
-  if (!node) return undefined;
-  const [, left, top, right, bottom] = node;
-  return {
-    x: Math.round((Number(left) + Number(right)) / 2),
-    y: Math.round((Number(top) + Number(bottom)) / 2),
-  };
-}
-
 if (!enabled) {
   blocked('Set AUTOMATEPLUS_ANDROID_E2E=1 to run explicit physical-device checks. No ADB command was issued.');
 } else {
@@ -54,20 +47,31 @@ if (!enabled) {
     const devicesResult = run(adb, ['devices', '-l']);
     const devices = parseDevices(devicesResult.stdout);
     const authorized = devices.filter((device) => device.status === 'device');
-    if (authorized.length < 2) {
-      blocked(`At least two authorized devices are required; discovered ${authorized.length}.`);
+      if (!['farm', 'single'].includes(deviceMode)) {
+      blocked('AUTOMATEPLUS_ANDROID_E2E_MODE must be either farm or single.');
     } else {
-      const deviceResults = authorized.map((device) => {
+      const requiredDevices = deviceMode === 'single' ? 1 : 2;
+      if (authorized.length < requiredDevices) {
+      blocked(`At least ${requiredDevices} authorized device${requiredDevices === 1 ? '' : 's'} are required for ${deviceMode} mode; discovered ${authorized.length}.`);
+    } else {
+      const deviceResults = authorized.slice(0, requiredDevices).map((device) => {
         const packagePath = run(adb, ['-s', device.serial, 'shell', 'pm', 'path', packageName]);
         const resolvedActivity = run(adb, ['-s', device.serial, 'shell', 'cmd', 'package', 'resolve-activity', '--brief', packageName]);
         const launch = run(adb, ['-s', device.serial, 'shell', 'am', 'start', '-W', '-n', activity]);
         const dump = run(adb, ['-s', device.serial, 'shell', 'uiautomator', 'dump', hierarchyPath]);
         const hierarchy = run(adb, ['-s', device.serial, 'exec-out', 'cat', hierarchyPath]);
-        const selectorObserved = /(?:text|content-desc)="Riwayat"/u.test(hierarchy.stdout);
-        const selectorPoint = selectorCenter(hierarchy.stdout, 'Riwayat');
+        const observedNode = hierarchy.code === 0 ? firstObservedNodeWithBounds(hierarchy.stdout, packageName) : undefined;
+        const selectorObserved = Boolean(observedNode);
+        const selectorPoint = observedNode?.clickable ? observedNode.bounds : undefined;
         const tap = selectorPoint
           ? run(adb, ['-s', device.serial, 'shell', 'input', 'tap', String(selectorPoint.x), String(selectorPoint.y)])
-          : { code: 1, stdout: '', stderr: 'Riwayat selector was not found in the live hierarchy.' };
+          : {
+            code: 1,
+            stdout: '',
+            stderr: observedNode
+              ? 'Live semantic node has no clickable bounds; no coordinate fallback was used.'
+              : 'No semantic selector was found in the live hierarchy.',
+          };
         const afterHierarchyPath = '/sdcard/automateplus-notifplus-hierarchy-after.xml';
         const afterDump = tap.code === 0
           ? run(adb, ['-s', device.serial, 'shell', 'uiautomator', 'dump', afterHierarchyPath])
@@ -83,7 +87,9 @@ if (!enabled) {
           launchExitCode: launch.code,
           hierarchyDumpExitCode: dump.code,
           hierarchySha256: sha256(hierarchy.stdout),
-          realSelector: { strategy: 'text-or-content-desc', value: 'Riwayat', observed: selectorObserved },
+          realSelector: observedNode
+            ? { strategy: observedNode.strategy, value: observedNode.value, score: observedNode.score, observed: true }
+            : null,
           actionExecution: {
             action: 'tap',
             source: 'live-hierarchy-bounds',
@@ -111,7 +117,8 @@ if (!enabled) {
       const report = {
         generatedAt: new Date().toISOString(),
         mode: 'explicit-physical-android-target',
-        target: { packageName, activity, requiredDevices: 2 },
+        target: { packageName, activity, requiredDevices },
+        deviceMode,
         status: targetPassed && nativeAcceptance.status === 'NeedsReview' ? 'NeedsReview' : 'Blocked',
         devices: deviceResults,
         nativeAutomatePlusAcceptance: nativeAcceptance,
@@ -123,6 +130,7 @@ if (!enabled) {
       writeFileSync(evidencePath, evidence, 'utf8');
       console.log(JSON.stringify({ ...report, evidencePath: evidencePath.replaceAll('\\', '/'), evidenceSha256: sha256(evidence) }, null, 2));
       process.exitCode = 2;
+    }
     }
   }
 }

@@ -60,8 +60,12 @@ for (const name of ['Button', 'Field', 'Select', 'StatusMessage', 'Dialog', 'Act
 
 const app = readFileSync(join(sourceRoot, 'App.tsx'), 'utf8');
 if (!app.includes("workspace-layout--full") || !app.includes("data-layout")) findings.push('App.tsx: editor/full-workspace layout contract missing');
+if (!css.includes('.runtime-summary-grid') || !css.includes('.device-farm-workspace') || !css.includes('.ap-bento-card')) findings.push('index.css: functional bento/layout contract missing');
 const runtime = readFileSync(join(sourceRoot, 'components', 'runtime', 'RuntimeManagerPanel.tsx'), 'utf8');
 if (!runtime.includes('runtime-pack-table') || !runtime.includes('Not evaluated')) findings.push('RuntimeManagerPanel.tsx: truthful compact runtime catalog contract missing');
+if (!runtime.includes('runtime-summary-grid') || !runtime.includes('runtime-summary-card--root')) findings.push('RuntimeManagerPanel.tsx: functional summary bento contract missing');
+const farm = readFileSync(join(sourceRoot, 'components', 'farm', 'DeviceFarmView.tsx'), 'utf8');
+if (!farm.includes('device-farm-workspace') || !farm.includes('device-farm-body') || !farm.includes('device-farm-mirror')) findings.push('DeviceFarmView.tsx: full-workspace layout contract missing');
 const setupGuide = readFileSync(join(sourceRoot, 'components', 'common', 'NativeSetupGuide.tsx'), 'utf8');
 if (!setupGuide.includes('role="dialog"') || !setupGuide.includes('Open native setup guide')) findings.push('NativeSetupGuide.tsx: controlled setup dialog contract missing');
 

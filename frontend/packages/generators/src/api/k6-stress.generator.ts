@@ -1,4 +1,4 @@
-import { ActionIR, SessionIR } from '@automate-plus/ir-schema';
+import { ActionIR, SecretRef, SessionIR } from '@automate-plus/ir-schema';
 import { GeneratorOptions } from '@automate-plus/contracts';
 import { BaseCodeGenerator } from '../base.generator.js';
 
@@ -43,10 +43,10 @@ export class K6StressGenerator extends BaseCodeGenerator {
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
     if (action.action === 'httpRequest' && action.apiPayload) {
       const { method, url, headers, bodyContent } = action.apiPayload;
-      const headersStr = this.getJsRecord(headers);
-      const bodyStr = bodyContent === undefined ? 'null' : this.getJsValue(bodyContent);
+      const headersStr = this.getK6Record(headers);
+      const bodyStr = bodyContent === undefined ? 'null' : this.getK6Value(bodyContent);
       const queryEntries = Object.entries(action.apiPayload.queryParams).map(
-        ([key, value]) => `    queryParams[${this.getJsValue(key)}] = ${this.getJsValue(value)};`,
+        ([key, value]) => `    queryParams[${this.getK6Value(key)}] = ${this.getK6Value(value)};`,
       );
 
       return [
@@ -74,5 +74,16 @@ export class K6StressGenerator extends BaseCodeGenerator {
 
   public generateFooter(_session: SessionIR, _options?: GeneratorOptions): string {
     return `}`;
+  }
+
+  private getK6Value(value?: string | number | boolean | null | SecretRef): string {
+    if (value === undefined) return "''";
+    if (value === null) return 'null';
+    if (typeof value === 'object' && value.kind === 'secret') return `__ENV[${JSON.stringify(value.key)}] ?? ''`;
+    return JSON.stringify(value);
+  }
+
+  private getK6Record(values: Record<string, string | SecretRef> = {}): string {
+    return `{ ${Object.entries(values).map(([key, value]) => `${JSON.stringify(key)}: ${this.getK6Value(value)}`).join(', ')} }`;
   }
 }

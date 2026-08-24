@@ -151,7 +151,7 @@ export const Dialog: React.FC<DialogProps> = ({ open, title, description, onClos
 };
 
 export const ActionToolbar: React.FC<React.HTMLAttributes<HTMLElement>> = ({ className = '', children, ...props }) => (
-  <section {...props} className={`flex min-w-0 flex-wrap items-center gap-2 border-b border-[var(--ap-border)] bg-[var(--ap-surface)] px-4 py-3 ${className}`.trim()}>
+  <section {...props} className={`ap-action-toolbar flex min-w-0 flex-wrap items-center gap-2 border-b border-[var(--ap-border)] px-4 py-3 ${className}`.trim()}>
     {children}
   </section>
 );

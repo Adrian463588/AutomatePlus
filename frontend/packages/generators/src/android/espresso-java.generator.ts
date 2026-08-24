@@ -8,8 +8,8 @@ export class EspressoJavaGenerator extends BaseCodeGenerator {
   public readonly supportedPlatforms = ['android'] as const;
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
-    const className = this.toPascalCase(session.name) + 'Test';
-    const activityName = this.requireTargetField(session, 'appActivity');
+    const className = `${this.generatedClassName(session.name)}Test`;
+    const activityName = this.requireJavaActivityClass(session);
     return [
       `package com.automateplus.tests;`,
       ``,
@@ -34,11 +34,11 @@ export class EspressoJavaGenerator extends BaseCodeGenerator {
     ].join('\n');
   }
 
-  public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
+  public generateStep(action: ActionIR, session: SessionIR, _options?: GeneratorOptions): string {
     const loc = this.getPrimaryLocator(action);
-    const matcher = loc ? this.formatEspressoMatcher(loc) : this.unsupportedAction(action);
-    const val = this.getJavaValue(action.value);
-    const expected = this.getJavaValue(action.expectedValue ?? action.value);
+    const matcher = loc ? this.formatEspressoMatcher(loc, session) : '';
+    const value = this.getJavaValue(action.value);
+    const expected = this.getJavaValue(this.getAssertionExpected(action));
 
     switch (action.action) {
       case 'tap':
@@ -53,22 +53,26 @@ export class EspressoJavaGenerator extends BaseCodeGenerator {
         return `        onView(${matcher}).perform(longClick());`;
 
       case 'fill':
-        return `        onView(${matcher}).perform(clearText(), typeText(${val}), closeSoftKeyboard());`;
+        return `        onView(${matcher}).perform(clearText(), typeText(${value}), closeSoftKeyboard());`;
 
       case 'clear':
         return `        onView(${matcher}).perform(clearText());`;
 
-      case 'swipe':
-        return `        onView(${matcher}).perform(swipeUp());`;
+      case 'swipe': {
+        const vector = action.swipeVector;
+        if (!vector) return this.unsupportedAction(action);
+        return `        onView(withId(android.R.id.content)).perform(${this.espressoSwipeAction(vector)});`;
+      }
 
       case 'back':
         return `        pressBack();`;
 
       case 'enter':
+        if (!matcher) return this.unsupportedAction(action);
         return `        onView(${matcher}).perform(pressImeActionButton());`;
 
       case 'sleep':
-        return `        try { Thread.sleep(${action.timeoutMs ?? 1000}); } catch (InterruptedException ignored) {}`;
+        return `        try { Thread.sleep(${action.timeoutMs ?? 1000}); } catch (InterruptedException error) { Thread.currentThread().interrupt(); throw new RuntimeException(error); }`;
 
       case 'assertVisible':
         return `        onView(${matcher}).check(matches(isDisplayed()));`;
@@ -88,23 +92,25 @@ export class EspressoJavaGenerator extends BaseCodeGenerator {
     ].join('\n');
   }
 
-  private formatEspressoMatcher(loc: LocatorCandidate): string {
+  private formatEspressoMatcher(loc: LocatorCandidate, session: SessionIR): string {
     switch (loc.strategy) {
       case 'resourceId':
-        return `withId(R.id.${loc.value.split('/').pop()})`;
+        return `withId(${this.getAndroidResourceReference(session, loc)})`;
       case 'accessibilityId':
-        return `withContentDescription("${loc.value}")`;
+        return `withContentDescription(${this.getJavaValue(loc.value)})`;
       case 'text':
-        return `withText("${loc.value}")`;
+        return `withText(${this.getJavaValue(loc.value)})`;
+      case 'role':
+        return `withClassName(org.hamcrest.Matchers.is(${this.getJavaValue(loc.value)}))`;
       default:
         return this.unsupportedLocator(loc);
     }
   }
 
-  private toPascalCase(str: string): string {
-    return str
-      .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase())
-      .replace(/^[a-z]/, (c) => c.toUpperCase())
-      .replace(/[^a-zA-Z0-9]/g, '');
+  private espressoSwipeAction(vector: NonNullable<ActionIR['swipeVector']>): string {
+    const deltaX = vector.endX - vector.startX;
+    const deltaY = vector.endY - vector.startY;
+    if (Math.abs(deltaX) >= Math.abs(deltaY)) return deltaX >= 0 ? 'swipeRight()' : 'swipeLeft()';
+    return deltaY >= 0 ? 'swipeDown()' : 'swipeUp()';
   }
 }

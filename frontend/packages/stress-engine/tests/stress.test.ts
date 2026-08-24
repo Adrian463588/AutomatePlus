@@ -73,6 +73,7 @@ describe('Stress Engine (Looper & k6 RPS Runner)', () => {
         }),
       );
       request.onStdout('k6 fixture completed\n');
+      request.onStdout('x'.repeat(20 * 1024));
       return { completion: Promise.resolve({ exitCode: 0 }), terminate: () => undefined };
     };
     const k6Runner = new K6StressRunner(processFactory, 'k6-fixture');
@@ -94,5 +95,6 @@ describe('Stress Engine (Looper & k6 RPS Runner)', () => {
     expect(metrics.length).toBeGreaterThan(0);
     expect(metrics[0].maxVUs).toBe(37);
     expect(logs.some((l) => l.includes('Generated k6 load script'))).toBe(true);
+    expect(logs.some((l) => l.includes('[k6 log chunk truncated]'))).toBe(true);
   });
 });

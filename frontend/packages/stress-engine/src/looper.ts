@@ -39,7 +39,8 @@ export class SessionLooper {
     let successful = 0;
     let failed = 0;
     let blocked = false;
-    const iterationDurations: number[] = [];
+    let totalDurationMs = 0;
+    let measuredIterations = 0;
 
     onLog({
       timestamp: Date.now(),
@@ -64,7 +65,8 @@ export class SessionLooper {
       });
 
       const summary = await this.runner.run(session, { executionMode: 'loop' }, onLog);
-      iterationDurations.push(summary.durationMs);
+      totalDurationMs += summary.durationMs;
+      measuredIterations += 1;
 
       if (summary.status === 'passed') {
         successful++;
@@ -83,10 +85,7 @@ export class SessionLooper {
     }
 
     const totalCompleted = successful + failed;
-    const avgDuration =
-      iterationDurations.length > 0
-        ? iterationDurations.reduce((a, b) => a + b, 0) / iterationDurations.length
-        : 0;
+    const avgDuration = measuredIterations > 0 ? totalDurationMs / measuredIterations : 0;
 
     return {
       runId,

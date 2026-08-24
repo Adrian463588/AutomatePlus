@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@automate-plus/contracts": "file:../contracts",
-    "@automate-plus/ir-schema": "file:../ir-schema"
+    "@automate-plus/ir-schema": "file:../ir-schema",
+    "@automate-plus/selector-engine": "file:../selector-engine"
   }
 }

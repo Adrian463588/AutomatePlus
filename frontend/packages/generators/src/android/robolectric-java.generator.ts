@@ -8,8 +8,8 @@ export class RobolectricJavaGenerator extends BaseCodeGenerator {
   public readonly supportedPlatforms = ['android'] as const;
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
-    const className = this.toPascalCase(session.name) + 'Test';
-    const activityName = this.requireTargetField(session, 'appActivity');
+    const className = `${this.generatedClassName(session.name)}Test`;
+    const activityName = this.requireJavaActivityClass(session);
     return [
       `package com.automateplus.tests;`,
       ``,
@@ -34,11 +34,11 @@ export class RobolectricJavaGenerator extends BaseCodeGenerator {
     ].join('\n');
   }
 
-  public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
+  public generateStep(action: ActionIR, session: SessionIR, _options?: GeneratorOptions): string {
     const loc = this.getPrimaryLocator(action);
-    const matcher = loc ? this.formatEspressoMatcher(loc) : this.unsupportedAction(action);
-    const val = this.getJavaValue(action.value);
-    const expected = this.getJavaValue(action.expectedValue ?? action.value);
+    const matcher = loc ? this.formatEspressoMatcher(loc, session) : this.unsupportedAction(action);
+    const value = this.getJavaValue(action.value);
+    const expected = this.getJavaValue(this.getAssertionExpected(action));
 
     switch (action.action) {
       case 'tap':
@@ -50,7 +50,7 @@ export class RobolectricJavaGenerator extends BaseCodeGenerator {
         return `            onView(${matcher}).perform(doubleClick());`;
 
       case 'fill':
-        return `            onView(${matcher}).perform(clearText(), typeText(${val}), closeSoftKeyboard());`;
+        return `            onView(${matcher}).perform(clearText(), typeText(${value}), closeSoftKeyboard());`;
 
       case 'clear':
         return `            onView(${matcher}).perform(clearText());`;
@@ -74,23 +74,18 @@ export class RobolectricJavaGenerator extends BaseCodeGenerator {
     ].join('\n');
   }
 
-  private formatEspressoMatcher(loc: LocatorCandidate): string {
+  private formatEspressoMatcher(loc: LocatorCandidate, session: SessionIR): string {
     switch (loc.strategy) {
       case 'resourceId':
-        return `withId(R.id.${loc.value.split('/').pop()})`;
+        return `withId(${this.getAndroidResourceReference(session, loc)})`;
       case 'accessibilityId':
-        return `withContentDescription("${loc.value}")`;
+        return `withContentDescription(${this.getJavaValue(loc.value)})`;
       case 'text':
-        return `withText("${loc.value}")`;
+        return `withText(${this.getJavaValue(loc.value)})`;
+      case 'role':
+        return `withClassName(org.hamcrest.Matchers.is(${this.getJavaValue(loc.value)}))`;
       default:
         return this.unsupportedLocator(loc);
     }
-  }
-
-  private toPascalCase(str: string): string {
-    return str
-      .replace(/[^a-zA-Z0-9]+(.)/g, (_, chr) => chr.toUpperCase())
-      .replace(/^[a-z]/, (c) => c.toUpperCase())
-      .replace(/[^a-zA-Z0-9]/g, '');
   }
 }

@@ -54,7 +54,7 @@ export const WEB_ACTIONS = [
 export const ANDROID_ACTIONS = [
   'tap', 'click', 'doubleTap', 'doubleClick', 'longPress', 'swipe', 'drag', 'dragAndDrop',
   'pinch', 'fill', 'clear', 'back', 'home', 'enter', 'launchApp', 'closeApp', 'waitFor',
-  'sleep', 'takeScreenshot', 'assertVisible', 'assertHidden', 'assertText', 'assertValue',
+  'scroll', 'sleep', 'takeScreenshot', 'assertVisible', 'assertHidden', 'assertText', 'assertValue',
   'assertAttribute',
 ] as const satisfies readonly ActionType[];
 

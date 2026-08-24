@@ -8,6 +8,16 @@ AutomatePlus is a Windows desktop test workbench. Its visual hierarchy is conten
 
 The renderer does not use gradients, glassmorphism, decorative glow, oversized radii, decorative badges, or animation that does not communicate state. Existing controls are reused before new primitives are created.
 
+## Functional bento layout
+
+Bento is used as information architecture, not decoration:
+
+- Runtime Manager uses one larger active-root/health anchor and compact catalog, verification, and policy regions.
+- Device Farm uses the full workspace for the device pool and mirror/replay region; it does not reserve a generated-code column.
+- Recorder and API Builder retain the generated-code column because it is part of their primary task.
+- Each surface owns a bounded scroll container. The terminal is a sibling region below the workspace and must never overlap it.
+- A surface may remain flat when grouping would add visual noise; not every section becomes a rounded card.
+
 ## Tokens
 
 - Typography: `Segoe UI Variable`, `Segoe UI`, system fallback; `Cascadia Mono`, `Consolas`, monospace for code.

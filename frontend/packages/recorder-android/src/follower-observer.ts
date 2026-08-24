@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { DeviceObservation, DeviceObservationStatus } from '@automate-plus/contracts';
 import { ActionIR, LocatorCandidate } from '@automate-plus/ir-schema';
+import { rankLocators } from '@automate-plus/selector-engine';
 import { AndroidBridgeError } from './android-errors.js';
 import { AndroidUiNode, parseUiHierarchy } from './hierarchy-parser.js';
 
@@ -29,7 +30,10 @@ export class AndroidFollowerLocatorObserver {
     const hierarchy = await this.bridge.dumpUiHierarchy(context.deviceId);
     const hierarchyHash = createHash('sha256').update(hierarchy, 'utf8').digest('hex');
     const nodes = parseUiHierarchy(hierarchy);
-    const semanticLocators = (action.locators ?? []).filter((locator) => locator.strategy !== 'bounds');
+    const semanticLocators = rankLocators(
+      (action.locators ?? []).filter((locator) => locator.strategy !== 'bounds'),
+      'android',
+    );
 
     if (semanticLocators.length === 0) {
       return this.observation(action, context, 'SEMANTIC_SELECTOR_MISSING', hierarchyHash, 0, false,

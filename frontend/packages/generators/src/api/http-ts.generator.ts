@@ -7,17 +7,26 @@ export class HttpTsGenerator extends BaseCodeGenerator {
   public readonly language = 'typescript';
   public readonly supportedPlatforms = ['api'] as const;
 
-  public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
+  public generateHeader(_session: SessionIR, _options?: GeneratorOptions): string {
     return [
       `import axios, { AxiosResponse } from 'axios';`,
+      `import assert from 'node:assert/strict';`,
       ``,
-      `describe(${this.getJsValue(session.name)}, () => {`,
-      `  let lastResponse: AxiosResponse;`,
-      `  let lastResponseTimeMs = 0;`,
-      `  const variables: Record<string, any> = {};`,
-      `  const readJsonPath = (value: unknown, path: string): unknown => path.replace(/^\\$\\.?/, '').split('.').filter(Boolean).reduce<unknown>((current, key) => current && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined, value);`,
+      `const readJsonPath = (value: unknown, path: string): unknown => path.replace(/^\\$\\.?/, '').split('.').filter(Boolean).reduce<unknown>((current, key) => current && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined, value);`,
+      `const getResponseHeader = (headers: AxiosResponse['headers'], name: string): string | undefined => {`,
+      `  const key = Object.keys(headers ?? {}).find((candidate) => candidate.toLowerCase() === name.toLowerCase());`,
+      `  const value = key ? headers[key] : undefined;`,
+      `  return Array.isArray(value) ? value.join(', ') : value === undefined ? undefined : String(value);`,
+      `};`,
+      `let lastResponse: AxiosResponse | undefined;`,
+      `let lastResponseTimeMs = 0;`,
+      `const variables: Record<string, unknown> = {};`,
+      `const requireResponse = (): AxiosResponse => {`,
+      `  if (!lastResponse) throw new Error('API assertion requires a preceding httpRequest step.');`,
+      `  return lastResponse;`,
+      `};`,
       ``,
-      `  it('should execute API test sequence', async () => {`,
+      `async function main(): Promise<void> {`,
     ].join('\n');
   }
 
@@ -29,43 +38,43 @@ export class HttpTsGenerator extends BaseCodeGenerator {
       const dataStr = bodyContent === undefined ? 'undefined' : this.getJsValue(bodyContent);
 
       const extractionLines = (extractedVariables || []).map(
-        (v) => `    variables[${this.getJsValue(v.variableName)}] = readJsonPath(lastResponse.data, ${this.getJsValue(v.jsonPath)});`
+        (v) => `  variables[${this.getJsValue(v.variableName)}] = readJsonPath(requireResponse().data, ${this.getJsValue(v.jsonPath)});`
       );
       const requestStartedAt = `requestStartedAtStep${action.stepNumber}`;
 
       return [
-        `    const ${requestStartedAt} = Date.now();`,
-        `    lastResponse = await axios.request({`,
-        `      method: ${this.getJsValue(method.toLowerCase())},`,
-        `      url: ${this.getJsValue(url)},`,
-        `      params: ${queryParamsStr},`,
-        `      headers: ${headersStr},`,
-        `      data: ${dataStr},`,
-        `      validateStatus: () => true,`,
-        `    });`,
-        `    lastResponseTimeMs = Date.now() - ${requestStartedAt};`,
+        `  const ${requestStartedAt} = Date.now();`,
+        `  lastResponse = await axios.request({`,
+        `    method: ${this.getJsValue(method.toLowerCase())},`,
+        `    url: ${this.getJsValue(url)},`,
+        `    params: ${queryParamsStr},`,
+        `    headers: ${headersStr},`,
+        `    data: ${dataStr},`,
+        `    validateStatus: () => true,`,
+        `  });`,
+        `  lastResponseTimeMs = Date.now() - ${requestStartedAt};`,
         ...extractionLines,
       ].join('\n');
     }
 
     if (action.action === 'assertStatusCode') {
-      return `    expect(lastResponse.status).toBe(${this.requireExpectedNumber(action, 100, 599)});`;
+      return `  assert.equal(requireResponse().status, ${this.requireExpectedNumber(action, 100, 599)});`;
     }
 
     if (action.action === 'assertJsonPath') {
-      return `    expect(readJsonPath(lastResponse.data, ${this.getJsValue(action.attributeName || action.assertion?.jsonPath)})).toEqual(${this.getJsValue(action.expectedValue)});`;
+      return `  assert.deepEqual(readJsonPath(requireResponse().data, ${this.getJsValue(action.attributeName || action.assertion?.jsonPath)}), ${this.getJsValue(action.expectedValue)});`;
     }
 
     if (action.action === 'assertHeader') {
-      return `    expect(lastResponse.headers[${this.getJsValue(action.attributeName?.toLowerCase())}]).toContain(${this.getJsValue(action.expectedValue)});`;
+      return `  assert.ok(String(getResponseHeader(requireResponse().headers, ${this.getJsValue(action.attributeName)}) ?? '').includes(String(${this.getJsValue(action.expectedValue)})));`;
     }
 
     if (action.action === 'assertResponseTime') {
-      return `    expect(lastResponseTimeMs).toBeLessThanOrEqual(${this.requireExpectedNumber(action, 1)});`;
+      return `  requireResponse();\n  assert.ok(lastResponseTimeMs <= ${this.requireExpectedNumber(action, 1)});`;
     }
 
     if (action.action === 'sleep') {
-      return `    await new Promise((r) => setTimeout(r, ${action.timeoutMs ?? 1000}));`;
+      return `  await new Promise((resolve) => setTimeout(resolve, ${action.timeoutMs ?? 1000}));`;
     }
 
     return this.unsupportedAction(action);
@@ -73,7 +82,11 @@ export class HttpTsGenerator extends BaseCodeGenerator {
 
   public generateFooter(_session: SessionIR, _options?: GeneratorOptions): string {
     return [
-      `  });`,
+      `}`,
+      ``,
+      `main().catch((error: unknown) => {`,
+      `  console.error(error instanceof Error ? error.message : String(error));`,
+      `  process.exitCode = 1;`,
       `});`,
     ].join('\n');
   }

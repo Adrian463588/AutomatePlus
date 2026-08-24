@@ -49,11 +49,11 @@ describe('Polyglot Code Generators', () => {
   const sampleAndroidSession: SessionIR = {
     id: 'a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11',
     projectId: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
-    name: 'AndroidLogin',
+    name: 'NotiPlusHistory',
     platform: 'android',
     targetConfig: {
-      appPackage: 'com.automateplus.demo',
-      appActivity: 'MainActivity',
+      appPackage: 'com.notifplus',
+      appActivity: 'com.notifplus.MainActivity',
     },
     environmentVariables: {},
     steps: [
@@ -61,9 +61,8 @@ describe('Polyglot Code Generators', () => {
         id: 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33',
         stepNumber: 1,
         platform: 'android',
-        action: 'fill',
-        locators: [{ strategy: 'resourceId', value: 'com.automateplus.demo:id/input_email', score: 100 }],
-        value: 'tester@example.com',
+        action: 'tap',
+        locators: [{ strategy: 'text', value: 'Riwayat', score: 100 }],
         timeoutMs: 5000,
         timestamp: Date.now(),
       },
@@ -72,7 +71,7 @@ describe('Polyglot Code Generators', () => {
         stepNumber: 2,
         platform: 'android',
         action: 'tap',
-        locators: [{ strategy: 'resourceId', value: 'com.automateplus.demo:id/btn_login', score: 100 }],
+        locators: [{ strategy: 'text', value: 'Aplikasi', score: 100 }],
         timeoutMs: 5000,
         timestamp: Date.now(),
       },
@@ -81,7 +80,7 @@ describe('Polyglot Code Generators', () => {
         stepNumber: 3,
         platform: 'android',
         action: 'assertVisible',
-        locators: [{ strategy: 'resourceId', value: 'com.automateplus.demo:id/dashboard', score: 95 }],
+        locators: [{ strategy: 'text', value: 'Pengaturan', score: 95 }],
         timeoutMs: 5000,
         timestamp: Date.now(),
       },
@@ -138,8 +137,92 @@ describe('Polyglot Code Generators', () => {
     expect(project.language).toBe('typescript');
     const code = project.files[0].content;
     expect(code).toContain(`import { test, expect } from '@playwright/test';`);
-    expect(code).toContain(`await page.goto('https://example.com/login');`);
-    expect(code).toContain(`await page.getByTestId('email-input').fill("admin@automateplus.io");`);
+    expect(code).toContain(`await page.goto("https://example.com/login");`);
+    expect(code).toContain(`await page.getByTestId("email-input").fill("admin@automateplus.io");`);
+  });
+
+  it('selects the strongest observed web target even when recorder scores arrive stale', async () => {
+    const generator = GeneratorFactory.getGenerator('playwright', 'typescript');
+    const session: SessionIR = {
+      ...sampleWebSession,
+      name: 'ObservedTargetRanking',
+      steps: [{
+        ...sampleWebSession.steps[0],
+        locators: [
+          { strategy: 'css', value: '#email', score: 90 },
+          { strategy: 'testId', value: 'email-input', score: 80 },
+        ],
+      }],
+    };
+
+    const project = await generator.generateFullProject(session);
+
+    expect(project.files[0].content).toContain(`page.getByTestId("email-input")`);
+    expect(project.files[0].content).not.toContain(`page.locator("#email")`);
+  });
+
+  it('emits an HTML id locator as an id selector for real web targets', async () => {
+    const generator = GeneratorFactory.getGenerator('playwright', 'typescript');
+    const session: SessionIR = {
+      ...sampleWebSession,
+      name: 'HtmlIdTarget',
+      steps: [{
+        ...sampleWebSession.steps[2],
+        stepNumber: 1,
+        locators: [{ strategy: 'id', value: 'inventory_container', score: 82 }],
+      }],
+    };
+
+    const project = await generator.generateFullProject(session);
+
+    expect(project.files[0].content).toContain('page.locator("#inventory_container")');
+    expect(project.files[0].content).not.toContain('getByTestId("inventory_container")');
+  });
+
+  it('selects Android resource IDs above class-name fallbacks during generation', async () => {
+    const generator = GeneratorFactory.getGenerator('appium', 'typescript');
+    const session: SessionIR = {
+      ...sampleAndroidSession,
+      name: 'ObservedAndroidTargetRanking',
+      steps: [{
+        ...sampleAndroidSession.steps[0],
+        locators: [
+          { strategy: 'role', value: 'android.widget.Button', score: 90 },
+          { strategy: 'resourceId', value: 'com.notifplus:id/history', score: 80 },
+        ],
+      }],
+    };
+
+    const project = await generator.generateFullProject(session);
+    const generatedSource = project.files.find((file) => file.content.includes('UiSelector'))?.content;
+
+    expect(generatedSource).toContain('UiSelector().resourceId(\\"com.notifplus:id/history\\")');
+    expect(generatedSource).not.toContain('UiSelector().className');
+  });
+
+  it('ranks a real drag target and never falls back to the document body', async () => {
+    const generator = GeneratorFactory.getGenerator('playwright', 'typescript');
+    const session: SessionIR = {
+      ...sampleWebSession,
+      name: 'ObservedDragTargetRanking',
+      steps: [{
+        ...sampleWebSession.steps[0],
+        action: 'dragAndDrop',
+        locators: [{ strategy: 'css', value: '#source', score: 100 }],
+        dragTarget: {
+          locators: [
+            { strategy: 'css', value: '#drop-zone', score: 95 },
+            { strategy: 'testId', value: 'drop-zone', score: 80 },
+          ],
+        },
+      }],
+    };
+
+    const project = await generator.generateFullProject(session);
+    const code = project.files[0].content;
+
+    expect(code).toContain('getByTestId("drop-zone")');
+    expect(code).not.toContain("page.locator('body')");
   });
 
   it('should generate valid Playwright JavaScript test project', async () => {
@@ -147,7 +230,7 @@ describe('Polyglot Code Generators', () => {
     const project = await generator.generateFullProject(sampleWebSession);
     expect(project.framework).toBe('playwright');
     expect(project.language).toBe('javascript');
-    expect(project.files[0].content).toContain(`const { test, expect } = require('@playwright/test');`);
+    expect(project.files[0].content).toContain(`import { test, expect } from '@playwright/test';`);
   });
 
   it('should generate valid Playwright Python test project', async () => {
@@ -168,15 +251,59 @@ describe('Polyglot Code Generators', () => {
     expect(project.files[0].content).toContain(`import com.microsoft.playwright.*;`);
   });
 
+  it('uses assertion metadata as the canonical expected value for every web generator', async () => {
+    const assertionSession: SessionIR = {
+      ...sampleWebSession,
+      name: 'WebAssertionContract',
+      steps: [
+        {
+          ...sampleWebSession.steps[0],
+          action: 'assertText',
+          locators: [{ strategy: 'css', value: '#inventory_container', score: 100 }],
+          value: undefined,
+          expectedValue: undefined,
+          assertion: { operator: 'equals', expected: 'Assertion fallback value' },
+        },
+        {
+          ...sampleWebSession.steps[0],
+          id: '10000000-0000-4000-8000-000000000045',
+          stepNumber: 2,
+          action: 'assertUrl',
+          value: undefined,
+          expectedValue: undefined,
+          assertion: { operator: 'equals', expected: 'https://example.com/login' },
+        },
+      ],
+    };
+
+    for (const { framework, language } of GeneratorFactory.getSupportedCombinations().filter((item) => item.platforms.includes('web'))) {
+      const project = await GeneratorFactory.getGenerator(framework, language).generateFullProject(assertionSession);
+      const code = project.files[0].content;
+      expect(code, `${framework}/${language}`).toContain('Assertion fallback value');
+    }
+  });
+
+  it('requires explicit local browser and driver executables for Selenium generators', async () => {
+    const sessionCode = await GeneratorFactory.getGenerator('selenium', 'javascript').generateFullProject(sampleWebSession);
+    const pythonCode = await GeneratorFactory.getGenerator('selenium', 'python').generateFullProject(sampleWebSession);
+    const javaCode = await GeneratorFactory.getGenerator('selenium', 'java').generateFullProject(sampleWebSession);
+
+    expect(sessionCode.files[0].content).toContain('AUTOMATEPLUS_BROWSER_EXECUTABLE');
+    expect(sessionCode.files[0].content).toContain('AUTOMATEPLUS_DRIVER_EXECUTABLE');
+    expect(pythonCode.files[0].content).toContain('Service(driver_executable)');
+    expect(javaCode.files[0].content).toContain('new ChromeDriver(service, options)');
+    expect(javaCode.files[0].content).toContain('driver.get("https://example.com/login")');
+  });
+
   it('should generate valid Cypress TypeScript test project', async () => {
     const generator = GeneratorFactory.getGenerator('cypress', 'typescript');
     const project = await generator.generateFullProject(sampleWebSession);
     expect(project.framework).toBe('cypress');
     expect(project.language).toBe('typescript');
     const code = project.files[0].content;
-    expect(code).toContain(`describe('Login_Flow', () => {`);
-    expect(code).toContain(`cy.visit('https://example.com/login');`);
-    expect(code).toContain(`cy.get('[data-testid="email-input"]').clear().type('admin@automateplus.io');`);
+    expect(code).toContain(`describe("Login_Flow", () => {`);
+    expect(code).toContain(`cy.visit("https://example.com/login");`);
+    expect(code).toContain('cy.get("[data-testid=\\\"email-input\\\"]").clear().type("admin@automateplus.io");');
   });
 
   it('should generate valid Cypress JavaScript test project', async () => {
@@ -184,7 +311,7 @@ describe('Polyglot Code Generators', () => {
     const project = await generator.generateFullProject(sampleWebSession);
     expect(project.framework).toBe('cypress');
     expect(project.language).toBe('javascript');
-    expect(project.files[0].content).toContain(`describe('Login_Flow', () => {`);
+    expect(project.files[0].content).toContain(`describe("Login_Flow", () => {`);
   });
 
   it('should generate valid Puppeteer TypeScript test project', async () => {
@@ -198,7 +325,7 @@ describe('Polyglot Code Generators', () => {
     const generator = GeneratorFactory.getGenerator('puppeteer', 'javascript');
     const project = await generator.generateFullProject(sampleWebSession);
     expect(project.framework).toBe('puppeteer');
-    expect(project.files[0].content).toContain(`const puppeteer = require('puppeteer');`);
+    expect(project.files[0].content).toContain(`import puppeteer from 'puppeteer';`);
   });
 
   it('should generate valid Selenium WebDriver Python test project', async () => {
@@ -293,11 +420,17 @@ describe('Polyglot Code Generators', () => {
     expect(project.language).toBe('yaml');
 
     const code = project.files[0].content;
-    expect(code).toContain('appId: com.automateplus.demo');
+    expect(code).toContain('appId: "com.notifplus"');
     expect(code).toContain('- launchApp');
-    expect(code).toContain('id: "com.automateplus.demo:id/input_email"');
-    expect(code).toContain('inputText: "tester@example.com"');
-    expect(code).toContain('id: "com.automateplus.demo:id/btn_login"');
+    expect(code).toContain('text: "Riwayat"');
+    expect(code).toContain('text: "Aplikasi"');
+    expect(code).toContain('text: "Pengaturan"');
+    expect(project.files.map((file) => file.relativePath)).toEqual(expect.arrayContaining([
+      'automateplus.manifest.json',
+      'automateplus.runtime.json',
+    ]));
+    const runtimeLock = JSON.parse(project.files.find((file) => file.relativePath === 'automateplus.runtime.json')?.content ?? '{}');
+    expect(runtimeLock.requiredRuntimePacks).toContain('maestro');
   });
 
   // --- API Generators ---

@@ -26,6 +26,11 @@ export class HttpJavaGenerator extends BaseCodeGenerator {
       `    private long lastResponseTimeMs;`,
       `    private Map<String, Object> variables = new HashMap<>();`,
       ``,
+      `    private Response requireResponse() {`,
+      `        if (lastResponse == null) throw new IllegalStateException("API assertion requires a preceding httpRequest step.");`,
+      `        return lastResponse;`,
+      `    }`,
+      ``,
       `    @Test`,
       `    public void testApiSession() {`,
     ].join('\n');
@@ -38,7 +43,7 @@ export class HttpJavaGenerator extends BaseCodeGenerator {
       const queryLines = this.getJavaQueryLines(action.apiPayload.queryParams);
       const bodyLine = bodyContent === undefined ? '' : `            .body(${this.getJavaValue(bodyContent)})`;
       const extractionLines = (extractedVariables || []).map(
-        (v) => `        variables.put(${JSON.stringify(v.variableName)}, lastResponse.jsonPath().get(${JSON.stringify(v.jsonPath.replace(/^\$\.?/, ''))}));`,
+        (v) => `        variables.put(${JSON.stringify(v.variableName)}, requireResponse().jsonPath().get(${JSON.stringify(v.jsonPath.replace(/^\$\.?/, ''))}));`,
       );
       const requestStartedAt = `requestStartedAtStep${action.stepNumber}`;
 
@@ -58,20 +63,20 @@ export class HttpJavaGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertStatusCode') {
-      return `        lastResponse.then().statusCode(${this.requireExpectedNumber(action, 100, 599)});`;
+      return `        requireResponse().then().statusCode(${this.requireExpectedNumber(action, 100, 599)});`;
     }
 
     if (action.action === 'assertJsonPath') {
       const path = action.attributeName || action.assertion?.jsonPath || '';
-      return `        lastResponse.then().body(${this.getJavaValue(path)}, equalTo(${this.getJavaValue(action.expectedValue)}));`;
+      return `        requireResponse().then().body(${this.getJavaValue(path)}, equalTo(${this.getJavaValue(action.expectedValue)}));`;
     }
 
     if (action.action === 'assertHeader') {
-      return `        lastResponse.then().header(${this.getJavaValue(action.attributeName)}, containsString(${this.getJavaValue(action.expectedValue)}));`;
+      return `        requireResponse().then().header(${this.getJavaValue(action.attributeName)}, containsString(${this.getJavaValue(action.expectedValue)}));`;
     }
 
     if (action.action === 'assertResponseTime') {
-      return `        assertTrue(lastResponseTimeMs <= ${this.requireExpectedNumber(action, 1)});`;
+      return `        requireResponse();\n        assertTrue(lastResponseTimeMs <= ${this.requireExpectedNumber(action, 1)});`;
     }
 
     if (action.action === 'sleep') {

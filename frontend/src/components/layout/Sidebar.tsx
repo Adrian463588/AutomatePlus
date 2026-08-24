@@ -113,7 +113,7 @@ export const Sidebar: React.FC = () => {
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
             <span id="runtime-preflight-heading">Runtime preflight</span><Server className="w-3.5 h-3.5 text-slate-500" />
           </div>
-          <div className="rounded-md border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+          <div className="ap-bento-card p-3 space-y-2">
             <div className="flex items-start gap-2 text-slate-400 leading-5" role="status" aria-live="polite" aria-busy={runtimePreflight.status === 'busy'}>
               <span className={`mt-1 h-2 w-2 rounded shrink-0 ${runtimePreflight.status === 'ready' ? 'bg-emerald-400' : runtimePreflight.status === 'busy' ? 'bg-sky-400' : runtimePreflight.status === 'error' ? 'bg-rose-400' : 'bg-amber-400'}`} />
               <span>{runtimePreflight.message}</span>
@@ -157,7 +157,7 @@ export const Sidebar: React.FC = () => {
 
         <section aria-labelledby="devices-heading">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between"><span id="devices-heading">Android preflight</span><SmartphoneNfc className="w-3.5 h-3.5 text-slate-500" /></div>
-          <div className="rounded-md border border-slate-800 bg-slate-950/60 p-3 space-y-2">
+          <div className="ap-bento-card p-3 space-y-2">
             <div className="flex items-start gap-2 text-slate-500 leading-5"><span className="mt-1 h-2 w-2 rounded bg-slate-600 shrink-0" /> <span>{deviceDiscoveryMessage}</span></div>
             <button type="button" onClick={() => void discoverDevices()} className="flex items-center gap-1.5 px-2 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-slate-700"><RefreshCw className="w-3.5 h-3.5" /> Check devices</button>
             {devices.length > 0 && <select aria-label="Select Android device" value={activeDevice ?? ''} onChange={(event) => setActiveDevice(event.target.value)} className="ap-select w-full">{devices.map((device) => <option key={device.id} value={device.id}>{device.model || device.id} · {device.status}</option>)}</select>}
