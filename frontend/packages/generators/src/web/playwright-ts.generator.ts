@@ -8,10 +8,14 @@ export class PlaywrightTsGenerator extends BaseCodeGenerator {
   public readonly supportedPlatforms = ['web'] as const;
 
   public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
+    const healingImport = session.steps.some((step) => this.getGeneratedLocatorCandidates(step).length > 1)
+      ? `import { withLocatorHealing } from './automateplus-healing.js';`
+      : '';
     return [
       `import { test, expect } from '@playwright/test';`,
       `import { mkdir } from 'node:fs/promises';`,
       `import { basename } from 'node:path';`,
+      healingImport,
       ``,
       `test.describe(${JSON.stringify(session.name)}, () => {`,
       `  test('should execute recorded test session', async ({ page }) => {`,
@@ -26,8 +30,6 @@ export class PlaywrightTsGenerator extends BaseCodeGenerator {
   }
 
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
-    const loc = this.getPrimaryLocator(action);
-    const locatorCode = loc ? this.formatPlaywrightLocator(loc) : '';
     const val = this.getJsValue(action.value);
     const expected = this.getJsValue(this.getAssertionExpected(action));
     if (['assertText', 'assertValue', 'assertUrl'].includes(action.action)) this.requireAssertionOperator(action, ['equals']);
@@ -37,22 +39,22 @@ export class PlaywrightTsGenerator extends BaseCodeGenerator {
         return `    await page.goto(${val});`;
 
       case 'click':
-        return `    await ${locatorCode}.click();`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `${locator}.click()`)};`;
 
       case 'doubleClick':
-        return `    await ${locatorCode}.dblclick();`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `${locator}.dblclick()`)};`;
 
       case 'rightClick':
-        return `    await ${locatorCode}.click({ button: 'right' });`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `${locator}.click({ button: 'right' })`)};`;
 
       case 'hover':
-        return `    await ${locatorCode}.hover();`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `${locator}.hover()`)};`;
 
       case 'fill':
-        return `    await ${locatorCode}.fill(${val});`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `${locator}.fill(${val})`)};`;
 
       case 'clear':
-        return `    await ${locatorCode}.clear();`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `${locator}.clear()`)};`;
 
       case 'pressKey':
         return `    await page.keyboard.press(${JSON.stringify(this.getWebKeyValue(action.value))});`;
@@ -60,14 +62,14 @@ export class PlaywrightTsGenerator extends BaseCodeGenerator {
       case 'dragAndDrop': {
         const targetLoc = this.requireDragTarget(action);
         const targetCode = this.formatPlaywrightLocator(targetLoc);
-        return `    await ${locatorCode}.dragTo(${targetCode});`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `${locator}.dragTo(${targetCode})`)};`;
       }
 
       case 'scroll':
         return `    await page.mouse.wheel(${action.scrollOffset?.deltaX ?? 0}, ${action.scrollOffset?.deltaY ?? 0});`;
 
       case 'waitFor':
-        return `    await ${locatorCode}.waitFor({ state: 'visible' });`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `${locator}.waitFor({ state: 'visible' })`)};`;
 
       case 'sleep':
         return `    await page.waitForTimeout(${action.timeoutMs ?? 1000});`;
@@ -76,16 +78,16 @@ export class PlaywrightTsGenerator extends BaseCodeGenerator {
         return `    await page.screenshot({ path: 'screenshots/' + basename(${action.value ? val : "'screenshot.png'"}) });`;
 
       case 'assertVisible':
-        return `    await expect(${locatorCode}).toBeVisible();`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `expect(${locator}).toBeVisible()`)};`;
 
       case 'assertHidden':
-        return `    await expect(${locatorCode}).toBeHidden();`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `expect(${locator}).toBeHidden()`)};`;
 
       case 'assertText':
-        return `    await expect(${locatorCode}).toHaveText(${expected});`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `expect(${locator}).toHaveText(${expected})`)};`;
 
       case 'assertValue':
-        return `    await expect(${locatorCode}).toHaveValue(${expected});`;
+        return `    await ${this.formatLocatorAction(action, (locator) => `expect(${locator}).toHaveValue(${expected})`)};`;
 
       case 'assertUrl':
         return `    await expect(page).toHaveURL(${expected});`;
@@ -100,6 +102,13 @@ export class PlaywrightTsGenerator extends BaseCodeGenerator {
       `  });`,
       `});`,
     ].join('\n');
+  }
+
+  private formatLocatorAction(action: ActionIR, operation: (locator: string) => string): string {
+    const candidates = this.getGeneratedLocatorCandidates(action);
+    if (candidates.length <= 1) return operation(this.formatPlaywrightLocator(candidates[0] ?? this.requireLocator(action)));
+    const factories = candidates.map((candidate) => `() => ${this.formatPlaywrightLocator(candidate)}`).join(', ');
+    return `withLocatorHealing(${JSON.stringify(action.id)}, [${factories}], async (locator) => ${operation('locator')})`;
   }
 
   private formatPlaywrightLocator(loc: LocatorCandidate): string {

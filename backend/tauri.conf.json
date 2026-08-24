@@ -4,8 +4,8 @@
   "version": "1.0.0",
   "identifier": "com.automateplus.desktop",
   "build": {
-    "beforeDevCommand": "npm --prefix ../frontend run dev -- --host 127.0.0.1",
-    "beforeBuildCommand": "npm --prefix .. run build",
+    "beforeDevCommand": "npm --prefix frontend run dev -- --host 127.0.0.1",
+    "beforeBuildCommand": "npm --prefix frontend run build",
     "devUrl": "http://127.0.0.1:5173",
     "frontendDist": "../frontend/dist"
   },
@@ -29,10 +29,9 @@
   },
   "bundle": {
     "active": true,
+    "icon": ["../frontend/public/favicon.svg"],
     "resources": [
-      "resources/sidecar/**/*",
-      "resources/node/**/*",
-      "resources/runtime-packs/**/*"
+      "resources/**/*"
     ],
     "windows": {
       "webviewInstallMode": {

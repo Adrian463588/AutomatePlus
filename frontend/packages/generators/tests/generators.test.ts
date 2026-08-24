@@ -158,7 +158,9 @@ describe('Polyglot Code Generators', () => {
     const project = await generator.generateFullProject(session);
 
     expect(project.files[0].content).toContain(`page.getByTestId("email-input")`);
-    expect(project.files[0].content).not.toContain(`page.locator("#email")`);
+    expect(project.files[0].content).toContain(`page.locator("#email")`);
+    expect(project.files[0].content).toContain('withLocatorHealing');
+    expect(project.files.map((file) => file.relativePath)).toContain('tests/automateplus-healing.ts');
   });
 
   it('emits an HTML id locator as an id selector for real web targets', async () => {
@@ -197,7 +199,9 @@ describe('Polyglot Code Generators', () => {
     const generatedSource = project.files.find((file) => file.content.includes('UiSelector'))?.content;
 
     expect(generatedSource).toContain('UiSelector().resourceId(\\"com.notifplus:id/history\\")');
-    expect(generatedSource).not.toContain('UiSelector().className');
+    expect(generatedSource).toContain('UiSelector().className');
+    expect(generatedSource).toContain('withAppiumLocatorHealing');
+    expect(project.files.map((file) => file.relativePath)).toContain('tests/automateplus-healing.ts');
   });
 
   it('ranks a real drag target and never falls back to the document body', async () => {

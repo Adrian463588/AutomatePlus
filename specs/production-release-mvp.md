@@ -20,16 +20,17 @@ cloud control plane.
 
 | Requirement | Interface/ADR | Module boundary | Evidence | Status |
 |---|---|---|---|---|
-| Truthful native health and capability state | ADR-001/002, `NativeHealth` | Rust preflight, Tauri dispatch, desktop bridge | Preflight JSON; Cargo compile blocked by missing offline `tauri` | NeedsReview |
-| One-click local launch | Launcher contract | `Run-AutomatePlus.bat`, offline build script | `--doctor` and default fail-closed launcher output | NeedsReview |
+| Truthful native health and capability state | ADR-001/002, `NativeHealth` | Rust preflight, Tauri dispatch, desktop bridge | Preflight JSON; offline Cargo/Tauri gates pass | Implemented; runtime packs blocked |
+| One-click local launch | Launcher contract | `Run-AutomatePlus.bat`, offline build script | `--doctor`, launcher smoke, native executable build | Implemented; release packaging pending |
 | Real device discovery | FR-04/14, `DeviceProfile` | Rust ADB client, SQLite, bridge | Two-device ADB target snapshot; native host acceptance blocked | NeedsReview |
-| Farm leases and ports | FR-15, `FarmRunSpec`, `DeviceRunContext` | Rust coordinator, port/process supervisors | Component lease tests; verified Appium pack/native executor blocked | NeedsReview |
+| Farm leases and ports | FR-15, `FarmRunSpec`, `DeviceRunContext` | Rust coordinator, port/process supervisors | Component lease tests; verified Appium pack/native executor blocked | Implemented; native acceptance blocked |
 | Primary/follower observation | FR-16, `RecordingPlan` | Android recorder and selector engine | Component observation tests; native recorder blocked | NeedsReview |
 | Complete generator matrix | FR-07/17, capability manifests | `frontend/packages/generators` | `verify:generators` — 27 combinations; `verify:web-generators` — 13 Web combinations against real SauceDemo/DemoQA URLs; `verify:api-generators` — 5 API combinations against real ReqRes/Petstore endpoints plus action/assertion contracts | Generated/Parsed Verified; runner execution Blocked until verified local packs are installed |
+| Deterministic best-target selection and bounded self-healing | FR-07/17, selector policy | `frontend/packages/selector-engine`, `frontend/packages/generators`, recorder adapters | Selector ranking/self-healer tests; generated healing helper and locator manifest | Implemented for recorded evidence; framework runtime execution remains pack-gated |
 | Runtime Manager and offline distribution | FR-12, runtime IPC 1.0, catalog contract | Rust runtime manager, SQLite migration, Runtime Manager UI, launcher | `verify:runtime-catalog`, `verify:runtime-manager`, `verify:offline-install`, `verify:release-manifest` | NeedsReview/Blocked until pinned artifacts and native bootstrap are supplied |
-| Native Windows folder and archive selection | `native.dialog.pick` IPC 1.0 | Async parent-aware Rust `rfd` dialog boundary, versioned desktop bridge, Create Project and Runtime Manager | Picker contract tests; native Windows folder/file selection evidence | NeedsReview until Tauri host is built and manually exercised |
+| Native Windows folder and archive selection | `native.dialog.pick` IPC 1.0 | Async parent-aware Rust `rfd` dialog boundary, versioned desktop bridge, Create Project and Runtime Manager | Picker contract tests; native Windows folder/file selection evidence | Implemented in source; manual host evidence pending |
 | Real web/API target checks | FR-03/05/08/11 | Explicit online E2E harness | Playwright MCP completed real SauceDemo login and DemoQA text-box interactions; `verify:web-generators` and `verify:api-generators` materialize generated projects against the declared real targets; local framework/browser/API packs and ReqRes credential remain unavailable | NeedsReview/Blocked |
-| Responsive accessible UI | NFR-05/09 | React renderer | UI contract, lint/build, Runtime Manager viewport PNGs; live browser a11y retest pending | NeedsReview |
+| Responsive accessible UI | NFR-05/09 | React renderer | UI contract, lint/build, Playwright viewport and accessibility evidence | Implemented in shell; native retest pending |
 | Safe publication | Change discipline | Reviewed allowlist and Git checks | Local/remote SHA match | Verified |
 
 ## Required behavior

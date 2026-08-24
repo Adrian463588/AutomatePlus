@@ -296,7 +296,9 @@ if (!primary) {
             action,
             status: 'Blocked',
             errors: [],
-            reason: 'A real input value was not captured from the live NotiPlus hierarchy and no explicit test value was supplied; fill generation is blocked.',
+            reason: explicitFillValue
+              ? 'No semantic input selector was observed in the live NotiPlus hierarchy; the explicit value cannot be applied to an unknown target.'
+              : 'A real input value was not captured from the live NotiPlus hierarchy and no explicit test value was supplied; fill generation is blocked.',
           });
           index += 1;
           continue;
@@ -353,7 +355,9 @@ if (!primary) {
       source: primary.observedInputSelector && explicitFillValue ? 'explicit-environment' : 'not-provided',
       reason: primary.observedInputSelector && explicitFillValue
         ? 'The generated fill action uses the explicit test value supplied by AUTOMATEPLUS_ANDROID_GENERATOR_FILL_VALUE.'
-        : 'A real fill action value was not captured from the live target and no explicit test value was supplied; fill generation remains blocked.',
+        : explicitFillValue
+          ? 'No semantic input selector was observed in the live target; the explicit value cannot be applied to an unknown target.'
+          : 'A real fill action value was not captured from the live target and no explicit test value was supplied; fill generation remains blocked.',
     },
     generators: generatorResults,
     physicalAcceptance: farmPack

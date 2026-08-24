@@ -72,27 +72,28 @@ impl AppState {
             return NativeResponse::failure(request, "PROTOCOL_ERROR", message, json!({}));
         }
 
-        let mut gate = match self.dialog_open.lock() {
-            Ok(gate) => gate,
-            Err(_) => {
+        {
+            let mut gate = match self.dialog_open.lock() {
+                Ok(gate) => gate,
+                Err(_) => {
+                    return NativeResponse::failure(
+                        request,
+                        "DIALOG_ERROR",
+                        "Native dialog state is unavailable.",
+                        json!({ "state": "blocked" }),
+                    )
+                }
+            };
+            if *gate {
                 return NativeResponse::failure(
                     request,
-                    "DIALOG_ERROR",
-                    "Native dialog state is unavailable.",
-                    json!({ "state": "blocked" }),
-                )
+                    "DIALOG_BUSY",
+                    "Another native dialog is already open.",
+                    json!({ "state": "busy" }),
+                );
             }
-        };
-        if *gate {
-            return NativeResponse::failure(
-                request,
-                "DIALOG_BUSY",
-                "Another native dialog is already open.",
-                json!({ "state": "busy" }),
-            );
+            *gate = true;
         }
-        *gate = true;
-        drop(gate);
 
         let result = native_dialog::pick(window, args).await;
         if let Ok(mut gate) = self.dialog_open.lock() {
@@ -372,8 +373,9 @@ impl AppState {
                     .payload
                     .get("runId")
                     .and_then(Value::as_str)
-                    .unwrap_or_default();
-                match self.farm.cancel(run_id) {
+                    .unwrap_or_default()
+                    .to_owned();
+                match self.farm.cancel(&run_id) {
                     Ok(cancelled) => NativeResponse::success(
                         request,
                         json!({ "runId": run_id, "cancelled": cancelled }),
@@ -391,8 +393,9 @@ impl AppState {
                     .payload
                     .get("runId")
                     .and_then(Value::as_str)
-                    .unwrap_or_default();
-                match self.farm.status(run_id) {
+                    .unwrap_or_default()
+                    .to_owned();
+                match self.farm.status(&run_id) {
                     Ok(summary) => NativeResponse::success(
                         request,
                         serde_json::to_value(summary).unwrap_or_else(|_| json!({})),
@@ -584,6 +587,13 @@ impl AppState {
         &self,
         args: RecordingCommandArgs,
     ) -> Result<Value, (&'static str, String, Value)> {
+        if args.session.get("platform").and_then(Value::as_str) != Some("android") {
+            return Err((
+                "PROTOCOL_ERROR",
+                "Android recording requires an Android SessionIR.".to_owned(),
+                json!({}),
+            ));
+        }
         let health = Preflight::run();
         let devices = self
             .discover()
@@ -744,7 +754,7 @@ fn process_is_running(pid: u32) -> bool {
     #[cfg(windows)]
     {
         let filter = format!("PID eq {pid}");
-        return Command::new("tasklist")
+        Command::new("tasklist")
             .args(["/FI", filter.as_str(), "/FO", "CSV", "/NH"])
             .output()
             .map(|output| {
@@ -753,7 +763,7 @@ fn process_is_running(pid: u32) -> bool {
                         .lines()
                         .any(|line| !line.trim().is_empty() && !line.contains("No tasks"))
             })
-            .unwrap_or(true);
+            .unwrap_or(true)
     }
     #[cfg(not(windows))]
     {
@@ -796,11 +806,11 @@ async fn automate_plus_dispatch(
     state: State<'_, AppState>,
     window: Window,
     request: NativeRequest,
-) -> NativeResponse {
+) -> Result<NativeResponse, String> {
     if request.method == "native.dialog.pick" {
-        state.dispatch_dialog(&window, request).await
+        Ok(state.dispatch_dialog(&window, request).await)
     } else {
-        state.dispatch(request)
+        Ok(state.dispatch(request))
     }
 }
 

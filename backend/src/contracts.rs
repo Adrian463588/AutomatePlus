@@ -103,6 +103,7 @@ pub struct ProcessStopArgs {
 #[derive(Debug, Clone, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordingCommandArgs {
+    #[serde(rename = "session")]
     pub session: Value,
     pub plan: RecordingPlanInput,
 }
@@ -322,33 +323,6 @@ fn validate_dialog_extension(value: &str) -> Result<(), String> {
         ));
     }
     Ok(())
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct RunSummary {
-    pub run_id: String,
-    pub session_id: String,
-    pub status: String,
-    pub passed_steps: u32,
-    pub failed_steps: u32,
-    pub total_steps: u32,
-    pub duration_ms: u64,
-    pub error: Option<String>,
-}
-impl RunSummary {
-    pub fn blocked(session_id: String, error: String) -> Self {
-        Self {
-            run_id: runtime_id("run"),
-            session_id,
-            status: "blocked".to_owned(),
-            passed_steps: 0,
-            failed_steps: 0,
-            total_steps: 0,
-            duration_ms: 0,
-            error: Some(error),
-        }
-    }
 }
 
 #[derive(Debug, Clone, Serialize)]

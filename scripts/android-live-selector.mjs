@@ -70,8 +70,22 @@ function observedNodes(xml, packageName) {
     .sort((left, right) => right.score - left.score);
 }
 
+function bestObservedActionNode(nodes) {
+  return nodes.find((node) => node.clickable && node.strategy !== 'role')
+    ?? nodes.find((node) => node.strategy !== 'role')
+    ?? nodes.find((node) => node.clickable)
+    ?? nodes[0];
+}
+
 function firstObservedNode(xml, packageName) {
-  return observedNodes(xml, packageName)[0];
+  const nodes = observedNodes(xml, packageName);
+  // Generator actions begin with tap/click/assert against the target. Prefer
+  // the strongest semantic evidence (resource-id, accessibility id, or text)
+  // that is also clickable. Some Android hierarchies mark only a generic
+  // parent as clickable while exposing the useful text on a child; in that
+  // case the observed semantic child is a better generator target. A generic
+  // role is the final observed fallback. Coordinates are never invented here.
+  return bestObservedActionNode(nodes);
 }
 
 /**
@@ -100,7 +114,7 @@ export function observedSelectors(xml, limit = 32, packageName) {
 
 export function firstObservedNodeWithBounds(xml, packageName) {
   const nodes = observedNodes(xml, packageName);
-  return nodes.find((node) => node.clickable) ?? nodes[0];
+  return bestObservedActionNode(nodes);
 }
 
 export function firstObservedTextInput(xml, packageName) {

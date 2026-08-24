@@ -262,7 +262,6 @@ impl RuntimeManager {
         selected_key: &str,
     ) -> RuntimeRootSnapshot {
         let packs = read_manifest(&candidate.path)
-            .ok()
             .and_then(|manifest| manifest.get("packs").and_then(Value::as_array).cloned())
             .unwrap_or_default()
             .into_iter()
@@ -385,7 +384,7 @@ impl RuntimeManager {
                 !installed
                     .iter()
                     .any(|(installed_id, version, source_sha, verified)| {
-                        installed_id == id
+                        installed_id == *id
                             && *verified
                             && entry.version.as_deref() == Some(version.as_str())
                             && source_sha.as_deref() == entry.source.sha256.as_deref()
@@ -618,6 +617,7 @@ impl RuntimeManager {
         Ok(bytes)
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn download(
         &self,
         job_id: &str,

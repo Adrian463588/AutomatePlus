@@ -358,17 +358,19 @@ fn resolve_tool(root: &Path, name: &str) -> Option<PathBuf> {
         .find_map(|pack| {
             let path_text = pack.get("path").and_then(Value::as_str)?;
             let path = pack_path(root, path_text);
-            let file_name = path.file_stem()?.to_string_lossy();
+            let file_name = path.file_stem()?.to_string_lossy().into_owned();
             let names = [
-                pack.get("tool").and_then(Value::as_str),
-                pack.get("executable").and_then(Value::as_str),
-                pack.get("name").and_then(Value::as_str),
-                Some(file_name.as_ref()),
+                pack.get("tool").and_then(Value::as_str).map(str::to_owned),
+                pack.get("executable")
+                    .and_then(Value::as_str)
+                    .map(str::to_owned),
+                pack.get("name").and_then(Value::as_str).map(str::to_owned),
+                Some(file_name),
             ];
             names
                 .into_iter()
                 .flatten()
-                .map(normalize_tool_name)
+                .map(|candidate| normalize_tool_name(&candidate))
                 .any(|candidate| candidate == expected)
                 .then_some(path)
         })
@@ -455,6 +457,7 @@ fn runtime_root(root: &Path) -> PathBuf {
         .unwrap_or_else(|| root.join("runtime-packs"))
 }
 
+#[allow(clippy::too_many_arguments)]
 fn capabilities(
     runtime: &Path,
     manifest: Option<&Value>,

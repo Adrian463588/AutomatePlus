@@ -151,6 +151,18 @@ The generator creates one project per framework/language. Appium output requires
 
 Missing context is an explicit capability/runtime error. Generated source contains no fixed serial, 4723 fallback, device-specific path, or source duplicate per device. Capability manifests declare supported strategies, parallel-session model, required packs, physical-device requirement, and project prerequisites.
 
+### 10.1 Deterministic locator selection and self-healing
+
+Recording adapters preserve every locator observed from the real target and the
+selector engine ranks that evidence with a platform-aware, deterministic score.
+Generation chooses the highest-ranked candidate, while generated Playwright and
+Appium JavaScript/TypeScript projects may retry only the remaining recorded
+candidates in that order. The in-app player uses the same policy. Healing is
+bounded to eight candidates per action, never invents a selector or coordinate,
+and fails closed when no live evidence remains. Other generator languages still
+receive the ranked locator evidence and require their verified framework pack;
+they do not receive an unverified runtime fallback.
+
 ## 11. SQLite and evidence
 
 The native migration creates schema_migrations, device_profiles, device_groups, device_leases, port_leases, farm_runs, device_runs, device_iterations, observations, and artifact_index. The Rust host opens the database, applies migrations, records the applied version, saves real profiles, and recovers stale leases.
@@ -201,8 +213,8 @@ The renderer uses a deliberate Windows desktop workbench direction. This is a pr
 | Smoke/docs | verify:sidecar, verify:k6:fixture, verify:docs, verify:authenticity | Component evidence only; verify:k6 is target-online and separately gated |
 | Runtime distribution | verify:runtime-catalog, verify:runtime-manager, verify:offline-install, verify:release-manifest | Catalog completeness is component-verified; unresolved artifact metadata is Blocked/NeedsReview |
 | Rust source | cargo fmt --check | Must pass independently |
-| Rust build/test | cargo clippy --offline, cargo test --offline | Blocked when crates are not cached |
-| Tauri build | npm run native:build | Requires local Tauri CLI/packs |
+| Rust build/test | cargo clippy --offline, cargo test --offline | Required with the committed lockfile and cached crates |
+| Tauri build | npm run native:build | Requires local Tauri CLI, WebView2, and verified packs |
 | Physical Android | two authorized devices, target app, verified packs | Blocked until present |
 
 Fixtures may exercise parsers, selectors, IPC, lease logic, and failure transitions. They cannot promote native or physical acceptance to Verified.
@@ -211,12 +223,12 @@ Fixtures may exercise parsers, selectors, IPC, lease logic, and failure transiti
 
 | Requirement | Contract/ADR | Module | Test/evidence | Status |
 |---|---|---|---|---|
-| Offline Tauri launch | ADR-001, launcher contract | backend, Run-AutomatePlus.bat | preflight/launcher smoke | Implemented; pack/CLI blocked |
+| Offline Tauri launch | ADR-001, launcher contract | backend, Run-AutomatePlus.bat | preflight/launcher smoke | Implemented; runtime packs blocked |
 | Real discovery and stable IDs | FR-14, ADR-003 | backend/src/adb.rs, contracts | ADB parser tests; device evidence | Implemented; physical evidence blocked |
-| Farm strategies and leases | FR-15, ADR-004 | device-farm, runner core, Rust ports | scheduler/lease tests, real-device evidence | Rust Appium worker, serial-bound leases, ports, cancellation, and evidence implemented; native acceptance blocked by verified packs/Cargo cache |
+| Farm strategies and leases | FR-15, ADR-004 | device-farm, runner core, Rust ports | scheduler/lease tests, real-device evidence | Rust Appium worker, serial-bound leases, ports, cancellation, and evidence implemented; native acceptance blocked by verified packs/device prerequisites |
 | Primary/follower recording | FR-16 | recorder contracts, native dispatch | observation tests | Contract/component; runtime blocked |
 | Runtime-context generation | FR-17 | frontend/packages/generators | no-fixed-port tests | Implemented |
-| Runtime Manager | FR-12, runtime IPC 1.0 | runtime.rs, runtime_catalog.rs, RuntimeManagerContainer, launcher | component verifiers, responsive PNGs, offline/release gates | Implemented; native artifact/Cargo gates blocked |
+| Runtime Manager | FR-12, runtime IPC 1.0 | runtime.rs, runtime_catalog.rs, RuntimeManagerContainer, launcher | component verifiers, responsive PNGs, offline/release gates | Implemented; verified artifact packs blocked |
 | Native folder/archive picker | `native.dialog.pick`, IPC 1.0 | Rust `rfd` boundary, desktop bridge, Sidebar, Runtime Manager | contract tests and manual Windows picker evidence | Implemented in contract; native host evidence pending |
 | Truthful UI | NFR-05/NFR-16 | DeviceFarmView, bridge/store | authenticity/build/viewport evidence | Implemented in shell |
 | Persistence/evidence | FR-18 | Rust migration/persistence | SQLite gate | Source implemented; crate cache blocked |

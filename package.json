@@ -41,6 +41,7 @@
     "native:preflight": "node scripts/build-native-offline.mjs --preflight",
     "native:check": "node scripts/build-native-offline.mjs --check",
     "native:build": "node scripts/build-native-offline.mjs --build",
+    "native:provision": "node scripts/provision-native-deps.mjs",
     "native:run": "Run-AutomatePlus.bat"
   },
   "dependencies": {

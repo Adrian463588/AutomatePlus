@@ -36,11 +36,11 @@ $env:AUTOMATEPLUS_ANDROID_GENERATOR_FILL_VALUE = 'NotiPlus'
 npm run verify:android-generators
 ```
 
-With that explicit test input, Appium Java/Kotlin/TypeScript/JavaScript, Espresso Java/Kotlin, Robolectric Java/Kotlin, and Maestro YAML are `GeneratedAndParsed` across all 9 Android combinations and every action declared by each manifest. Every generated project includes `automateplus.manifest.json` and an exact-version `automateplus.runtime.json` lock. Appium runners require the leased device/Appium/port environment at execution time; Espresso and Robolectric retain the resolved target activity and require the real target Android Gradle project; Maestro retains its real `appId` and offline runtime-pack requirements. Physical replay remains a separate `Blocked` gate until a verified farm runtime pack and native IPC replay are available.
+When the live hierarchy contains a real semantic input selector and that explicit test input is supplied, fill generation is enabled. If NotiPlus exposes no `EditText`/input selector, fill remains `Blocked` even when a value is provided; the verifier never invents an input target. The other observed-action contracts are generated and parsed across all 9 Android combinations. Every generated project includes `automateplus.manifest.json` and an exact-version `automateplus.runtime.json` lock. Appium runners require the leased device/Appium/port environment at execution time; Espresso and Robolectric retain the resolved target activity and require the real target Android Gradle project; Maestro retains its real `appId` and offline runtime-pack requirements. Physical replay remains a separate `Blocked` gate until a verified farm runtime pack and native IPC replay are available.
 
 The API Builder was exercised manually against the real Petstore `GET /v2/store/inventory` endpoint using an explicit user click; it returned measured HTTP 200, persisted status/header assertions into `SessionIR`, and the generated preview contained exactly one request after a repeated send. ReqRes is currently `Blocked` because the service requires `AUTOMATEPLUS_REQRES_API_KEY`; no credential is fabricated. A real Petstore 404 was rendered as an HTTP error and returned the action to the ready state. This is explicit target-online browser evidence, not native offline acceptance.
 
-Native Tauri/Rust acceptance remains explicitly `Blocked` until the offline Cargo/Tauri dependency cache and verified runtime packs are available. The latest target preflight found one authorized device (`RRCN3008VYE`) with the installed NotiPlus package/activity and a semantic selector observed from its live hierarchy; the second expected device was disconnected during the audit, so two-device farm acceptance is blocked. An explicit Appium 2.10.3/UiAutomator2 3.5.5 single-device probe reached the local server but was blocked by Android `SecurityException` for inaccessible secondary user `150`; no policy bypass was attempted. This is physical-device setup evidence, not a farm pass. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
+Native Tauri/Rust acceptance remains explicitly `Blocked` because this checkout has no verified runtime packs. The backend `Cargo.lock`, offline Cargo cache, Rust toolchain, `cargo-tauri`, and WebView2 detection are now healthy; `native:preflight` reports those facts separately from the missing runtime packs. The latest target preflight found one authorized device (`RRCN3008VYE`) with the installed NotiPlus package/activity and a semantic selector observed from its live hierarchy; the second expected device was disconnected during the audit, so two-device farm acceptance is blocked. An explicit Appium 2.10.3/UiAutomator2 3.5.5 single-device probe reached the local server but was blocked by Android `SecurityException` for inaccessible secondary user `150`; no policy bypass was attempted. This is physical-device setup evidence, not a farm pass. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
 ### Sprint 2 Android device farm
 
@@ -146,6 +146,17 @@ AutomatePlus provides first-class code generation for the following frameworks a
 | **k6 RPS Load Generator** | — | ✅ | — | — |
 | **HTTP Request Clients** | ✅ | ✅ | ✅ | ✅ |
 
+### Locator policy and self-healing
+
+Every generated target is selected from locator evidence captured from the real
+web page or Android hierarchy. The selector engine ranks platform-appropriate
+resource IDs, accessibility names, roles, text, CSS, and XPath deterministically;
+it never invents a target. The in-app player and generated Playwright/Appium
+JavaScript/TypeScript projects retry only the remaining recorded candidates (up
+to eight per action). Other languages receive the same ranked evidence and stay
+blocked until their verified framework runtime is available. A passing 27-entry
+generator matrix proves generation and parsing, not a fabricated runtime pass.
+
 ---
 
 ## ⚡ Getting Started
@@ -190,7 +201,15 @@ For the official one-click offline desktop path, double-click `Run-AutomatePlus.
 .\Run-AutomatePlus.bat --build-dev
 ```
 
-The launcher returns `0` on normal completion, `1` on a runtime/build failure, and `2` when a prerequisite or argument is blocked. It never falls back to browser mode automatically.
+The launcher returns `0` on normal completion, `1` on a runtime/build failure, and `2` when a prerequisite or argument is blocked. It never falls back to browser mode automatically. When a locally built `backend/target/release/AutomatePlus.exe` is present, the same BAT launches it for local verification; a release package should copy the verified executable to `release/AutomatePlus.exe`.
+
+Cargo is offline during `native:preflight`, `native:check`, and `native:build` by design: those gates prove that a release can be rebuilt without the network. It is not a permanent Cargo restriction. To provision a missing lock/cache or install the pinned Tauri CLI, use the explicit online command once:
+
+```powershell
+.\Run-AutomatePlus.bat --provision-native --install-tauri-cli
+```
+
+That command is never called by the normal launcher and does not download runtime packs. After provisioning, the native build produces the executable with `--no-bundle` so Tauri cannot fetch WiX silently; an installer requires a separately staged, locally verified WiX pack.
 
 ### Runtime Manager and offline distribution
 
@@ -206,7 +225,7 @@ $env:AUTOMATEPLUS_RUNTIME_DOWNLOAD = '1'
 .\Run-AutomatePlus.bat
 ```
 
-After installation, execution resolves only checksum-verified local packs and health evidence. Exact `id + version + source SHA-256` matches are reused; different hashes become `NeedsReview` and are never overwritten automatically. `runtime-packs/catalog.json` is metadata-only until an official artifact has a pinned version, HTTPS URL, size, SHA-256, license, executable allowlist, and health command. Run `npm run verify:runtime-catalog` and `npm run verify:offline-install` to see the current status. The current checkout deliberately reports `NeedsReview/Blocked` because those verified release artifacts and the offline Cargo/`cargo-tauri` cache are not present.
+After installation, execution resolves only checksum-verified local packs and health evidence. Exact `id + version + source SHA-256` matches are reused; different hashes become `NeedsReview` and are never overwritten automatically. `runtime-packs/catalog.json` is metadata-only until an official artifact has a pinned version, HTTPS URL, size, SHA-256, license, executable allowlist, and health command. Run `npm run verify:runtime-catalog` and `npm run verify:offline-install` to see the current status. The current checkout deliberately reports `NeedsReview/Blocked` because those verified release artifacts are not present; the Rust lockfile, cached crates, and pinned `cargo-tauri` CLI are separate healthy prerequisites.
 
 The release verifier expects `release/AutomatePlus.exe`, `release/AutomatePlusBootstrap.exe`, `release/WebView2RuntimeInstallerX64.exe`, and the catalog. It writes `release/release-manifest.json` only after hashing every artifact from disk:
 
@@ -223,7 +242,7 @@ npm run build:sidecar
 ```
 
 ### 3. Build Desktop Application Bundle
-Compile the renderer with npm run build:desktop. Build the offline native package with npm run native:build after the local Tauri CLI, Cargo cache, WebView2, and verified packs are present:
+Compile the renderer with npm run build:desktop. Build the offline native executable with npm run native:build after the local Tauri CLI, Cargo cache, WebView2, and verified packs are present. The gate intentionally does not create an MSI or download a bundler:
 ```bash
 npm run build:desktop
 ```
@@ -316,7 +335,7 @@ flowchart LR
 - **No Plaintext Secrets**: Passwords, API tokens, and private keys use `SecretRef` objects (`${secret.KEY}`) that resolve securely at runtime.
 - **Process Isolation**: Command execution strictly uses allowlisted executables and argument arrays (preventing shell injection).
 - **Offline First**: The native Tauri/Rust host owns SQLite, device leases, farm evidence, process state, and cleanup; the browser migration shell uses browser-safe local storage and remains non-production native evidence.
-- **Truthful acceptance**: Component gates may pass locally, while native Tauri and physical Android remain Blocked until Cargo/Tauri, verified packs, a target app, and the required real devices are available.
+- **Truthful acceptance**: Component gates may pass locally, while native Tauri and physical Android remain Blocked until verified packs, native IPC/farm evidence, a target app, and the required real devices are available.
 
 ---
 

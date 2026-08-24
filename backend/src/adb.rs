@@ -98,11 +98,7 @@ impl AdbClient {
         }
         let expected = normalize_activity(package, activity);
         let output = String::from_utf8_lossy(&resolved.stdout);
-        let resolved_activity = output
-            .lines()
-            .map(str::trim)
-            .filter(|line| !line.is_empty())
-            .last();
+        let resolved_activity = output.lines().map(str::trim).rfind(|line| !line.is_empty());
         if resolved_activity
             .map(|value| normalize_activity(package, value) != expected)
             .unwrap_or(true)
@@ -133,6 +129,7 @@ fn normalize_activity(package: &str, activity: &str) -> String {
     }
 }
 
+#[allow(dead_code)]
 pub fn parse_devices(text: &str) -> Result<Vec<DeviceProfile>, String> {
     parse_devices_with_details(Path::new("adb"), text)
 }
@@ -227,7 +224,11 @@ fn parse_devices_with_details(adb: &Path, text: &str) -> Result<Vec<DeviceProfil
             orientation: orientation.to_owned(),
             transport: transport.to_owned(),
             status: status.to_owned(),
-            health_state: if status == "device" { "ready" } else { status },
+            health_state: if status == "device" {
+                "ready".to_owned()
+            } else {
+                status.to_owned()
+            },
             last_seen_at: now(),
         });
     }
@@ -314,10 +315,12 @@ fn run_bounded_command(path: &Path, args: &[String]) -> Result<BoundedCommandOut
     let status = child.wait().map_err(|error| error.to_string())?;
     let (stdout, stdout_truncated) = stdout_reader
         .join()
-        .map_err(|_| "ADB stdout reader panicked.".to_owned())??;
+        .map_err(|_| "ADB stdout reader panicked.".to_owned())?
+        .map_err(|error| error.to_string())?;
     let (stderr, stderr_truncated) = stderr_reader
         .join()
-        .map_err(|_| "ADB stderr reader panicked.".to_owned())??;
+        .map_err(|_| "ADB stderr reader panicked.".to_owned())?
+        .map_err(|error| error.to_string())?;
 
     Ok(BoundedCommandOutput {
         status,

@@ -41,6 +41,7 @@ lerna-debug.log*
 
 # Local acceptance evidence (fresh target/device output; never source or release input)
 .automateplus/
+.automate-plus/
 
 # IDE & Editor Configs
 .vscode/*
@@ -72,3 +73,5 @@ runtime-packs/**/*.7z
 
 # Native build staging is generated from verified packs and removed after build
 backend/resources/runtime-packs/
+backend/target/
+backend/gen/

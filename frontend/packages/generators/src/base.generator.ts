@@ -16,8 +16,10 @@ import {
   ValidationResult,
   CapabilityError,
 } from '@automate-plus/contracts';
-import { selectBestLocator } from '@automate-plus/selector-engine';
+import { rankLocators, selectBestLocator } from '@automate-plus/selector-engine';
 import { createCapabilityManifest } from './capabilities.js';
+
+const MAX_GENERATED_HEALING_CANDIDATES = 8;
 
 export abstract class BaseCodeGenerator implements ICodeGenerator {
   public abstract readonly framework: string;
@@ -126,17 +128,28 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
           language: this.language,
           entrypoint,
           capability: this.manifest,
+          selfHealing: {
+            policy: 'retry-ordered-recorded-locators-only',
+            maxCandidatesPerAction: MAX_GENERATED_HEALING_CANDIDATES,
+            targetSelection: 'deterministic-platform-aware-ranking',
+          },
           validation: ['format', 'lint', 'typecheck-or-compile', 'local-smoke'],
         },
         null,
         2,
       ),
     };
+    const locatorEvidenceFile: GeneratedFile = {
+      relativePath: 'automateplus.locators.json',
+      language: 'json',
+      content: JSON.stringify(this.generateLocatorEvidence(session), null, 2),
+    };
 
     if (this.language === 'typescript' || this.language === 'javascript') {
       const dependency = this.runtimeDependency();
       const files: GeneratedFile[] = [
         manifestFile,
+        locatorEvidenceFile,
         {
           relativePath: 'package.json',
           language: 'json',
@@ -162,6 +175,8 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
         },
       ];
       if (this.language === 'typescript') files.push(this.typescriptConfigFile());
+      const healingSupport = this.generateHealingSupportFile();
+      if (healingSupport) files.push(healingSupport);
       files.push(this.runtimeLockFile(entrypoint));
       return files;
     }
@@ -169,25 +184,28 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     if (this.language === 'python' || this.language === 'robot') {
       return [
         manifestFile,
+        locatorEvidenceFile,
         { relativePath: 'requirements.txt', language: 'text', content: `${this.pythonDependency()}\n` },
         this.runtimeLockFile(entrypoint),
       ];
     }
 
     if (this.language === 'yaml') {
-      return [manifestFile, this.runtimeLockFile(entrypoint)];
+      return [manifestFile, locatorEvidenceFile, this.runtimeLockFile(entrypoint)];
     }
 
     if (this.language === 'java') {
       if (this.framework === 'espresso' || this.framework === 'robolectric') {
         return [
           manifestFile,
+          locatorEvidenceFile,
           { relativePath: 'build.gradle.kts', language: 'kotlin', content: this.androidGradleFile() },
           this.runtimeLockFile(entrypoint),
         ];
       }
       return [
         manifestFile,
+        locatorEvidenceFile,
         {
           relativePath: 'pom.xml',
           language: 'xml',
@@ -200,6 +218,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
     if (this.language === 'kotlin') {
       return [
         manifestFile,
+        locatorEvidenceFile,
         {
           relativePath: 'build.gradle.kts',
           language: 'kotlin',
@@ -211,7 +230,121 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
       ];
     }
 
-    return [manifestFile];
+    return [manifestFile, locatorEvidenceFile];
+  }
+
+  /**
+   * Carry the same observed locator evidence used by the in-app runner into
+   * every generated project. Candidates are never invented and are bounded so
+   * long sessions cannot create unbounded generated output or retry work.
+   */
+  private generateLocatorEvidence(session: SessionIR): Record<string, unknown> {
+    return {
+      schemaVersion: 1,
+      policy: 'recorded-evidence-only',
+      maxCandidatesPerAction: MAX_GENERATED_HEALING_CANDIDATES,
+      platform: session.platform,
+      actions: session.steps.map((action) => ({
+        stepId: action.id,
+        stepNumber: action.stepNumber,
+        action: action.action,
+        candidates: this.getGeneratedLocatorCandidates(action),
+        ...(action.dragTarget
+          ? { dragTargetCandidates: rankLocators(action.dragTarget.locators, action.platform).slice(0, MAX_GENERATED_HEALING_CANDIDATES) }
+          : {}),
+      })),
+    };
+  }
+
+  protected getGeneratedLocatorCandidates(action: ActionIR): LocatorCandidate[] {
+    return rankLocators(action.locators ?? [], action.platform).slice(0, MAX_GENERATED_HEALING_CANDIDATES);
+  }
+
+  private generateHealingSupportFile(): GeneratedFile | undefined {
+    if (this.framework === 'playwright' && (this.language === 'typescript' || this.language === 'javascript')) {
+      return {
+        relativePath: `tests/automateplus-healing.${this.language === 'typescript' ? 'ts' : 'js'}`,
+        language: this.language,
+        content: this.language === 'typescript'
+          ? `import type { Locator } from '@playwright/test';
+
+type LocatorFactory = () => Locator;
+
+/** Retries only locator candidates captured in ActionIR, in ranked order. */
+export async function withLocatorHealing<T>(
+  actionId: string,
+  candidates: readonly LocatorFactory[],
+  operation: (locator: Locator) => Promise<T>,
+): Promise<T> {
+  let lastError: unknown;
+  for (const createLocator of candidates) {
+    try {
+      return await operation(createLocator());
+    } catch (error: unknown) {
+      lastError = error;
+    }
+  }
+  throw new Error('Action ' + actionId + ' failed for every recorded locator candidate: ' + String(lastError));
+}
+`
+          : `/** Retries only locator candidates captured in ActionIR, in ranked order. */
+export async function withLocatorHealing(actionId, candidates, operation) {
+  let lastError;
+  for (const createLocator of candidates) {
+    try {
+      return await operation(createLocator());
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error('Action ' + actionId + ' failed for every recorded locator candidate: ' + String(lastError));
+}
+`,
+      };
+    }
+
+    if (this.framework === 'appium' && (this.language === 'typescript' || this.language === 'javascript')) {
+      return {
+        relativePath: `tests/automateplus-healing.${this.language === 'typescript' ? 'ts' : 'js'}`,
+        language: this.language,
+        content: this.language === 'typescript'
+          ? `type DriverLike<TElement> = { $: (selector: string) => Promise<TElement> };
+
+/** Retries only selectors captured in ActionIR, in ranked order. */
+export async function withAppiumLocatorHealing<TElement, TResult>(
+  driver: DriverLike<TElement>,
+  actionId: string,
+  selectors: readonly string[],
+  operation: (element: TElement) => Promise<TResult>,
+): Promise<TResult> {
+  let lastError: unknown;
+  for (const selector of selectors) {
+    try {
+      return await operation(await driver.$(selector));
+    } catch (error: unknown) {
+      lastError = error;
+    }
+  }
+  throw new Error('Action ' + actionId + ' failed for every recorded Android selector: ' + String(lastError));
+}
+`
+          : `/** Retries only selectors captured in ActionIR, in ranked order. */
+export async function withAppiumLocatorHealing(driver, actionId, selectors, operation) {
+  let lastError;
+  for (const selector of selectors) {
+    try {
+      return await operation(await driver.$(selector));
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw new Error('Action ' + actionId + ' failed for every recorded Android selector: ' + String(lastError));
+}
+`,
+      };
+    }
+
+    return undefined;
   }
 
   private runtimeDependency(): { name: string; version: string } | undefined {
@@ -642,7 +775,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   }
 
   protected getPrimaryLocator(action: ActionIR): LocatorCandidate | undefined {
-    return selectBestLocator(action.locators, action.platform);
+    return this.getGeneratedLocatorCandidates(action)[0] ?? selectBestLocator(action.locators, action.platform);
   }
 
   protected hasExplicitNavigate(session: SessionIR): boolean {

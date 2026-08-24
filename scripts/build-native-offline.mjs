@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   copyFileSync,
+  cpSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -19,6 +20,9 @@ const runtimePacksRoot = join(root, 'runtime-packs');
 const manifestPath = join(root, 'runtime-packs', 'manifest.json');
 const catalogPath = join(root, 'runtime-packs', 'catalog.json');
 const cargoManifestPath = join(native, 'Cargo.toml');
+const cargoLockPath = join(native, 'Cargo.lock');
+const nativeResourcesRoot = join(native, 'resources');
+const sidecarDist = join(root, 'frontend', 'sidecar', 'dist');
 const blockedCode = 2;
 
 function log(message) { process.stdout.write(`[native-offline] ${message}\n`); }
@@ -56,6 +60,22 @@ function sha256(path) {
 }
 function commandExists(command, args = ['--version']) {
   const result = spawnSync(command, args, {
+    env: { ...process.env, CARGO_NET_OFFLINE: 'true' },
+    stdio: 'ignore',
+    windowsHide: true,
+  });
+  return result.error == null && result.status === 0;
+}
+function cargoOfflineCacheReady() {
+  if (!existsSync(cargoLockPath)) return false;
+  const result = spawnSync('cargo', [
+    'fetch',
+    '--manifest-path',
+    cargoManifestPath,
+    '--locked',
+    '--offline',
+  ], {
+    cwd: root,
     env: { ...process.env, CARGO_NET_OFFLINE: 'true' },
     stdio: 'ignore',
     windowsHide: true,
@@ -236,10 +256,16 @@ function preflight() {
       webview2: webview2Available(),
       runtime: runtimeTools,
     },
+    cargo: {
+      lockfile: existsSync(cargoLockPath),
+      offlineCache: cargoOfflineCacheReady(),
+    },
   };
   const reasons = [];
   if (!result.tools.cargo || !result.tools.rustc) reasons.push('Rust toolchain is unavailable');
   if (!result.tools.node) reasons.push('Node.js is unavailable');
+  if (!result.cargo.lockfile) reasons.push('backend/Cargo.lock is missing; provision native dependencies explicitly');
+  else if (!result.cargo.offlineCache) reasons.push('Cargo.lock exists but the complete native dependency cache is unavailable offline');
   if (!result.packs.verified.length) reasons.push(result.packs.issue ?? 'no verified offline packs are present');
   if (catalog.error) reasons.push(catalog.error);
   if (!existsSync(result.frontendDist)) reasons.push('frontend/dist is missing; build the real renderer first');
@@ -310,6 +336,39 @@ function stagePacks(packs) {
     throw error;
   }
 }
+function stageSupportingResources(packs) {
+  const staged = [];
+  if (!existsSync(sidecarDist)) {
+    const result = spawnSync('npm', ['run', 'build:sidecar'], {
+      cwd: root,
+      env: { ...process.env, npm_config_offline: 'true' },
+      stdio: 'inherit',
+      windowsHide: true,
+    });
+    if (result.error != null || result.status !== 0 || !existsSync(sidecarDist)) {
+      throw new Error('Built TypeScript sidecar is missing; run npm run build:sidecar with the locked local dependency graph.');
+    }
+  }
+  const sidecarDestination = join(nativeResourcesRoot, 'sidecar');
+  if (existsSync(sidecarDestination)) {
+    throw new Error('native sidecar staging directory already exists; refusing to overwrite it');
+  }
+  mkdirSync(nativeResourcesRoot, { recursive: true });
+  cpSync(sidecarDist, sidecarDestination, { recursive: true, errorOnExist: true });
+  staged.push(sidecarDestination);
+
+  const nodePack = packs.find((pack) => packMatchesTool(pack, pack.path, 'node'));
+  if (nodePack && isVerifiedRuntimeFile(nodePack.path)) {
+    const nodeDestination = join(nativeResourcesRoot, 'node');
+    if (existsSync(nodeDestination)) {
+      throw new Error('native Node.js staging directory already exists; refusing to overwrite it');
+    }
+    mkdirSync(nodeDestination, { recursive: true });
+    copyFileSync(nodePack.path, join(nodeDestination, basename(nodePack.path)));
+    staged.push(nodeDestination);
+  }
+  return staged;
+}
 function removeStagedPacks(destination) {
   if (destination) rmSync(destination, { recursive: true, force: true });
 }
@@ -322,16 +381,22 @@ function main() {
   if (mode === '--preflight') return report.status === 'ready' ? 0 : blockedCode;
   if (report.status !== 'ready') return fail(report.reasons.join('; '));
   if (run('cargo', ['fmt', '--manifest-path', cargoManifestPath, '--', '--check']).status !== 0) return 1;
-  if (run('cargo', ['test', '--manifest-path', cargoManifestPath, '--offline', '--no-default-features']).status !== 0) return 1;
+  if (run('cargo', ['test', '--manifest-path', cargoManifestPath, '--offline', '--locked']).status !== 0) return 1;
   if (mode === '--check') {
-    return run('cargo', ['check', '--manifest-path', cargoManifestPath, '--offline', '--no-default-features']).status ?? 1;
+    return run('cargo', ['check', '--manifest-path', cargoManifestPath, '--offline', '--locked']).status ?? 1;
   }
   let stagedDestination;
+  let stagedSupportingResources = [];
   try {
+    stagedSupportingResources = stageSupportingResources(report.packs.verified);
     stagedDestination = stagePacks(report.packs.verified);
-    return run('cargo', ['tauri', 'build', '--offline']).status ?? 1;
+    // Tauri's Windows bundler may fetch WiX when it is not already staged.
+    // The offline gate produces the native executable only; packaging is a
+    // separate release step that must receive a locally verified bundler.
+    return run('cargo', ['tauri', 'build', '--no-bundle', '--', '--offline', '--locked']).status ?? 1;
   } finally {
     removeStagedPacks(stagedDestination);
+    stagedSupportingResources.forEach((path) => rmSync(path, { recursive: true, force: true }));
   }
 }
 process.exitCode = main();

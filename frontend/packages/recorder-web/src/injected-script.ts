@@ -66,28 +66,46 @@ export function extractElementLocators(element: BrowserElementSnapshot): Locator
 export const ELEMENT_SNAPSHOT_SCRIPT = `
 (element => {
   if (!element) return undefined;
-  const labels = element.labels ? Array.from(element.labels).map(label => label.innerText).filter(Boolean) : [];
+  const actionable = element.closest && element.closest('button, a[href], input, textarea, select, [role], [contenteditable="true"]') || element;
+  const labels = actionable.labels ? Array.from(actionable.labels).map(label => label.innerText).filter(Boolean) : [];
+  const explicitRole = actionable.getAttribute('role') || undefined;
+  const inputType = (actionable.getAttribute('type') || '').toLowerCase();
+  const implicitRole = explicitRole || (
+    actionable.tagName === 'BUTTON' ? 'button' :
+    actionable.tagName === 'A' && actionable.hasAttribute('href') ? 'link' :
+    actionable.tagName === 'TEXTAREA' ? 'textbox' :
+    actionable.tagName === 'SELECT' ? 'combobox' :
+    actionable.tagName === 'INPUT' && ['button', 'submit', 'reset'].includes(inputType) ? 'button' :
+    actionable.tagName === 'INPUT' && inputType === 'checkbox' ? 'checkbox' :
+    actionable.tagName === 'INPUT' && inputType === 'radio' ? 'radio' :
+    actionable.tagName === 'INPUT' ? 'textbox' :
+    undefined
+  );
+  const labelledBy = (actionable.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
+    .map(id => document.getElementById(id)?.textContent || '').join(' ').trim();
+  const accessibleName = actionable.getAttribute('aria-label') || labelledBy || labels.join(' ').trim() ||
+    (typeof actionable.innerText === 'string' ? actionable.innerText.trim().slice(0, 120) : undefined);
   return {
-    tagName: element.tagName,
-    id: element.id || undefined,
-    name: element.getAttribute('name') || undefined,
-    testId: element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-qa') || undefined,
-    role: element.getAttribute('role') || undefined,
-    ariaLabel: element.getAttribute('aria-label') || undefined,
+    tagName: actionable.tagName,
+    id: actionable.id || undefined,
+    name: actionable.getAttribute('name') || undefined,
+    testId: actionable.getAttribute('data-testid') || actionable.getAttribute('data-test') || actionable.getAttribute('data-qa') || undefined,
+    role: implicitRole,
+    ariaLabel: accessibleName,
     labelText: labels.join(' ').trim() || undefined,
-    innerText: typeof element.innerText === 'string' ? element.innerText : undefined,
-    className: typeof element.className === 'string' ? element.className : undefined,
+    innerText: typeof actionable.innerText === 'string' ? actionable.innerText : undefined,
+    className: typeof actionable.className === 'string' ? actionable.className : undefined,
     xpath: (() => {
-      if (element.id) return '//*[@id="' + element.id + '"]';
-      if (element === document.body) return '/html/body';
+      if (actionable.id) return '//*[@id="' + actionable.id + '"]';
+      if (actionable === document.body) return '/html/body';
       let index = 0;
-      let sibling = element;
+      let sibling = actionable;
       while (sibling && sibling.previousElementSibling) {
         sibling = sibling.previousElementSibling;
-        if (sibling.tagName === element.tagName) index += 1;
+        if (sibling.tagName === actionable.tagName) index += 1;
       }
-      return element.parentElement
-        ? element.parentElement.tagName.toLowerCase() + '/' + element.tagName.toLowerCase() + '[' + (index + 1) + ']'
+      return actionable.parentElement
+        ? '//' + actionable.tagName.toLowerCase() + '[' + (index + 1) + ']'
         : undefined;
     })()
   };
@@ -102,6 +120,29 @@ export const INJECTED_RECORDING_SCRIPT = `
   const lastValues = new WeakMap();
   let pendingClick;
   let dragSource;
+
+  function actionableElement(target) {
+    if (!target || !target.tagName) return undefined;
+    return target.closest && target.closest('button, a[href], input, textarea, select, [role], [contenteditable="true"]') || target;
+  }
+
+  function implicitRole(element) {
+    const explicitRole = element.getAttribute('role');
+    if (explicitRole) return explicitRole;
+    const inputType = (element.getAttribute('type') || '').toLowerCase();
+    if (element.tagName === 'BUTTON' || (element.tagName === 'INPUT' && ['button', 'submit', 'reset'].includes(inputType))) return 'button';
+    if (element.tagName === 'A' && element.hasAttribute('href')) return 'link';
+    if (element.tagName === 'TEXTAREA' || element.tagName === 'INPUT') return inputType === 'checkbox' ? 'checkbox' : inputType === 'radio' ? 'radio' : 'textbox';
+    if (element.tagName === 'SELECT') return 'combobox';
+    return undefined;
+  }
+
+  function accessibleName(element, labels) {
+    const labelledBy = (element.getAttribute('aria-labelledby') || '').split(/\s+/).filter(Boolean)
+      .map(function(id) { const labelled = document.getElementById(id); return labelled ? labelled.textContent || '' : ''; }).join(' ').trim();
+    return element.getAttribute('aria-label') || labelledBy || labels.join(' ').trim() ||
+      (typeof element.innerText === 'string' ? element.innerText.trim().slice(0, 120) : undefined);
+  }
 
   function getXPath(element) {
     if (!element) return undefined;
@@ -120,26 +161,28 @@ export const INJECTED_RECORDING_SCRIPT = `
 
   function snapshot(element) {
     if (!element || !element.tagName) return undefined;
-    const labels = element.labels ? Array.from(element.labels).map(label => label.innerText).filter(Boolean) : [];
+    const actionable = actionableElement(element);
+    const labels = actionable.labels ? Array.from(actionable.labels).map(label => label.innerText).filter(Boolean) : [];
     return {
-      tagName: element.tagName,
-      id: element.id || undefined,
-      name: element.getAttribute('name') || undefined,
-      testId: element.getAttribute('data-testid') || element.getAttribute('data-test') || element.getAttribute('data-qa') || undefined,
-      role: element.getAttribute('role') || undefined,
-      ariaLabel: element.getAttribute('aria-label') || undefined,
+      tagName: actionable.tagName,
+      id: actionable.id || undefined,
+      name: actionable.getAttribute('name') || undefined,
+      testId: actionable.getAttribute('data-testid') || actionable.getAttribute('data-test') || actionable.getAttribute('data-qa') || undefined,
+      role: implicitRole(actionable),
+      ariaLabel: accessibleName(actionable, labels),
       labelText: labels.join(' ').trim() || undefined,
-      innerText: typeof element.innerText === 'string' ? element.innerText : undefined,
-      className: typeof element.className === 'string' ? element.className : undefined,
-      xpath: getXPath(element)
+      innerText: typeof actionable.innerText === 'string' ? actionable.innerText : undefined,
+      className: typeof actionable.className === 'string' ? actionable.className : undefined,
+      xpath: getXPath(actionable)
     };
   }
 
   function reportAction(actionType, element, value, extra) {
+    const observedElement = actionableElement(element);
     const data = Object.assign({
       actionType,
       value,
-      element: snapshot(element),
+      element: snapshot(observedElement),
       timestamp: Date.now()
     }, extra || {});
     const report = window.__automatePlusReportAction || window.onAutomatePlusAction;
@@ -214,7 +257,7 @@ export const INJECTED_RECORDING_SCRIPT = `
   }, true);
 
   document.addEventListener('keydown', function(event) {
-    if (event.target) reportAction('keyboard', event.target, event.key);
+    if (event.target) reportAction('keyboard', actionableElement(event.target), event.key);
   }, true);
 
   document.addEventListener('wheel', function(event) {

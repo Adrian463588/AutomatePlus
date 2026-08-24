@@ -77,6 +77,7 @@ impl ConcurrencyGate {
 }
 
 impl FarmRunManager {
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn start(
         &self,
         session: Value,
@@ -395,6 +396,7 @@ fn recalculate_summary(summary: &mut LegacyFarmSummary) {
     summary.error_summary = (!errors.is_empty()).then(|| errors.join("; "));
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_device(
     farm_run_id: &str,
     session: &Value,
@@ -559,6 +561,7 @@ fn execute_device(
     result
 }
 
+#[allow(clippy::too_many_arguments)]
 fn execute_iteration(
     client: &AppiumClient,
     session_id: &str,
@@ -902,7 +905,9 @@ fn execute_action(
             let duration = step.get("value").and_then(Value::as_u64).unwrap_or(0);
             sleep_with_cancellation(duration, cancel);
         }
-        "back" => client.post(session_path(session_id, "back"), None)?,
+        "back" => {
+            client.post(session_path(session_id, "back"), None)?;
+        }
         "home" => client.press_key(session_id, 3)?,
         "enter" => client.press_key(session_id, 66)?,
         "launchApp" => client.start_activity(session_id, package, activity)?,
@@ -2002,11 +2007,11 @@ mod tests {
 
     #[test]
     fn maps_observed_android_class_to_a_real_uiautomator_locator() {
-        let (strategy, value) = appium_locator(&serde_json::json!({
+        let locator = serde_json::json!({
             "strategy": "role",
             "value": "android.widget.Button"
-        }))
-        .expect("class locator");
+        });
+        let (strategy, value) = appium_locator(&locator).expect("class locator");
         assert_eq!(strategy, "-android uiautomator");
         assert_eq!(
             value,

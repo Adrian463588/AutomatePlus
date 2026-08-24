@@ -15,6 +15,7 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
       `import { mkdir } from 'node:fs/promises';`,
       `import { basename, join } from 'node:path';`,
       `import { remote } from 'webdriverio';`,
+      `import { withAppiumLocatorHealing } from './automateplus-healing.js';`,
       ``,
       renderAppiumRuntimeContext(this.getRuntimeContext(options), 'javascript'),
       ``,
@@ -43,9 +44,6 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
   }
 
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
-    const loc = this.getPrimaryLocator(action);
-    const selector = loc ? this.formatWdioSelector(loc) : '';
-    const selectorValue = this.getJsValue(selector);
     const value = this.getJsValue(action.value);
     const expected = this.getJsValue(this.getAssertionExpected(action));
     const step = action.stepNumber;
@@ -53,42 +51,23 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
     switch (action.action) {
       case 'tap':
       case 'click':
-        return `    await (await driver.$(${selectorValue})).click();`;
+        return `    await ${this.formatElementAction(action, (element) => `${element}.click()`)};`;
 
       case 'doubleTap':
       case 'doubleClick': {
-        const element = `element${step}`;
-        return [
-          `    const ${element} = await driver.$(${selectorValue});`,
-          `    await ${element}.click();`,
-          `    await ${element}.click();`,
-        ].join('\n');
+        return `    await ${this.formatElementAction(action, (candidate) => `(async () => { await ${candidate}.click(); await ${candidate}.click(); })()`)}`;
       }
 
       case 'longPress': {
-        const element = `element${step}`;
-        return [
-          `    const ${element} = await driver.$(${selectorValue});`,
-          `    await driver.action('pointer')`,
-          `      .move({ origin: ${element} })`,
-          `      .down()`,
-          `      .pause(1000)`,
-          `      .up()`,
-          `      .perform();`,
-        ].join('\n');
+        return `    await ${this.formatElementAction(action, (candidate) => `(async () => { await driver.action('pointer').move({ origin: ${candidate} }).down().pause(1000).up().perform(); })()`)}`;
       }
 
       case 'fill': {
-        const element = `element${step}`;
-        return [
-          `    const ${element} = await driver.$(${selectorValue});`,
-          `    await ${element}.clearValue();`,
-          `    await ${element}.setValue(${value});`,
-        ].join('\n');
+        return `    await ${this.formatElementAction(action, (candidate) => `(async () => { await ${candidate}.clearValue(); await ${candidate}.setValue(${value}); })()`)}`;
       }
 
       case 'clear':
-        return `    await (await driver.$(${selectorValue})).clearValue();`;
+        return `    await ${this.formatElementAction(action, (element) => `${element}.clearValue()`)};`;
 
       case 'swipe': {
         const vector = action.swipeVector;
@@ -106,19 +85,9 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
 
       case 'drag':
       case 'dragAndDrop': {
-        const source = `source${step}`;
         const target = `target${step}`;
         const targetSelector = this.getJsValue(this.formatWdioSelector(this.requireDragTarget(action)));
-        return [
-          `    const ${source} = await driver.$(${selectorValue});`,
-          `    const ${target} = await driver.$(${targetSelector});`,
-          `    const targetLocation${step} = await ${target}.getLocation();`,
-          `    await driver.execute('mobile: dragGesture', {`,
-          `      elementId: ${source}.elementId,`,
-          `      endX: targetLocation${step}.x,`,
-          `      endY: targetLocation${step}.y,`,
-          `    });`,
-        ].join('\n');
+        return `    await ${this.formatElementAction(action, (sourceElement) => `(async () => { const ${target} = await driver.$(${targetSelector}); const targetLocation${step} = await ${target}.getLocation(); await driver.execute('mobile: dragGesture', { elementId: ${sourceElement}.elementId, endX: targetLocation${step}.x, endY: targetLocation${step}.y }); })()`)}`;
       }
 
       case 'back':
@@ -143,28 +112,15 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
       }
 
       case 'assertVisible': {
-        const element = `element${step}`;
-        return [
-          `    const ${element} = await driver.$(${selectorValue});`,
-          `    if (!(await ${element}.isDisplayed())) throw new Error('Android visibility assertion failed');`,
-        ].join('\n');
+        return `    await ${this.formatElementAction(action, (element) => `(async () => { if (!(await ${element}.isDisplayed())) throw new Error('Android visibility assertion failed'); })()`)}`;
       }
 
       case 'assertHidden': {
-        const element = `element${step}`;
-        return [
-          `    const ${element} = await driver.$(${selectorValue});`,
-          `    if (await ${element}.isDisplayed()) throw new Error('Android hidden assertion failed');`,
-        ].join('\n');
+        return `    await ${this.formatElementAction(action, (element) => `(async () => { if (await ${element}.isDisplayed()) throw new Error('Android hidden assertion failed'); })()`)}`;
       }
 
       case 'assertText': {
-        const element = `element${step}`;
-        return [
-          `    const ${element} = await driver.$(${selectorValue});`,
-          `    const actualText${step} = await ${element}.getText();`,
-          `    if (!actualText${step}.includes(String(${expected}))) throw new Error('Android text assertion failed');`,
-        ].join('\n');
+        return `    await ${this.formatElementAction(action, (element) => `(async () => { const actualText = await ${element}.getText(); if (!actualText.includes(String(${expected}))) throw new Error('Android text assertion failed'); })()`)}`;
       }
 
       default:
@@ -184,6 +140,13 @@ export class AppiumJsGenerator extends BaseCodeGenerator {
       `  process.exitCode = 1;`,
       `});`,
     ].join('\n');
+  }
+
+  private formatElementAction(action: ActionIR, operation: (element: string) => string): string {
+    const candidates = this.getGeneratedLocatorCandidates(action);
+    if (candidates.length === 0) this.requireLocator(action);
+    const selectors = candidates.map((candidate) => this.getJsValue(this.formatWdioSelector(candidate))).join(', ');
+    return `withAppiumLocatorHealing(driver, ${JSON.stringify(action.id)}, [${selectors}], async (element) => ${operation('element')})`;
   }
 
   private formatWdioSelector(loc: LocatorCandidate): string {

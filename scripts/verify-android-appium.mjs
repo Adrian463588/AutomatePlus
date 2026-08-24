@@ -92,9 +92,9 @@ async function appiumRequest(path, options = {}) {
     signal,
     headers: { 'content-type': 'application/json', ...(options.headers ?? {}) },
   }));
-  const body = await readBodyBounded(response, MAX_APPIUM_RESPONSE_BYTES);
-  if (body.truncated) throw new Error(`Appium response exceeded the ${MAX_APPIUM_RESPONSE_BYTES} byte safety limit.`);
-  const text = body.text;
+  const responseBody = await readBodyBounded(response, MAX_APPIUM_RESPONSE_BYTES);
+  if (responseBody.truncated) throw new Error(`Appium response exceeded the ${MAX_APPIUM_RESPONSE_BYTES} byte safety limit.`);
+  const text = responseBody.text;
   let body;
   try {
     body = JSON.parse(text);

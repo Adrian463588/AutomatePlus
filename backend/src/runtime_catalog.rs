@@ -99,7 +99,6 @@ pub struct CatalogValidation {
 #[derive(Debug, Clone)]
 pub struct HttpsSource {
     pub host: String,
-    pub request_target: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -398,24 +397,17 @@ pub fn parse_https_source(value: &str) -> Result<HttpsSource, String> {
         return Err("source host or port is invalid.".to_owned());
     }
     let suffix = &remainder[authority_end..];
-    let request_target = if suffix.is_empty() {
-        "/".to_owned()
-    } else if suffix.starts_with('?') {
-        format!("/{suffix}")
-    } else {
-        suffix.to_owned()
-    };
+    if suffix.is_empty() {
+        return Ok(HttpsSource {
+            host: host.to_ascii_lowercase(),
+        });
+    }
+    if !(suffix.starts_with('/') || suffix.starts_with('?')) {
+        return Err("HTTPS source path must be absolute.".to_owned());
+    }
     Ok(HttpsSource {
         host: host.to_ascii_lowercase(),
-        request_target,
     })
-}
-
-pub fn workspace_root() -> PathBuf {
-    env::var_os("AUTOMATE_PLUS_WORKSPACE")
-        .map(PathBuf::from)
-        .or_else(|| env::current_dir().ok())
-        .unwrap_or_else(|| PathBuf::from("."))
 }
 
 pub fn discover_known_roots(
@@ -457,11 +449,12 @@ pub fn discover_known_roots(
                 return None;
             }
             let metadata = fs::metadata(&path).ok();
+            let writable = metadata.as_ref().is_some_and(|_| is_writable(&path));
             Some(RuntimeRootCandidate {
                 path,
                 exists: metadata.is_some(),
                 is_directory: metadata.as_ref().is_some_and(std::fs::Metadata::is_dir),
-                writable: metadata.as_ref().is_some_and(|_| is_writable(&path)),
+                writable,
             })
         })
         .collect()
@@ -500,7 +493,6 @@ mod tests {
         assert!(parse_https_source("http://example.test/a").is_err());
         let source = parse_https_source("https://example.test/a?x=1").expect("valid source");
         assert_eq!(source.host, "example.test");
-        assert_eq!(source.request_target, "/a?x=1");
     }
 
     #[test]

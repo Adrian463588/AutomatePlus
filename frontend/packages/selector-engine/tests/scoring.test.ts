@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { rankLocators } from '../src/scoring.js';
-import { findNextResilientLocator } from '../src/self-healer.js';
+import { findNextResilientLocator, orderedHealingCandidates } from '../src/self-healer.js';
 import { ActionIR, LocatorCandidate } from '@automate-plus/ir-schema';
 
 describe('Selector Engine Scoring & Ranking', () => {
@@ -73,5 +73,46 @@ describe('Selector Engine Scoring & Ranking', () => {
     expect(healingResult.chosenCandidate?.strategy).toBe('role');
     expect(healingResult.chosenCandidate?.value).toBe('Submit');
     expect(healingResult.remainingCandidates.length).toBe(1);
+  });
+
+  it('keeps healing candidates deterministic and limited to recorded evidence', () => {
+    const action: ActionIR = {
+      id: 'd6df5a7b-c79c-4e6c-80f1-5cc4f0d9b5d5',
+      stepNumber: 2,
+      platform: 'web',
+      action: 'click',
+      locators: [
+        { strategy: 'xpath', value: '//button[1]', score: 10 },
+        { strategy: 'role', role: 'button', name: 'Continue', value: 'Continue', score: 80 },
+        { strategy: 'testId', value: 'continue', score: 100 },
+      ],
+      timeoutMs: 5000,
+      timestamp: Date.now(),
+    };
+
+    expect(orderedHealingCandidates(action).map((candidate) => candidate.value)).toEqual([
+      'continue',
+      'Continue',
+      '//button[1]',
+    ]);
+    expect(findNextResilientLocator(action, 'continue').chosenCandidate?.value).toBe('Continue');
+  });
+
+  it('fails closed when an action has no recorded locator evidence', () => {
+    const action: ActionIR = {
+      id: '1adf5ef7-6ecb-4264-883c-17be2a41fae7',
+      stepNumber: 3,
+      platform: 'android',
+      action: 'tap',
+      locators: [],
+      timeoutMs: 5000,
+      timestamp: Date.now(),
+    };
+
+    const result = findNextResilientLocator(action, 'missing');
+
+    expect(result.healed).toBe(false);
+    expect(result.chosenCandidate).toBeUndefined();
+    expect(result.remainingCandidates).toEqual([]);
   });
 });
