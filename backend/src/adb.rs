@@ -25,6 +25,80 @@ impl AdbClient {
 
         parse_devices_with_details(&self.path, &String::from_utf8_lossy(&output.stdout))
     }
+
+    pub fn verify_application(
+        &self,
+        serial: &str,
+        package: &str,
+        activity: &str,
+    ) -> Result<(), String> {
+        if serial.trim().is_empty() || package.trim().is_empty() || activity.trim().is_empty() {
+            return Err("BLOCKED: Android package, activity, and serial are required.".to_owned());
+        }
+        let package_result = Command::new(&self.path)
+            .args(["-s", serial, "shell", "pm", "path", package])
+            .output()
+            .map_err(|error| format!("BLOCKED: Unable to verify Android package: {error}"))?;
+        if !package_result.status.success()
+            || !String::from_utf8_lossy(&package_result.stdout).contains("package:")
+        {
+            return Err(format!(
+                "BLOCKED: Android package '{package}' is not installed on serial '{serial}'."
+            ));
+        }
+        let resolved = Command::new(&self.path)
+            .args([
+                "-s",
+                serial,
+                "shell",
+                "cmd",
+                "package",
+                "resolve-activity",
+                "--brief",
+                package,
+            ])
+            .output()
+            .map_err(|error| format!("BLOCKED: Unable to resolve Android activity: {error}"))?;
+        if !resolved.status.success() {
+            return Err(format!(
+                "BLOCKED: Android activity '{activity}' could not be resolved for package '{package}' on serial '{serial}'."
+            ));
+        }
+        let expected = normalize_activity(package, activity);
+        let output = String::from_utf8_lossy(&resolved.stdout);
+        let resolved_activity = output
+            .lines()
+            .map(str::trim)
+            .filter(|line| !line.is_empty())
+            .last();
+        if resolved_activity
+            .map(|value| normalize_activity(package, value) != expected)
+            .unwrap_or(true)
+        {
+            return Err(format!(
+                "BLOCKED: Android activity mismatch for serial '{serial}'; expected '{expected}', resolved '{}'.",
+                resolved_activity.unwrap_or("<none>")
+            ));
+        }
+        Ok(())
+    }
+}
+
+fn normalize_activity(package: &str, activity: &str) -> String {
+    let value = activity.trim();
+    if value.starts_with('.') {
+        format!("{package}{value}")
+    } else if let Some((resolved_package, resolved_activity)) = value.split_once('/') {
+        if resolved_package == package {
+            normalize_activity(package, resolved_activity)
+        } else {
+            value.replace('/', "")
+        }
+    } else if value.starts_with(package) {
+        value.to_owned()
+    } else {
+        format!("{package}.{value}")
+    }
 }
 
 pub fn parse_devices(text: &str) -> Result<Vec<DeviceProfile>, String> {

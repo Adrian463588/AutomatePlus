@@ -365,6 +365,8 @@ pub struct DeviceRunResult {
     pub failed_iterations: u32,
     pub duration_ms: u64,
     pub iterations: Vec<Value>,
+    #[serde(default)]
+    pub artifacts: Vec<Value>,
     pub error: Option<String>,
 }
 
@@ -434,6 +436,7 @@ impl NativeRequest {
                 | "recording.start"
                 | "recording.stop"
                 | "farm.run.start"
+                | "farm.run.status"
                 | "farm.run.cancel"
                 | "artifacts.list"
                 | "native.run"

@@ -93,27 +93,27 @@ export const VisualCanvas: React.FC = () => {
             <label className="field-inline">
               <Globe className="h-3.5 w-3.5 text-sky-400" aria-hidden="true" />
               <span className="sr-only">Web recording target URL</span>
-              <input type="url" value={inputUrl} onChange={(event) => setInputUrl(event.target.value)} onBlur={() => void handleTargetBlur()} aria-describedby="recording-preflight" />
+              <input id="web-recording-target-url" name="targetUrl" type="url" value={inputUrl} onChange={(event) => setInputUrl(event.target.value)} onBlur={() => void handleTargetBlur()} aria-describedby="recording-preflight" />
             </label>
           ) : (
             <label className="field-inline">
               <Smartphone className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />
               <span className="sr-only">Android application package</span>
-              <input value={appPackage} onChange={(event) => setAppPackage(event.target.value)} onBlur={() => void handleTargetBlur()} aria-describedby="recording-preflight" />
+              <input id="android-application-package" name="appPackage" value={appPackage} onChange={(event) => setAppPackage(event.target.value)} onBlur={() => void handleTargetBlur()} aria-describedby="recording-preflight" />
             </label>
           )}
         </div>
         <div className="flex items-center gap-2">
           <label className="field-inline">
-            <span className="text-[10px] text-slate-500">Locator</span>
-            <select value={assertionStrategy} onChange={(event) => setAssertionStrategy(event.target.value as typeof assertionStrategy)} aria-label="Assertion locator strategy">
+            <span className="text-[10px] text-slate-400">Locator</span>
+            <select id="assertion-locator-strategy" name="assertionStrategy" value={assertionStrategy} onChange={(event) => setAssertionStrategy(event.target.value as typeof assertionStrategy)} aria-label="Assertion locator strategy">
               <option value="testId">testId</option>
               <option value="role">role</option>
               <option value="accessibilityId">accessibilityId</option>
               <option value="resourceId">resourceId</option>
               <option value="text">text</option>
             </select>
-            <input value={assertionLocator} onChange={(event) => setAssertionLocator(event.target.value)} aria-label="Assertion locator value" />
+            <input id="assertion-locator-value" name="assertionLocator" value={assertionLocator} onChange={(event) => setAssertionLocator(event.target.value)} aria-label="Assertion locator value" />
           </label>
           <button type="button" onClick={() => void handleAddAssertion()} disabled={!activeSession || isApi || isRecording || !assertionLocator.trim()} title={isApi ? 'API sessions use the API builder for assertions' : 'Add a user-provided assertion locator'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />Add assertion

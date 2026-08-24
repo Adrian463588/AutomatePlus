@@ -207,7 +207,7 @@ Rex reviews requirements, Aria reviews contracts/persistence/IPC, Mason implemen
 |---|---|---|---|---|
 | Native offline launch | ADR-001, launcher contract | backend, Run-AutomatePlus.bat | preflight and launcher smoke | Implemented; blocked by local packs/CLI |
 | Real device registry | FR-04/14, DeviceProfile | Rust adb/persistence, UI bridge | parser tests and ADB output | Implemented; physical acceptance blocked |
-| Multi-device replay | FR-15, FarmRunSpec/leases | contracts, runner core, Rust host | scheduler/lease tests | Contract/component; Appium execution blocked |
+| Multi-device replay | FR-15, FarmRunSpec/leases | contracts, runner core, Rust host | scheduler/lease tests, real-device evidence | Rust Appium worker and farm IPC implemented; native acceptance blocked by verified packs/Cargo cache |
 | Primary/follower recording | FR-16, RecordingPlan/Observation | recorder contracts and native dispatch | observation tests | Contract/component; runtime blocked |
 | Runtime-context generation | FR-07/17, capability manifest | generators | no-fixed-port/context tests | Implemented |
 | Runtime Manager and explicit offline distribution | FR-12, runtime IPC 1.0, catalog contract | Rust runtime manager, SQLite migration, Runtime Manager UI, launcher | runtime-manager/catalog/offline verifiers; release manifest gate | Implemented; artifact/Cargo prerequisites blocked |

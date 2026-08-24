@@ -12,7 +12,7 @@ pub struct PortLeaseManager {
 
 struct PortLease {
     ports: Vec<u16>,
-    _listeners: Vec<TcpListener>,
+    listeners: Vec<TcpListener>,
 }
 
 impl Default for PortLeaseManager {
@@ -88,10 +88,25 @@ impl PortLeaseManager {
             lease_id.clone(),
             PortLease {
                 ports: ports.clone(),
-                _listeners: listeners,
+                listeners,
             },
         );
         Ok((lease_id, ports))
+    }
+
+    /// Release the temporary bind handles immediately before the leased
+    /// process binds its own sockets. The ports remain reserved in the map so
+    /// another AutomatePlus run cannot claim them during the process lifetime.
+    pub fn activate(&self, lease_id: &str) -> Result<Vec<u16>, String> {
+        let mut guard = self
+            .leases
+            .lock()
+            .map_err(|_| "Port lease state is poisoned.".to_string())?;
+        let lease = guard
+            .get_mut(lease_id)
+            .ok_or_else(|| format!("Port lease '{lease_id}' does not exist."))?;
+        lease.listeners.clear();
+        Ok(lease.ports.clone())
     }
 
     pub fn release(&self, lease_id: &str) -> Result<bool, String> {

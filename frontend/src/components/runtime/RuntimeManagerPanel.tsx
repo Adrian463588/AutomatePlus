@@ -300,7 +300,7 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
   const dialogEntries = licenseDialogPurpose === 'install' ? missingPacks : [];
 
   return (
-    <main className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-slate-950/60 text-xs text-slate-200" aria-labelledby="runtime-manager-heading" aria-busy={operationBusy}>
+    <section className="flex min-h-0 min-w-0 flex-1 flex-col overflow-x-hidden overflow-y-auto bg-slate-950/60 text-xs text-slate-200" aria-labelledby="runtime-manager-heading" aria-busy={operationBusy}>
       <header className="flex min-w-0 flex-wrap items-start justify-between gap-3 border-b border-slate-800 bg-slate-900 px-4 py-4">
         <div className="flex min-w-0 items-start gap-3">
           <PackageCheck className="mt-0.5 h-6 w-6 shrink-0 text-cyan-400" aria-hidden="true" />
@@ -318,24 +318,24 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
 
       <section className="grid min-w-0 gap-3 border-b border-slate-800 bg-slate-900/70 p-4 sm:grid-cols-2 xl:grid-cols-4" aria-label="Runtime summary">
         <div className="min-w-0 rounded border border-slate-800 bg-slate-950/80 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Active root</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Active root</p>
           <p className="mt-2 break-all font-mono text-[11px] text-slate-200">{activeRoot?.path || 'No verified install root selected'}</p>
-          {activeRoot && <p className="mt-1 text-[10px] text-slate-500">{activeRoot.writable ? 'Writable' : 'Read-only'} · {activeRoot.source}</p>}
+          {activeRoot && <p className="mt-1 text-[10px] text-slate-400">{activeRoot.writable ? 'Writable' : 'Read-only'} · {activeRoot.source}</p>}
         </div>
         <div className="min-w-0 rounded border border-slate-800 bg-slate-950/80 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Catalog</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Catalog</p>
           <p className="mt-2 text-sm font-semibold text-white">{catalogLabel}</p>
-          <p className="mt-1 text-[10px] text-slate-500">Metadata comes from the bundled pinned catalog.</p>
+          <p className="mt-1 text-[10px] text-slate-400">Metadata comes from the bundled pinned catalog.</p>
         </div>
         <div className="min-w-0 rounded border border-slate-800 bg-slate-950/80 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Verified local</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Verified local</p>
           <p className="mt-2 text-sm font-semibold text-emerald-300">{verifiedLabel}</p>
-          <p className="mt-1 text-[10px] text-slate-500">SHA, license, architecture, and health must pass.</p>
+          <p className="mt-1 text-[10px] text-slate-400">SHA, license, architecture, and health must pass.</p>
         </div>
         <div className="min-w-0 rounded border border-slate-800 bg-slate-950/80 p-3">
-          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-500">Install policy</p>
+          <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Install policy</p>
           <p className="mt-2 text-sm font-semibold text-cyan-200">Explicit action only</p>
-          <p className="mt-1 text-[10px] text-slate-500">No startup download or cloud fallback.</p>
+          <p className="mt-1 text-[10px] text-slate-400">No startup download or cloud fallback.</p>
         </div>
       </section>
 
@@ -452,6 +452,6 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
           </div>
         </div>
       )}
-    </main>
+    </section>
   );
 };

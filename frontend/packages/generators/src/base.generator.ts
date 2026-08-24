@@ -482,7 +482,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   protected getJsValue(val?: string | SecretRef): string {
     if (!val) return "''";
     if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') {
-      return `process.env.${val.key} || ''`;
+      return `process.env[${JSON.stringify(val.key)}] ?? ''`;
     }
     return JSON.stringify(val);
   }
@@ -490,7 +490,7 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   protected getPythonValue(val?: string | SecretRef): string {
     if (!val) return "''";
     if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') {
-      return `os.getenv('${val.key}', '')`;
+      return `os.getenv(${JSON.stringify(val.key)}, '')`;
     }
     return JSON.stringify(val);
   }
@@ -498,9 +498,33 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
   protected getJavaValue(val?: string | SecretRef): string {
     if (!val) return '""';
     if (typeof val === 'object' && 'kind' in val && val.kind === 'secret') {
-      return `System.getenv("${val.key}")`;
+      return `System.getenv(${JSON.stringify(val.key)})`;
     }
     return JSON.stringify(val);
+  }
+
+  protected getJsRecord(values: Record<string, string | SecretRef> = {}): string {
+    return `{ ${Object.entries(values)
+      .map(([key, value]) => `${JSON.stringify(key)}: ${this.getJsValue(value)}`)
+      .join(', ')} }`;
+  }
+
+  protected getPythonRecord(values: Record<string, string | SecretRef> = {}): string {
+    return `{ ${Object.entries(values)
+      .map(([key, value]) => `${JSON.stringify(key)}: ${this.getPythonValue(value)}`)
+      .join(', ')} }`;
+  }
+
+  protected getJavaHeaderLines(values: Record<string, string | SecretRef> = {}): string[] {
+    return Object.entries(values).map(
+      ([key, value]) => `            .header(${JSON.stringify(key)}, ${this.getJavaValue(value)})`,
+    );
+  }
+
+  protected getJavaQueryLines(values: Record<string, string | SecretRef> = {}): string[] {
+    return Object.entries(values).map(
+      ([key, value]) => `            .queryParam(${JSON.stringify(key)}, ${this.getJavaValue(value)})`,
+    );
   }
 
   protected getFileExtension(): string {

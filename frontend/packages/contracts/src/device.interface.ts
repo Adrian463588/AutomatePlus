@@ -44,6 +44,7 @@ export interface DeviceRunResult {
   failedIterations: number;
   durationMs: number;
   iterations: DeviceIterationResult[];
+  artifacts?: Array<{ artifactId: string; kind: string; relativePath: string; sha256?: string }>;
   error?: string;
 }
 

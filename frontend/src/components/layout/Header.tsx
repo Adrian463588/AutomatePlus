@@ -15,7 +15,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
   return (
     <header className="app-header bg-slate-900 border-b border-slate-800 px-4 py-2 select-none">
       <div className="header-brand flex items-center gap-3 min-w-0">
-        <div className="w-8 h-8 rounded-lg bg-cyan-600 flex items-center justify-center font-bold text-white shrink-0">A+</div>
+<div className="w-8 h-8 rounded-lg bg-cyan-700 flex items-center justify-center font-bold text-white shrink-0">A+</div>
         <div className="min-w-0">
           <div className="text-sm font-bold tracking-wide text-white flex items-center gap-2">
             AutomatePlus

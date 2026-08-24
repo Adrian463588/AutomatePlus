@@ -90,7 +90,7 @@ Requests and responses are JSON objects:
       "payload": { "ok": true, "data": { "devices": [] } }
     }
 
-Supported methods are native.health, native.capabilities, native.dialog.pick, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.cancel, artifacts.list, native.run, runtime.catalog.list, runtime.roots.scan, runtime.root.select, runtime.install.start, runtime.install.status, runtime.install.cancel, runtime.import, runtime.verify, runtime.health, and runtime.open-folder. `native.dialog.pick` is Rust-owned and uses a native Windows folder/file dialog; the renderer receives only a canonical selected path or an explicit cancellation. Failure payloads use shared automation error codes; native failures never become a pass.
+Supported methods are native.health, native.capabilities, native.dialog.pick, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.status, farm.run.cancel, artifacts.list, native.run, runtime.catalog.list, runtime.roots.scan, runtime.root.select, runtime.install.start, runtime.install.status, runtime.install.cancel, runtime.import, runtime.verify, runtime.health, and runtime.open-folder. `native.dialog.pick` is Rust-owned and uses a native Windows folder/file dialog; the renderer receives only a canonical selected path or an explicit cancellation. Failure payloads use shared automation error codes; native failures never become a pass.
 
 ## 6. Device model and discovery
 
@@ -211,7 +211,7 @@ Fixtures may exercise parsers, selectors, IPC, lease logic, and failure transiti
 |---|---|---|---|---|
 | Offline Tauri launch | ADR-001, launcher contract | backend, Run-AutomatePlus.bat | preflight/launcher smoke | Implemented; pack/CLI blocked |
 | Real discovery and stable IDs | FR-14, ADR-003 | backend/src/adb.rs, contracts | ADB parser tests; device evidence | Implemented; physical evidence blocked |
-| Farm strategies and leases | FR-15, ADR-004 | device-farm, runner core, Rust ports | scheduler/lease tests | Contract/component; Appium executor blocked |
+| Farm strategies and leases | FR-15, ADR-004 | device-farm, runner core, Rust ports | scheduler/lease tests, real-device evidence | Rust Appium worker, serial-bound leases, ports, cancellation, and evidence implemented; native acceptance blocked by verified packs/Cargo cache |
 | Primary/follower recording | FR-16 | recorder contracts, native dispatch | observation tests | Contract/component; runtime blocked |
 | Runtime-context generation | FR-17 | frontend/packages/generators | no-fixed-port tests | Implemented |
 | Runtime Manager | FR-12, runtime IPC 1.0 | runtime.rs, runtime_catalog.rs, RuntimeManagerContainer, launcher | component verifiers, responsive PNGs, offline/release gates | Implemented; native artifact/Cargo gates blocked |

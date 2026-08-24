@@ -29,6 +29,19 @@ function parseDevices(stdout) {
     return [{ serial: match[1], status: match[2], model: attributes.model?.replaceAll('_', ' ') }];
   });
 }
+function selectorCenter(hierarchy, selectorText) {
+  const escaped = selectorText.replace(/[.*+?^${}()|[\]\\]/gu, '\\$&');
+  const node = new RegExp(
+    `<node\\b(?=[^>]*(?:text|content-desc)="${escaped}")[^>]*bounds="\\[(\\d+),(\\d+)\\]\\[(\\d+),(\\d+)\\]"[^>]*>`,
+    'u',
+  ).exec(hierarchy);
+  if (!node) return undefined;
+  const [, left, top, right, bottom] = node;
+  return {
+    x: Math.round((Number(left) + Number(right)) / 2),
+    y: Math.round((Number(top) + Number(bottom)) / 2),
+  };
+}
 
 if (!enabled) {
   blocked('Set AUTOMATEPLUS_ANDROID_E2E=1 to run explicit physical-device checks. No ADB command was issued.');
@@ -51,6 +64,17 @@ if (!enabled) {
         const dump = run(adb, ['-s', device.serial, 'shell', 'uiautomator', 'dump', hierarchyPath]);
         const hierarchy = run(adb, ['-s', device.serial, 'exec-out', 'cat', hierarchyPath]);
         const selectorObserved = /(?:text|content-desc)="Riwayat"/u.test(hierarchy.stdout);
+        const selectorPoint = selectorCenter(hierarchy.stdout, 'Riwayat');
+        const tap = selectorPoint
+          ? run(adb, ['-s', device.serial, 'shell', 'input', 'tap', String(selectorPoint.x), String(selectorPoint.y)])
+          : { code: 1, stdout: '', stderr: 'Riwayat selector was not found in the live hierarchy.' };
+        const afterHierarchyPath = '/sdcard/automateplus-notifplus-hierarchy-after.xml';
+        const afterDump = tap.code === 0
+          ? run(adb, ['-s', device.serial, 'shell', 'uiautomator', 'dump', afterHierarchyPath])
+          : { code: 1, stdout: '', stderr: 'Tap was not issued.' };
+        const afterHierarchy = tap.code === 0
+          ? run(adb, ['-s', device.serial, 'exec-out', 'cat', afterHierarchyPath])
+          : { code: 1, stdout: '', stderr: 'Tap was not issued.' };
         return {
           serial: device.serial,
           model: device.model,
@@ -60,12 +84,21 @@ if (!enabled) {
           hierarchyDumpExitCode: dump.code,
           hierarchySha256: sha256(hierarchy.stdout),
           realSelector: { strategy: 'text-or-content-desc', value: 'Riwayat', observed: selectorObserved },
+          actionExecution: {
+            action: 'tap',
+            source: 'live-hierarchy-bounds',
+            point: selectorPoint ?? null,
+            exitCode: tap.code,
+            postActionHierarchySha256: afterHierarchy.code === 0 ? sha256(afterHierarchy.stdout) : null,
+          },
           checks: {
             packageInstalled: packagePath.code === 0 && packagePath.stdout.includes('package:'),
             activityResolved: resolvedActivity.code === 0 && resolvedActivity.stdout.includes('MainActivity'),
             launched: launch.code === 0,
             hierarchyCaptured: dump.code === 0 && hierarchy.code === 0,
             selectorObserved,
+            tapIssued: tap.code === 0,
+            postActionHierarchyCaptured: afterDump.code === 0 && afterHierarchy.code === 0,
           },
         };
       });

@@ -25,15 +25,12 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 #[cfg(windows)]
 use std::process::Command;
-use std::sync::{
-    atomic::{AtomicBool, Ordering},
-    Arc, Mutex,
-};
+use std::sync::Mutex;
 use tauri::{State, Window};
 
 pub struct AppState {
     pub ports: PortLeaseManager,
-    pub cancellation: Arc<AtomicBool>,
+    pub(crate) farm: farm::FarmRunManager,
     pub database: Mutex<Option<Database>>,
     pub processes: ProcessSupervisor,
     pub runtime: RuntimeManager,
@@ -52,7 +49,7 @@ impl AppState {
         }
         Self {
             ports: PortLeaseManager::default(),
-            cancellation: Arc::new(AtomicBool::new(false)),
+            farm: farm::FarmRunManager::default(),
             database: Mutex::new(database),
             processes: ProcessSupervisor::default(),
             runtime: RuntimeManager::new(workspace_root()),
@@ -371,9 +368,42 @@ impl AppState {
                 }
             }
             "farm.run.cancel" => {
-                self.cancellation.store(true, Ordering::SeqCst);
-                let run_id = request.payload.get("runId").cloned().unwrap_or(Value::Null);
-                NativeResponse::success(request, json!({ "runId": run_id, "cancelled": true }))
+                let run_id = request
+                    .payload
+                    .get("runId")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                match self.farm.cancel(run_id) {
+                    Ok(cancelled) => NativeResponse::success(
+                        request,
+                        json!({ "runId": run_id, "cancelled": cancelled }),
+                    ),
+                    Err(message) => NativeResponse::failure(
+                        request,
+                        "PROTOCOL_ERROR",
+                        message,
+                        json!({ "runId": run_id }),
+                    ),
+                }
+            }
+            "farm.run.status" => {
+                let run_id = request
+                    .payload
+                    .get("runId")
+                    .and_then(Value::as_str)
+                    .unwrap_or_default();
+                match self.farm.status(run_id) {
+                    Ok(summary) => NativeResponse::success(
+                        request,
+                        serde_json::to_value(summary).unwrap_or_else(|_| json!({})),
+                    ),
+                    Err(message) => NativeResponse::failure(
+                        request,
+                        "PROTOCOL_ERROR",
+                        message,
+                        json!({ "runId": run_id }),
+                    ),
+                }
             }
             "artifacts.list" => {
                 let run_id = request.payload.get("runId").and_then(Value::as_str);
@@ -575,24 +605,98 @@ impl AppState {
     }
 
     fn start_farm(&self, args: FarmCommandArgs) -> Result<Value, (&'static str, String, Value)> {
-        self.cancellation.store(false, Ordering::SeqCst);
-        let health = Preflight::run();
-        if !health.capabilities.farm_replay {
-            return Err((
-                "RUNTIME_MISSING",
-                format_blocked(&health),
-                json!({ "strategy": args.spec.strategy }),
-            ));
-        }
         if let Err(message) = farm::validate_spec(&args.spec) {
             return Err(("PROTOCOL_ERROR", message, json!({})));
         }
-        Err((
-            "CAPABILITY_ERROR",
-            "Farm replay executor is not implemented in the verified host; execution was not attempted."
-                .to_owned(),
-            json!({ "strategy": args.spec.strategy, "state": "blocked" }),
-        ))
+        let root = workspace_root();
+        let report = preflight::run(&root);
+        if !report.components.capabilities.farm_replay {
+            return Err((
+                "RUNTIME_MISSING",
+                format_blocked(&Preflight::run()),
+                json!({ "strategy": args.spec.strategy.clone() }),
+            ));
+        }
+        let adb_path = report.components.adb_path.ok_or_else(|| {
+            (
+                "RUNTIME_MISSING",
+                "Verified ADB is unavailable for the Android farm.".to_owned(),
+                json!({ "state": "blocked" }),
+            )
+        })?;
+        let devices = report.devices;
+        let mut spec = args.spec;
+        if spec.device_ids.is_none() {
+            let group_id = spec.device_group_id.as_deref().ok_or_else(|| {
+                (
+                    "PROTOCOL_ERROR",
+                    "Farm deviceIds or deviceGroupId is required.".to_owned(),
+                    json!({}),
+                )
+            })?;
+            let groups = self
+                .list_groups()
+                .map_err(|message| ("RUNTIME_MISSING", message, json!({ "groupId": group_id })))?;
+            let group = groups
+                .into_iter()
+                .find(|group| group.get("id").and_then(Value::as_str) == Some(group_id))
+                .ok_or_else(|| {
+                    (
+                        "PROTOCOL_ERROR",
+                        format!("Device group '{group_id}' was not found."),
+                        json!({ "groupId": group_id }),
+                    )
+                })?;
+            let device_ids = group
+                .get("deviceIds")
+                .and_then(Value::as_array)
+                .ok_or_else(|| {
+                    (
+                        "PROTOCOL_ERROR",
+                        format!("Device group '{group_id}' has no deviceIds."),
+                        json!({ "groupId": group_id }),
+                    )
+                })?
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::to_owned)
+                .collect::<Vec<_>>();
+            if device_ids.is_empty() {
+                return Err((
+                    "PROTOCOL_ERROR",
+                    format!("Device group '{group_id}' has no devices."),
+                    json!({ "groupId": group_id }),
+                ));
+            }
+            spec.device_ids = Some(device_ids);
+            spec.device_group_id = None;
+        }
+        let summary = self
+            .farm
+            .start(
+                args.session,
+                spec,
+                devices,
+                PathBuf::from(adb_path),
+                root,
+                self.ports.clone(),
+                self.processes.clone(),
+            )
+            .map_err(|message| {
+                let code = if message.starts_with("BLOCKED:") {
+                    "RUNTIME_MISSING"
+                } else {
+                    "CAPABILITY_ERROR"
+                };
+                (code, message, json!({ "state": "blocked" }))
+            })?;
+        serde_json::to_value(summary).map_err(|error| {
+            (
+                "PROTOCOL_ERROR",
+                format!("Unable to serialize farm run summary: {error}"),
+                json!({}),
+            )
+        })
     }
 }
 

@@ -9,7 +9,7 @@ import {
   ShieldAlert,
   Zap,
 } from 'lucide-react';
-import { DeviceExecutionStrategy, FarmFailurePolicy } from '@automate-plus/contracts';
+import type { DeviceExecutionStrategy, FarmFailurePolicy } from '@automate-plus/contracts';
 
 interface FarmRunModalProps {
   isOpen: boolean;
@@ -87,7 +87,7 @@ export const FarmRunModal: React.FC<FarmRunModalProps> = ({ isOpen, onClose }) =
       sessionId: activeSession.id,
       strategy,
       deviceIds: targetDevices.map((d) => d.deviceId),
-      iterationsPerDevice: strategy === 'all-devices' ? iterations : undefined,
+      iterationsPerDevice: strategy === 'split-iterations' ? undefined : iterations,
       totalIterations: strategy === 'split-iterations' ? iterations : undefined,
       maxParallelDevices: maxParallel,
       iterationDelayMs: delayMs,

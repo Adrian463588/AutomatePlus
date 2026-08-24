@@ -150,6 +150,7 @@ if not exist "!AUTOMATEPLUS_ROOT!\scripts\serve-desktop.mjs" (
 set "SERVER_ARGS="
 if "!BROWSER_DEV!"=="1" set "SERVER_ARGS=!SERVER_ARGS! --dev"
 if "!NO_OPEN!"=="1" set "SERVER_ARGS=!SERVER_ARGS! --no-open"
+if defined PORT set "SERVER_ARGS=!SERVER_ARGS! --port=!PORT!"
 echo [AutomatePlus] Starting explicit browser migration shell. Native capabilities remain Blocked.
 node "!AUTOMATEPLUS_ROOT!\scripts\serve-desktop.mjs" !SERVER_ARGS!
 set "EXIT_CODE=!ERRORLEVEL!"
@@ -164,7 +165,11 @@ if not exist "!AUTOMATEPLUS_ROOT!\scripts\build-native-offline.mjs" (
 )
 echo [AutomatePlus] Running native offline diagnostics...
 node "!AUTOMATEPLUS_ROOT!\scripts\build-native-offline.mjs" --preflight
-set "EXIT_CODE=!ERRORLEVEL!"
+if errorlevel 1 (
+  set "EXIT_CODE=2"
+  goto finish
+)
+set "EXIT_CODE=0"
 goto finish
 
 :require_node

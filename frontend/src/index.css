@@ -189,7 +189,7 @@ select:disabled,
 .farm-observation-summary strong { color: var(--ap-text); font-size: .9rem; }
 
 .workspace-layout--full > .sidebar-panel { min-width: 0; }
-.workspace-layout--full > main { min-width: 0; width: 100%; }
+.workspace-layout--full > :not(.sidebar-panel) { min-width: 0; width: 100%; }
 .runtime-pack-table { width: 100%; border-collapse: collapse; }
 .runtime-pack-table th { color: var(--ap-text-muted); font-size: .7rem; font-weight: 700; letter-spacing: .04em; text-align: left; text-transform: uppercase; }
 .runtime-pack-table td, .runtime-pack-table th { border-bottom: 1px solid var(--ap-border); padding: .75rem .5rem; vertical-align: top; }

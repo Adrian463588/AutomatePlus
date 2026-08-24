@@ -25,6 +25,17 @@ impl Database {
         Ok(database)
     }
 
+    pub fn open_at(root: &std::path::Path) -> Result<Self> {
+        let directory = root.join(".automate-plus");
+        fs::create_dir_all(&directory)
+            .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+        let database = Self {
+            path: directory.join("automate-plus.sqlite"),
+        };
+        database.migrate()?;
+        Ok(database)
+    }
+
     pub fn connection(&self) -> Result<Connection> {
         Connection::open(&self.path)
     }
@@ -183,6 +194,22 @@ impl Database {
             }));
         }
         Ok(artifacts)
+    }
+
+    pub fn record_artifact(
+        &self,
+        artifact_id: &str,
+        run_id: &str,
+        relative_path: &str,
+        sha256: &str,
+        media_type: &str,
+    ) -> Result<()> {
+        let connection = Connection::open(&self.path)?;
+        connection.execute(
+            "INSERT OR REPLACE INTO artifact_index (artifact_id, run_id, path, sha256, media_type, created_at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+            params![artifact_id, run_id, relative_path, sha256, media_type, now()],
+        )?;
+        Ok(())
     }
 }
 

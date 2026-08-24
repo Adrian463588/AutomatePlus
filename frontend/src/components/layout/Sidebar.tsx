@@ -98,10 +98,10 @@ export const Sidebar: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-3 space-y-5">
         <section aria-labelledby="workspace-heading">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 flex items-center justify-between">
-            <span id="workspace-heading">Workspace</span><span className="text-slate-500 font-mono">Local only</span>
+            <span id="workspace-heading">Workspace</span><span className="text-slate-400 font-mono">Local only</span>
           </div>
           <div className="flex gap-2">
-            <select aria-label="Select project" value={activeProject?.id ?? ''} onChange={(event) => void selectProject(event.target.value)} className="ap-select min-w-0 flex-1 text-xs font-medium">
+            <select id="project-selector" name="project" aria-label="Select project" value={activeProject?.id ?? ''} onChange={(event) => void selectProject(event.target.value)} className="ap-select min-w-0 flex-1 text-xs font-medium">
               <option value="">No project selected</option>
               {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
             </select>
@@ -114,7 +114,7 @@ export const Sidebar: React.FC = () => {
             <span id="runtime-preflight-heading">Runtime preflight</span><Server className="w-3.5 h-3.5 text-slate-500" />
           </div>
           <div className="rounded-md border border-slate-800 bg-slate-950/60 p-3 space-y-2">
-            <div className="flex items-start gap-2 text-slate-500 leading-5" role="status" aria-live="polite" aria-busy={runtimePreflight.status === 'busy'}>
+            <div className="flex items-start gap-2 text-slate-400 leading-5" role="status" aria-live="polite" aria-busy={runtimePreflight.status === 'busy'}>
               <span className={`mt-1 h-2 w-2 rounded shrink-0 ${runtimePreflight.status === 'ready' ? 'bg-emerald-400' : runtimePreflight.status === 'busy' ? 'bg-sky-400' : runtimePreflight.status === 'error' ? 'bg-rose-400' : 'bg-amber-400'}`} />
               <span>{runtimePreflight.message}</span>
             </div>

@@ -68,7 +68,7 @@ export const TerminalPanel: React.FC = () => {
       {/* Logs Scroll Area */}
       <div className="flex-1 p-3 overflow-y-auto space-y-1 bg-slate-950 text-slate-300">
         {logs.length === 0 ? (
-          <div className="text-slate-600 italic">Terminal ready. Click In-App Play, Native Run, or Looping to start execution.</div>
+<div className="text-slate-400 italic">Terminal ready. Click In-App Play, Native Run, or Looping to start execution.</div>
         ) : (
           logs.map((log, index) => {
             const timeStr = new Date(log.timestamp).toLocaleTimeString();

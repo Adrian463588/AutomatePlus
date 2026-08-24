@@ -32,7 +32,7 @@ const ANDROID_ACTIONS_BY_FRAMEWORK: Record<string, string[]> = {
 
 const API_ACTIONS_BY_FRAMEWORK: Record<string, string[]> = {
   k6: ['httpRequest', 'sleep', 'assertStatusCode'],
-  http: ['httpRequest', 'sleep', 'assertStatusCode', 'assertJsonPath', 'assertHeader'],
+  http: ['httpRequest', 'sleep', 'assertStatusCode', 'assertJsonPath', 'assertHeader', 'assertResponseTime'],
 };
 
 const ASSERTIONS = [

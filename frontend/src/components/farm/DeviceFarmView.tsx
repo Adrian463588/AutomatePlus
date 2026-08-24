@@ -113,7 +113,7 @@ export const DeviceFarmView: React.FC = () => {
         : 'Save device group.';
 
   return (
-    <main className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-950/60 text-xs text-slate-200" aria-labelledby="device-farm-heading">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-slate-950/60 text-xs text-slate-200" aria-labelledby="device-farm-heading">
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-4 py-3">
         <div className="flex min-w-0 items-center gap-2.5">
           <Smartphone className="h-5 w-5 shrink-0 text-emerald-400" aria-hidden="true" />
@@ -166,10 +166,12 @@ export const DeviceFarmView: React.FC = () => {
 
           <div className="grid min-h-0 flex-1 content-start gap-3 overflow-auto p-4 sm:grid-cols-2" role="list" aria-label="Discovered Android devices">
             {deviceProfiles.length === 0 ? (
-              <div className="col-span-full flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed border-slate-800 p-6 text-center text-slate-500" role="status">
-                <AlertTriangle className="mb-2 h-8 w-8 text-amber-400" aria-hidden="true" />
-                <p className="font-semibold text-slate-300">No Android devices reported</p>
-                <p className="mt-1 max-w-md text-[11px] leading-5">{nativeHostMessage} Connect an authorized device, then refresh discovery.</p>
+              <div className="col-span-full flex min-h-48 flex-col items-center justify-center rounded-lg border border-dashed border-slate-800 p-6 text-center text-slate-500" role="listitem">
+                <div role="status" aria-live="polite">
+                  <AlertTriangle className="mb-2 h-8 w-8 text-amber-400" aria-hidden="true" />
+                  <p className="font-semibold text-slate-300">No Android devices reported</p>
+                  <p className="mt-1 max-w-md text-[11px] leading-5 text-slate-400">{nativeHostMessage} Connect an authorized device, then refresh discovery.</p>
+                </div>
               </div>
             ) : deviceProfiles.map((device) => {
               const selected = selectedDeviceIds.includes(device.deviceId);
@@ -214,6 +216,6 @@ export const DeviceFarmView: React.FC = () => {
       </div>
 
       <FarmRunModal isOpen={isFarmModalOpen} onClose={() => setIsFarmModalOpen(false)} />
-    </main>
+    </section>
   );
 };

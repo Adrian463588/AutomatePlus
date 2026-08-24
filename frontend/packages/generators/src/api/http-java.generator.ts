@@ -23,6 +23,7 @@ export class HttpJavaGenerator extends BaseCodeGenerator {
       ``,
       `public class ${className} {`,
       `    private Response lastResponse;`,
+      `    private long lastResponseTimeMs;`,
       `    private Map<String, Object> variables = new HashMap<>();`,
       ``,
       `    @Test`,
@@ -32,18 +33,25 @@ export class HttpJavaGenerator extends BaseCodeGenerator {
 
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
     if (action.action === 'httpRequest' && action.apiPayload) {
-      const { method, url, headers, bodyContent } = action.apiPayload;
-      const headersLines = Object.entries(headers || {}).map(
-        ([k, v]) => `            .header("${k}", "${v}")`
+      const { method, url, headers, bodyContent, extractedVariables } = action.apiPayload;
+      const headersLines = this.getJavaHeaderLines(headers);
+      const queryLines = this.getJavaQueryLines(action.apiPayload.queryParams);
+      const bodyLine = bodyContent === undefined ? '' : `            .body(${this.getJavaValue(bodyContent)})`;
+      const extractionLines = (extractedVariables || []).map(
+        (v) => `        variables.put(${JSON.stringify(v.variableName)}, lastResponse.jsonPath().get(${JSON.stringify(v.jsonPath.replace(/^\$\.?/, ''))}));`,
       );
-      const bodyLine = bodyContent ? `            .body(${JSON.stringify(bodyContent)})` : '';
+      const requestStartedAt = `requestStartedAtStep${action.stepNumber}`;
 
       return [
+        `        long ${requestStartedAt} = System.nanoTime();`,
         `        lastResponse = RestAssured.given()`,
         ...headersLines,
+        ...queryLines,
         bodyLine,
         `            .when()`,
-        `            .${method.toLowerCase()}("${url}");`,
+        `            .${method.toLowerCase()}(${this.getJavaValue(url)});`,
+        `        lastResponseTimeMs = (System.nanoTime() - ${requestStartedAt}) / 1_000_000;`,
+        ...extractionLines,
       ]
         .filter(Boolean)
         .join('\n');
@@ -54,12 +62,16 @@ export class HttpJavaGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertJsonPath') {
-      const path = action.attributeName?.replace(/^\./, '') || '';
-      return `        lastResponse.then().body("${path}", equalTo(${this.getJavaValue(action.expectedValue)}));`;
+      const path = action.attributeName || action.assertion?.jsonPath || '';
+      return `        lastResponse.then().body(${this.getJavaValue(path)}, equalTo(${this.getJavaValue(action.expectedValue)}));`;
     }
 
     if (action.action === 'assertHeader') {
-      return `        lastResponse.then().header("${action.attributeName}", containsString(${this.getJavaValue(action.expectedValue)}));`;
+      return `        lastResponse.then().header(${this.getJavaValue(action.attributeName)}, containsString(${this.getJavaValue(action.expectedValue)}));`;
+    }
+
+    if (action.action === 'assertResponseTime') {
+      return `        assertTrue(lastResponseTimeMs <= ${this.requireExpectedNumber(action, 1)});`;
     }
 
     if (action.action === 'sleep') {

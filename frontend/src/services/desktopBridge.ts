@@ -232,6 +232,7 @@ function createBlockedFarmSummary(sessionId: string, spec: FarmRunSpec, error: s
 class NativeCapabilityAdapter {
   private status: NativeHostStatus = unavailableNativeStatus(BROWSER_BLOCKED_REASON);
   private preflightChecked = false;
+  private activeFarmRunId: string | undefined;
 
   public getStatus(): NativeHostStatus {
     return this.status;
@@ -352,11 +353,25 @@ class NativeCapabilityAdapter {
 
   public async runFarmTest(session: SessionIR, spec: FarmRunSpec): Promise<MultiDeviceRunSummary> {
     this.require(this.status.farmReplay, 'farmReplay');
-    const response = await this.request<unknown>('farm.run.start', { session, spec } satisfies NativeFarmRunRequest);
-    if (!isRecord(response) || typeof response.farmRunId !== 'string' || typeof response.status !== 'string') {
-      throw new Error('Native host returned an invalid farm summary.');
+    try {
+      const response = await this.request<unknown>('farm.run.start', { session, spec } satisfies NativeFarmRunRequest);
+      if (!isRecord(response) || typeof response.farmRunId !== 'string' || typeof response.status !== 'string') {
+        throw new Error('Native host returned an invalid farm summary.');
+      }
+      this.activeFarmRunId = response.farmRunId;
+      let summary = response as unknown as MultiDeviceRunSummary;
+      while (summary.status === 'running') {
+        await new Promise<void>((resolve) => window.setTimeout(resolve, 250));
+        const next = await this.request<unknown>('farm.run.status', { runId: summary.farmRunId });
+        if (!isRecord(next) || typeof next.farmRunId !== 'string' || typeof next.status !== 'string') {
+          throw new Error('Native host returned an invalid farm status summary.');
+        }
+        summary = next as unknown as MultiDeviceRunSummary;
+      }
+      return summary;
+    } finally {
+      this.activeFarmRunId = undefined;
     }
-    return response as unknown as MultiDeviceRunSummary;
   }
 
   public async listArtifacts(runId?: string): Promise<readonly unknown[]> {
@@ -369,7 +384,9 @@ class NativeCapabilityAdapter {
 
   public async cancel(): Promise<void> {
     if (!this.status.available && !this.status.farmReplay) return;
-    await this.request('farm.run.cancel', { runId: '' });
+    const runId = this.activeFarmRunId;
+    if (!runId) return;
+    await this.request('farm.run.cancel', { runId });
   }
 
   private resolveBridge(): NativeBridgeObject | undefined {

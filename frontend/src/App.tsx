@@ -63,11 +63,11 @@ export const App: React.FC = () => {
   return (
     <div className="app-shell flex flex-col min-h-screen w-full bg-slate-950 text-slate-100 font-sans">
       <Header onOpenStressModal={() => setIsStressModalOpen(true)} />
-      <div className={`${workspaceLayoutClass} flex-1 min-h-0`} data-layout={showsGeneratedCode ? 'editor' : 'full-workspace'}>
+      <main className={`${workspaceLayoutClass} flex-1 min-h-0`} data-layout={showsGeneratedCode ? 'editor' : 'full-workspace'}>
         <Sidebar />
         {renderCenterView()}
         {showsGeneratedCode ? <MonacoView /> : null}
-      </div>
+      </main>
       <TerminalPanel />
       <StressModal
         isOpen={isStressModalOpen}

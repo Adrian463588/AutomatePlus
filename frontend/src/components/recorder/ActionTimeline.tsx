@@ -71,7 +71,7 @@ export const ActionTimeline: React.FC = () => {
           <ListOrdered className="w-4 h-4 text-cyan-400" />
           <span>Recorded Action Sequence ({steps.length} steps)</span>
         </div>
-        <span className="text-[10px] text-slate-500 font-mono">
+<span className="text-[10px] text-slate-400 font-mono">
           Use the arrow controls to reorder
         </span>
       </div>

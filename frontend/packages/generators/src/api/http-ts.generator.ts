@@ -11,9 +11,11 @@ export class HttpTsGenerator extends BaseCodeGenerator {
     return [
       `import axios, { AxiosResponse } from 'axios';`,
       ``,
-      `describe('${session.name}', () => {`,
+      `describe(${this.getJsValue(session.name)}, () => {`,
       `  let lastResponse: AxiosResponse;`,
+      `  let lastResponseTimeMs = 0;`,
       `  const variables: Record<string, any> = {};`,
+      `  const readJsonPath = (value: unknown, path: string): unknown => path.replace(/^\\$\\.?/, '').split('.').filter(Boolean).reduce<unknown>((current, key) => current && typeof current === 'object' ? (current as Record<string, unknown>)[key] : undefined, value);`,
       ``,
       `  it('should execute API test sequence', async () => {`,
     ].join('\n');
@@ -22,21 +24,26 @@ export class HttpTsGenerator extends BaseCodeGenerator {
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
     if (action.action === 'httpRequest' && action.apiPayload) {
       const { method, url, headers, bodyContent, extractedVariables } = action.apiPayload;
-      const headersStr = JSON.stringify(headers);
-      const dataStr = bodyContent ? JSON.stringify(bodyContent) : 'undefined';
+      const headersStr = this.getJsRecord(headers);
+      const queryParamsStr = this.getJsRecord(action.apiPayload.queryParams);
+      const dataStr = bodyContent === undefined ? 'undefined' : this.getJsValue(bodyContent);
 
       const extractionLines = (extractedVariables || []).map(
-        (v) => `    variables['${v.variableName}'] = lastResponse.data${v.jsonPath.startsWith('.') ? v.jsonPath : '.' + v.jsonPath};`
+        (v) => `    variables[${this.getJsValue(v.variableName)}] = readJsonPath(lastResponse.data, ${this.getJsValue(v.jsonPath)});`
       );
+      const requestStartedAt = `requestStartedAtStep${action.stepNumber}`;
 
       return [
+        `    const ${requestStartedAt} = Date.now();`,
         `    lastResponse = await axios.request({`,
-        `      method: '${method.toLowerCase()}',`,
-        `      url: '${url}',`,
+        `      method: ${this.getJsValue(method.toLowerCase())},`,
+        `      url: ${this.getJsValue(url)},`,
+        `      params: ${queryParamsStr},`,
         `      headers: ${headersStr},`,
         `      data: ${dataStr},`,
         `      validateStatus: () => true,`,
         `    });`,
+        `    lastResponseTimeMs = Date.now() - ${requestStartedAt};`,
         ...extractionLines,
       ].join('\n');
     }
@@ -46,15 +53,15 @@ export class HttpTsGenerator extends BaseCodeGenerator {
     }
 
     if (action.action === 'assertJsonPath') {
-      return `    expect(lastResponse.data${action.attributeName?.startsWith('.') ? action.attributeName : '.' + (action.attributeName || '')}).toEqual(${this.getJsValue(action.expectedValue)});`;
+      return `    expect(readJsonPath(lastResponse.data, ${this.getJsValue(action.attributeName || action.assertion?.jsonPath)})).toEqual(${this.getJsValue(action.expectedValue)});`;
     }
 
     if (action.action === 'assertHeader') {
-      return `    expect(lastResponse.headers['${action.attributeName?.toLowerCase()}']).toContain(${this.getJsValue(action.expectedValue)});`;
+      return `    expect(lastResponse.headers[${this.getJsValue(action.attributeName?.toLowerCase())}]).toContain(${this.getJsValue(action.expectedValue)});`;
     }
 
     if (action.action === 'assertResponseTime') {
-      return this.unsupportedAction(action);
+      return `    expect(lastResponseTimeMs).toBeLessThanOrEqual(${this.requireExpectedNumber(action, 1)});`;
     }
 
     if (action.action === 'sleep') {

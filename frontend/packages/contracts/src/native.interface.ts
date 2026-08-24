@@ -108,6 +108,7 @@ export interface NativeProtocolMethodMap extends RuntimeProtocolMethodMap {
   'recording.start': NativeRecordingStartRequest;
   'recording.stop': NativeRecordingStopRequest;
   'farm.run.start': NativeFarmRunRequest;
+  'farm.run.status': { runId: string };
   'farm.run.cancel': NativeFarmCancelRequest;
   'artifacts.list': NativeArtifactsRequest;
   'native.run': { session: SessionIR; framework: string; language: string };
@@ -129,6 +130,7 @@ export interface NativeProtocolResponseMap {
   'recording.start': { recordingId: string; state: NativeHostState };
   'recording.stop': { recordingId: string; state: NativeHostState };
   'farm.run.start': FarmRunReport;
+  'farm.run.status': FarmRunReport;
   'farm.run.cancel': { runId: string; cancelled: boolean };
   'artifacts.list': NativeArtifactsResponse;
   'native.run': RunSummary;

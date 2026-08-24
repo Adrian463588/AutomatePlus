@@ -7,25 +7,30 @@ export class K6StressGenerator extends BaseCodeGenerator {
   public readonly language = 'javascript';
   public readonly supportedPlatforms = ['api'] as const;
 
-  public generateHeader(session: SessionIR, _options?: GeneratorOptions): string {
+  public generateHeader(_session: SessionIR, _options?: GeneratorOptions): string {
     return [
       `import http from 'k6/http';`,
       `import { check, sleep } from 'k6';`,
+      ``,
+      `const targetRps = Number(__ENV.TARGET_RPS);`,
+      `const duration = __ENV.DURATION;`,
+      `const preAllocatedVUs = Number(__ENV.PREALLOCATED_VUS);`,
+      `const maxVUs = Number(__ENV.MAX_VUS);`,
+      `if (!Number.isFinite(targetRps) || targetRps <= 0) throw new Error('TARGET_RPS must be a positive number.');`,
+      `if (!duration) throw new Error('DURATION is required.');`,
+      `if (!Number.isInteger(preAllocatedVUs) || preAllocatedVUs <= 0) throw new Error('PREALLOCATED_VUS must be a positive integer.');`,
+      `if (!Number.isInteger(maxVUs) || maxVUs < preAllocatedVUs) throw new Error('MAX_VUS must be an integer greater than or equal to PREALLOCATED_VUS.');`,
       ``,
       `export const options = {`,
       `  scenarios: {`,
       `    constant_rps: {`,
       `      executor: 'constant-arrival-rate',`,
-      `      rate: Number(__ENV.TARGET_RPS) || 50,`,
+      `      rate: targetRps,`,
       `      timeUnit: '1s',`,
-      `      duration: __ENV.DURATION || '30s',`,
-      `      preAllocatedVUs: Number(__ENV.PREALLOCATED_VUS) || 20,`,
-      `      maxVUs: Number(__ENV.MAX_VUS) || 100,`,
+      `      duration,`,
+      `      preAllocatedVUs,`,
+      `      maxVUs,`,
       `    },`,
-      `  },`,
-      `  thresholds: {`,
-      `    http_req_failed: ['rate<0.01'],`,
-      `    http_req_duration: ['p(95)<500'],`,
       `  },`,
       `};`,
       ``,
@@ -38,15 +43,19 @@ export class K6StressGenerator extends BaseCodeGenerator {
   public generateStep(action: ActionIR, _session: SessionIR, _options?: GeneratorOptions): string {
     if (action.action === 'httpRequest' && action.apiPayload) {
       const { method, url, headers, bodyContent } = action.apiPayload;
-      const headersStr = JSON.stringify(headers);
-      const bodyStr = bodyContent ? JSON.stringify(bodyContent) : 'null';
+      const headersStr = this.getJsRecord(headers);
+      const bodyStr = bodyContent === undefined ? 'null' : this.getJsValue(bodyContent);
+      const queryEntries = Object.entries(action.apiPayload.queryParams).map(
+        ([key, value]) => `    queryParams[${this.getJsValue(key)}] = ${this.getJsValue(value)};`,
+      );
 
       return [
         `  {`,
-        `    lastResponse = http.request(${JSON.stringify(method)}, ${JSON.stringify(url)}, ${bodyStr}, { headers: ${headersStr} });`,
-        `    check(lastResponse, {`,
-        `      'status is 2xx': (r) => r.status >= 200 && r.status < 300,`,
-        `    });`,
+        `    const queryParams = {};`,
+        ...queryEntries,
+        `    const queryString = Object.entries(queryParams).map(([key, value]) => \`\${encodeURIComponent(key)}=\${encodeURIComponent(String(value))}\`).join('&');`,
+        `    const requestUrl = queryString ? ${this.getJsValue(url)} + (${this.getJsValue(url)}.includes('?') ? '&' : '?') + queryString : ${this.getJsValue(url)};`,
+        `    lastResponse = http.request(${this.getJsValue(method)}, requestUrl, ${bodyStr}, { headers: ${headersStr} });`,
         `  }`,
       ].join('\n');
     }
