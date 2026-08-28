@@ -28,6 +28,9 @@ zip = { version = "=2.4.2", default-features = false, features = ["deflate"] }
 tauri = { version = "=2.11.5", features = [] }
 rfd = "=0.15.3"
 
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Storage_FileSystem"] }
+
 [features]
 default = ["custom-protocol"]
 custom-protocol = ["tauri/custom-protocol"]

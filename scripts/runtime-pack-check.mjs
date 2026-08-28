@@ -1,6 +1,6 @@
-import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, realpathSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { sha256FileSync } from './lib/hash-file.mjs';
 
 function inside(base, candidate) {
   const root = resolve(base);
@@ -10,7 +10,7 @@ function inside(base, candidate) {
 }
 
 function sha256(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
+  return sha256FileSync(path);
 }
 
 function packPath(root, value) {

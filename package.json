@@ -29,6 +29,7 @@
     "verify:sidecar": "npm run build:packages && npm run build:sidecar && node scripts/verify-sidecar.mjs",
     "verify:docs": "node scripts/verify-markdown.mjs",
     "verify:authenticity": "node scripts/verify-authenticity.mjs",
+    "verify:memory-bounds": "node scripts/verify-memory-bounds.mjs",
     "build": "npm run build:packages && npm run build:sidecar && npm run build:desktop",
     "test": "npm --prefix frontend run test",
     "typecheck": "npm --prefix frontend run typecheck",

@@ -4,10 +4,14 @@ use std::collections::HashMap;
 use std::io::{self, Read};
 use std::path::{Path, PathBuf};
 use std::process::{Command, ExitStatus, Stdio};
+use std::sync::mpsc::{self, Receiver};
 use std::thread;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MAX_ADB_STREAM_BYTES: usize = 512 * 1024;
+const ADB_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
+const ADB_READER_TIMEOUT: Duration = Duration::from_secs(2);
+const ADB_FORCE_KILL_TIMEOUT: Duration = Duration::from_secs(2);
 
 struct BoundedCommandOutput {
     status: ExitStatus,
@@ -310,17 +314,24 @@ fn run_bounded_command(path: &Path, args: &[String]) -> Result<BoundedCommandOut
         .stderr
         .take()
         .ok_or_else(|| "ADB stderr pipe was not created.".to_owned())?;
-    let stdout_reader = thread::spawn(|| read_bounded_stream(stdout));
-    let stderr_reader = thread::spawn(|| read_bounded_stream(stderr));
-    let status = child.wait().map_err(|error| error.to_string())?;
-    let (stdout, stdout_truncated) = stdout_reader
-        .join()
-        .map_err(|_| "ADB stdout reader panicked.".to_owned())?
-        .map_err(|error| error.to_string())?;
-    let (stderr, stderr_truncated) = stderr_reader
-        .join()
-        .map_err(|_| "ADB stderr reader panicked.".to_owned())?
-        .map_err(|error| error.to_string())?;
+    let stdout_reader = spawn_bounded_reader(stdout);
+    let stderr_reader = spawn_bounded_reader(stderr);
+    let deadline = Instant::now() + ADB_COMMAND_TIMEOUT;
+    let status = loop {
+        match child.try_wait().map_err(|error| error.to_string())? {
+            Some(status) => break status,
+            None if Instant::now() < deadline => thread::sleep(Duration::from_millis(25)),
+            None => {
+                terminate_bounded(&mut child);
+                return Err(format!(
+                    "ADB command exceeded the {} second timeout.",
+                    ADB_COMMAND_TIMEOUT.as_secs()
+                ));
+            }
+        }
+    };
+    let (stdout, stdout_truncated) = receive_bounded_reader(stdout_reader, "stdout")?;
+    let (stderr, stderr_truncated) = receive_bounded_reader(stderr_reader, "stderr")?;
 
     Ok(BoundedCommandOutput {
         status,
@@ -328,6 +339,37 @@ fn run_bounded_command(path: &Path, args: &[String]) -> Result<BoundedCommandOut
         stderr,
         truncated: stdout_truncated || stderr_truncated,
     })
+}
+
+fn spawn_bounded_reader(
+    stream: impl Read + Send + 'static,
+) -> Receiver<io::Result<(Vec<u8>, bool)>> {
+    let (sender, receiver) = mpsc::sync_channel(1);
+    thread::spawn(move || {
+        let _ = sender.send(read_bounded_stream(stream));
+    });
+    receiver
+}
+
+fn receive_bounded_reader(
+    receiver: Receiver<io::Result<(Vec<u8>, bool)>>,
+    stream_name: &str,
+) -> Result<(Vec<u8>, bool), String> {
+    receiver
+        .recv_timeout(ADB_READER_TIMEOUT)
+        .map_err(|_| format!("ADB {stream_name} reader did not close within the safety timeout."))?
+        .map_err(|error| error.to_string())
+}
+
+fn terminate_bounded(child: &mut std::process::Child) {
+    let _ = child.kill();
+    let deadline = Instant::now() + ADB_FORCE_KILL_TIMEOUT;
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(Some(_)) | Err(_) => return,
+            Ok(None) => thread::sleep(Duration::from_millis(25)),
+        }
+    }
 }
 
 fn read_bounded_stream(mut stream: impl Read) -> io::Result<(Vec<u8>, bool)> {

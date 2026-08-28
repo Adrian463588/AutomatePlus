@@ -162,6 +162,7 @@ Use passed, failed, blocked, cancelled, and completion complete/partial. Passed 
 | NFR-09 | UI works at 390, 600, 768, 840, 1024, 1280, and 1440 px | viewport/accessibility audit |
 | NFR-10 | Farm evidence is isolated and hashed | artifact tests |
 | NFR-11 | Device lease and port allocation are serial-safe and bounded | concurrency tests |
+| NFR-12 | Runtime-pack hashing, IPC frames, SessionIR, follower observations, process/job concurrency, archive extraction, Appium errors, and k6 summaries remain explicitly memory-bounded | `verify:memory-bounds`, payload/backpressure/timeout tests, Rust tests |
 
 ## 7. Native lifecycle
 

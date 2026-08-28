@@ -96,6 +96,7 @@
 .workspace-layout > * { min-height: 0; max-height: 100%; min-width: 0; }
 .workspace-layout > .sidebar-panel { height: 100%; overflow: hidden; }
 .workspace-layout > :not(.sidebar-panel) { height: 100%; overflow: hidden; }
+.workspace-loading { display: grid; min-height: 8rem; place-items: center; padding: 1rem; color: var(--ap-text-muted); background: var(--ap-canvas); }
 .terminal-panel { height: clamp(5.5rem, 14dvh, 10rem); min-height: 5.5rem; flex: 0 0 clamp(5.5rem, 14dvh, 10rem); background: var(--ap-canvas) !important; border-color: var(--ap-border) !important; }
 .sidebar-panel { background: var(--ap-surface) !important; border-color: var(--ap-border) !important; }
 .sidebar-panel > .flex-1 { min-height: 0; overflow-x: hidden; overflow-y: auto; }

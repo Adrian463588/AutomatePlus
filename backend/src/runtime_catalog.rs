@@ -1,11 +1,13 @@
 use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::env;
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Component, Path, PathBuf};
 
 pub const CATALOG_SCHEMA_VERSION: u32 = 1;
 pub const TARGET_ARCHITECTURE: &str = "win-x64";
+pub const MAX_RUNTIME_METADATA_BYTES: u64 = 8 * 1024 * 1024;
 
 /// The catalog is deliberately data-only. It is never fetched from a remote
 /// endpoint; a release or an explicit local import must provide this file.
@@ -142,12 +144,7 @@ pub const EXPECTED_GENERATOR_IDS: &[&str] = &[
 
 impl RuntimeCatalog {
     pub fn load(path: &Path) -> Result<Self, String> {
-        let text = fs::read_to_string(path).map_err(|error| {
-            format!(
-                "Unable to read runtime catalog '{}': {error}",
-                path.display()
-            )
-        })?;
+        let text = read_bounded_metadata(path)?;
         let catalog = serde_json::from_str::<Self>(&text).map_err(|error| {
             format!(
                 "Runtime catalog '{}' is not valid JSON: {error}",
@@ -217,6 +214,32 @@ impl RuntimeCatalog {
             duplicate_ids,
         }
     }
+}
+
+pub(crate) fn read_bounded_metadata(path: &Path) -> Result<String, String> {
+    let file = File::open(path).map_err(|error| {
+        format!(
+            "Unable to read runtime metadata '{}': {error}",
+            path.display()
+        )
+    })?;
+    let mut text = String::new();
+    file.take(MAX_RUNTIME_METADATA_BYTES + 1)
+        .read_to_string(&mut text)
+        .map_err(|error| {
+            format!(
+                "Unable to read runtime metadata '{}': {error}",
+                path.display()
+            )
+        })?;
+    if text.len() as u64 > MAX_RUNTIME_METADATA_BYTES {
+        return Err(format!(
+            "Runtime metadata '{}' exceeds the {}-byte safety limit.",
+            path.display(),
+            MAX_RUNTIME_METADATA_BYTES
+        ));
+    }
+    Ok(text)
 }
 
 pub fn format_catalog_errors(validation: &CatalogValidation) -> String {

@@ -1,7 +1,7 @@
 # AutomatePlus (Sprint 2)
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-150%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-160%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
@@ -23,7 +23,9 @@ The previews are captured from the current renderer in a fresh local browser pro
 
 ## Evidence and acceptance boundaries
 
-The current component evidence includes 150 passing unit tests, the generator package tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. A fresh Playwright audit rendered Runtime Manager and the main workspace at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`, every visible interactive control was at least 48 px high, and the clean reload had no application console errors.
+The current component evidence includes 160 passing TypeScript tests and 21 passing Rust tests, the generator package tests, lint, format, typecheck, package/sidecar/React builds, documentation checks, the 27-combination generator matrix, sidecar capability smoke, a separately named loopback k6 fixture, and an authenticity scan. The target-named SauceDemo, DemoQA, ReqRes, Petstore, and NotiPlus suites in Vitest are fixture-bound component tests; they are not evidence that those external targets or physical devices were automated. A fresh Playwright audit rendered Runtime Manager and the main workspace at `390x844`, `600x900`, `768x1024`, `840x1024`, `1024x768`, `1280x800`, and `1440x900`; each rendered document reported `scrollWidth === innerWidth`, every visible interactive control was at least 48 px high, and the clean reload had no application console errors.
+
+The OOM/EOF hardening gate is `npm run verify:memory-bounds`. Runtime and release SHA-256 checks now stream fixed 64 KiB chunks in Node and Rust; the gate hashed a 128 MiB sparse pack in a child process restricted to 32 MiB old-space. IPC records and SessionIR have explicit 8 MiB/1,000-step limits, runtime metadata and artifact queries are bounded, sidecar stdout handles backpressure/close/timeouts, follower observations and native runtime/farm/process jobs are bounded, ZIP extraction has expanded-size limits, and k6 caps local load settings, requires real metrics, performs bounded file reads, and waits for process-tree cleanup instead of exposing raw `Unexpected end of JSON input`.
 
 The Web generator gate is explicit: `npm run verify:web-generators` materializes all 13 Web framework/language combinations against real SauceDemo and DemoQA URLs, checks JavaScript syntax, TypeScript transpilation, Python compilation, runtime metadata, every action declared by each Web capability manifest, and assertion metadata fallback. The latest local report is `.automateplus/evidence/web-generators-1787593852298.json` (ignored local evidence). Its 26 target projects and 13 action/assertion contracts are `GeneratedAndParsed`; runner execution remains `Blocked`/`NeedsReview` until the verified local framework packages, browsers/drivers, Python wheels, Maven cache, and Robot executable are installed through Runtime Manager. This distinction is intentional: a generated source check is not a real-browser pass.
 
@@ -40,7 +42,7 @@ When the live hierarchy contains a real semantic input selector and that explici
 
 The API Builder was exercised manually against the real Petstore `GET /v2/store/inventory` endpoint using an explicit user click; it returned measured HTTP 200, persisted status/header assertions into `SessionIR`, and the generated preview contained exactly one request after a repeated send. ReqRes is currently `Blocked` because the service requires `AUTOMATEPLUS_REQRES_API_KEY`; no credential is fabricated. A real Petstore 404 was rendered as an HTTP error and returned the action to the ready state. This is explicit target-online browser evidence, not native offline acceptance.
 
-Native Tauri/Rust acceptance remains explicitly `Blocked` because this checkout has no verified runtime packs. The backend `Cargo.lock`, offline Cargo cache, Rust toolchain, `cargo-tauri`, and WebView2 detection are now healthy; `native:preflight` reports those facts separately from the missing runtime packs. The latest target preflight found one authorized device (`RRCN3008VYE`) with the installed NotiPlus package/activity and a semantic selector observed from its live hierarchy; the second expected device was disconnected during the audit, so two-device farm acceptance is blocked. An explicit Appium 2.10.3/UiAutomator2 3.5.5 single-device probe reached the local server but was blocked by Android `SecurityException` for inaccessible secondary user `150`; no policy bypass was attempted. This is physical-device setup evidence, not a farm pass. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
+Native Tauri/Rust acceptance remains explicitly `Blocked` because this checkout has no verified runtime packs. The backend `Cargo.lock`, offline Cargo cache, Rust toolchain, `cargo-tauri`, and installed WebView2 detection are healthy; `native:preflight` reports those facts separately from the missing runtime packs. The current `adb devices -l` snapshot contains no connected device, so NotiPlus and multi-device acceptance cannot be rerun. An earlier single-device Appium 2.10.3/UiAutomator2 3.5.5 probe reached the local server but was blocked by Android `SecurityException` for inaccessible secondary user `150`; no policy bypass was attempted. This is physical-device setup evidence, not a farm pass. The React/Vite application is a browser-safe migration shell; it does not fabricate native runtime or device evidence.
 
 ### Sprint 2 Android device farm
 
@@ -191,7 +193,7 @@ npm run dev:desktop
 ```
 Open your browser at `http://127.0.0.1:5173` to interact with the GUI.
 
-For the official one-click offline desktop path, double-click `Run-AutomatePlus.bat` in the repository root. The default path is native-only and fails closed with a diagnostic when the published `AutomatePlus.exe`, bootstrap, verified packs, or Tauri toolchain are unavailable. The launcher never downloads or installs a dependency. Pass `--browser` explicitly to start the migration shell; browser mode is not native acceptance. Pass `--doctor` for JSON preflight diagnostics. `--build-dev` performs an offline native build only after preflight passes.
+For the official one-click offline desktop path, double-click `Run-AutomatePlus.bat` in the repository root. The default path is native-only and starts the published or locally built `AutomatePlus.exe`; it fails closed only when neither the native executable nor bootstrap is available. Missing automation packs remain visible as capability blockers inside the running app and in `--doctor`, but do not prevent the desktop host from opening. The launcher never downloads or installs a dependency. Pass `--browser` explicitly to start the migration shell; browser mode is not native acceptance. Pass `--doctor` for JSON preflight diagnostics. `--build-dev` performs an offline native build after the host toolchain preflight passes.
 
 ```powershell
 .\Run-AutomatePlus.bat
@@ -203,10 +205,10 @@ For the official one-click offline desktop path, double-click `Run-AutomatePlus.
 
 The launcher returns `0` on normal completion, `1` on a runtime/build failure, and `2` when a prerequisite or argument is blocked. It never falls back to browser mode automatically. When a locally built `backend/target/release/AutomatePlus.exe` is present, the same BAT launches it for local verification; a release package should copy the verified executable to `release/AutomatePlus.exe`.
 
-Cargo is offline during `native:preflight`, `native:check`, and `native:build` by design: those gates prove that a release can be rebuilt without the network. It is not a permanent Cargo restriction. To provision a missing lock/cache or install the pinned Tauri CLI, use the explicit online command once:
+Cargo is offline during `native:preflight`, `native:check`, and `native:build` by design: those gates prove that a release can be rebuilt without the network. It is not a permanent Cargo restriction. Host readiness is evaluated separately from automation-pack readiness, so native check/build can succeed while unavailable browser or Android packs remain blocked. To provision a missing lock/cache or install the pinned Tauri CLI, use the explicit developer command once:
 
 ```powershell
-.\Run-AutomatePlus.bat --provision-native --install-tauri-cli
+npm run native:provision -- --online --install-tauri-cli
 ```
 
 That command is never called by the normal launcher and does not download runtime packs. After provisioning, the native build produces the executable with `--no-bundle` so Tauri cannot fetch WiX silently; an installer requires a separately staged, locally verified WiX pack.

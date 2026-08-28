@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ActionIRSchema, PlatformTypeSchema, SecretRefSchema, SecretValueSchema } from './actions.js';
 import { CURRENT_IR_SCHEMA_VERSION, IrSchemaVersionSchema } from './version.js';
+import { MAX_SESSION_STEPS } from './limits.js';
 
 const EnvironmentVariableNameSchema = z.string().trim().regex(/^[A-Za-z_][A-Za-z0-9_.-]{0,127}$/u);
 
@@ -30,7 +31,7 @@ export const SessionIRSchema = z
     platform: PlatformTypeSchema,
     targetConfig: TargetConfigSchema.default({}),
     environmentVariables: z.record(z.union([z.string().max(100_000), SecretRefSchema])).default({}),
-    steps: z.array(ActionIRSchema).max(10_000).default([]),
+    steps: z.array(ActionIRSchema).max(MAX_SESSION_STEPS).default([]),
     createdAt: z.number().int().nonnegative().finite().default(() => Date.now()),
     updatedAt: z.number().int().nonnegative().finite().default(() => Date.now()),
   })

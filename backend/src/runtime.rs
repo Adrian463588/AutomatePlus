@@ -1,7 +1,7 @@
 use crate::runtime_catalog::{
     discover_known_roots, is_safe_relative_path, is_sha256, parse_https_source,
-    RuntimeArchiveFormat, RuntimeCatalog, RuntimeCatalogEntry, RuntimeRootCandidate,
-    TARGET_ARCHITECTURE,
+    read_bounded_metadata, RuntimeArchiveFormat, RuntimeCatalog, RuntimeCatalogEntry,
+    RuntimeRootCandidate, TARGET_ARCHITECTURE,
 };
 use reqwest::blocking::Client;
 use reqwest::redirect::Policy;
@@ -22,6 +22,11 @@ use zip::ZipArchive;
 const PROTOCOL_VERSION: &str = "1.0";
 const MAX_DOWNLOAD_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 const HEALTH_COMMAND_TIMEOUT_SECONDS: u64 = 10;
+const MAX_ACTIVE_RUNTIME_JOBS: usize = 1;
+const MAX_RETAINED_RUNTIME_JOBS: usize = 32;
+const MAX_ARCHIVE_ENTRIES: usize = 100_000;
+const MAX_ARCHIVE_ENTRY_BYTES: u64 = 20 * 1024 * 1024 * 1024;
+const MAX_ARCHIVE_EXPANDED_BYTES: u64 = 40 * 1024 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -92,6 +97,7 @@ struct RuntimeState {
     selected_root: Mutex<Option<PathBuf>>,
     jobs: Mutex<HashMap<String, RuntimeJob>>,
     cancelled_jobs: Mutex<HashSet<String>>,
+    manifest_write: Mutex<()>,
 }
 
 #[derive(Clone, Debug)]
@@ -108,6 +114,7 @@ impl RuntimeManager {
                 selected_root: Mutex::new(selected_root),
                 jobs: Mutex::new(HashMap::new()),
                 cancelled_jobs: Mutex::new(HashSet::new()),
+                manifest_write: Mutex::new(()),
             }),
         }
     }
@@ -599,6 +606,11 @@ impl RuntimeManager {
                     .unwrap_or_else(|| "the process did not report success.".to_owned())
             ));
         }
+        let _manifest_guard = self
+            .state
+            .manifest_write
+            .lock()
+            .map_err(|_| "Runtime manifest writer is unavailable.".to_owned())?;
         append_manifest_pack(
             root,
             entry,
@@ -725,8 +737,20 @@ impl RuntimeManager {
     }
 
     fn install_cancel(&self, job_id: &str) -> Result<Value, String> {
-        if let Ok(mut cancelled) = self.state.cancelled_jobs.lock() {
-            cancelled.insert(job_id.to_owned());
+        let cancellable = self
+            .state
+            .jobs
+            .lock()
+            .map_err(|_| "Runtime job state is unavailable.".to_owned())?
+            .get(job_id)
+            .map(|job| !runtime_job_is_terminal(job));
+        let Some(cancellable) = cancellable else {
+            return Err(format!("Runtime job '{job_id}' was not found."));
+        };
+        if cancellable {
+            if let Ok(mut cancelled) = self.state.cancelled_jobs.lock() {
+                cancelled.insert(job_id.to_owned());
+            }
         }
         self.update_job(job_id, |job| {
             if !matches!(
@@ -758,78 +782,85 @@ impl RuntimeManager {
             .join(".staging")
             .join(format!("import-{}", now_nanos()));
         fs::create_dir_all(&staging).map_err(|error| error.to_string())?;
-        if source.is_dir() {
-            copy_tree(&source, &staging)?;
-        } else {
-            let extension = source
-                .extension()
-                .and_then(|value| value.to_str())
+        let import_result = (|| -> Result<Value, String> {
+            if source.is_dir() {
+                copy_tree(&source, &staging)?;
+            } else {
+                let extension = source
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .unwrap_or_default();
+                if !extension.eq_ignore_ascii_case("zip") {
+                    let _ = fs::remove_dir_all(&staging);
+                    return Err("Only local ZIP imports are enabled; MSI/install scripts are never executed implicitly.".to_owned());
+                }
+                extract_zip(&source, &staging)?;
+            }
+            let imported_manifest = read_manifest(&staging).ok_or_else(|| {
+                "Imported archive must contain a manifest.json at its root.".to_owned()
+            })?;
+            let packs = imported_manifest
+                .get("packs")
+                .and_then(Value::as_array)
+                .cloned()
                 .unwrap_or_default();
-            if !extension.eq_ignore_ascii_case("zip") {
+            if packs.is_empty() {
                 let _ = fs::remove_dir_all(&staging);
-                return Err("Only local ZIP imports are enabled; MSI/install scripts are never executed implicitly.".to_owned());
+                return Err("Imported manifest contains no runtime packs.".to_owned());
             }
-            extract_zip(&source, &staging)?;
-        }
-        let imported_manifest = read_manifest(&staging).ok_or_else(|| {
-            "Imported archive must contain a manifest.json at its root.".to_owned()
-        })?;
-        let packs = imported_manifest
-            .get("packs")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
-        if packs.is_empty() {
-            let _ = fs::remove_dir_all(&staging);
-            return Err("Imported manifest contains no runtime packs.".to_owned());
-        }
-        let catalog = self.catalog()?;
-        let mut imported = Vec::new();
-        let mut needs_review = Vec::new();
-        for pack in packs {
-            let Some(id) = pack_id(&pack) else {
-                continue;
-            };
-            let Some(_entry) = catalog.entries.iter().find(|entry| entry.id == id) else {
-                continue;
-            };
-            let Some(path_text) = pack.get("path").and_then(Value::as_str) else {
-                continue;
-            };
-            if !is_safe_relative_path(path_text) {
-                needs_review.push(json!({"id": id, "reason": "unsafe imported pack path"}));
-                continue;
-            }
-            let source_file = staging.join(path_text);
-            if !is_inside(&staging, &source_file) || !source_file.is_file() {
-                needs_review.push(json!({"id": id, "reason": "imported executable is missing or outside archive"}));
-                continue;
-            }
-            let target_file = root.join(path_text);
-            if target_file.exists() {
-                needs_review.push(
-                    json!({"id": id, "reason": "target exists; import will not overwrite it"}),
-                );
-                continue;
-            }
-            if let Some(parent) = target_file.parent() {
-                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-            }
-            fs::copy(&source_file, &target_file).map_err(|error| error.to_string())?;
-            if let Some(record) = inspect_manifest_pack(&root, &pack, &catalog) {
-                append_imported_manifest_pack(&root, &pack)?;
-                if record.verified {
-                    imported.push(record);
-                } else {
+            let catalog = self.catalog()?;
+            let imported: Vec<RuntimeInstalledPack> = Vec::new();
+            let mut needs_review = Vec::new();
+            for pack in packs {
+                let Some(id) = pack_id(&pack) else {
+                    continue;
+                };
+                let Some(_entry) = catalog.entries.iter().find(|entry| entry.id == id) else {
+                    continue;
+                };
+                let Some(path_text) = pack.get("path").and_then(Value::as_str) else {
+                    continue;
+                };
+                if !is_safe_relative_path(path_text) {
+                    needs_review.push(json!({"id": id, "reason": "unsafe imported pack path"}));
+                    continue;
+                }
+                let source_file = staging.join(path_text);
+                if !is_inside(&staging, &source_file) || !source_file.is_file() {
+                    needs_review.push(json!({"id": id, "reason": "imported executable is missing or outside archive"}));
+                    continue;
+                }
+                let target_file = root.join(path_text);
+                if target_file.exists() {
+                    needs_review.push(
+                        json!({"id": id, "reason": "target exists; import will not overwrite it"}),
+                    );
+                    continue;
+                }
+                if let Some(parent) = target_file.parent() {
+                    fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                }
+                fs::copy(&source_file, &target_file).map_err(|error| error.to_string())?;
+                let mut imported_pack = pack;
+                imported_pack["verified"] = Value::Bool(false);
+                imported_pack["healthStatus"] = Value::String("NeedsReview".to_owned());
+                if let Some(record) = inspect_manifest_pack(&root, &imported_pack, &catalog) {
+                    let _manifest_guard = self
+                        .state
+                        .manifest_write
+                        .lock()
+                        .map_err(|_| "Runtime manifest writer is unavailable.".to_owned())?;
+                    append_imported_manifest_pack(&root, &imported_pack)?;
                     needs_review
                         .push(serde_json::to_value(record).unwrap_or_else(|_| json!({"id": id})));
                 }
             }
-        }
+            Ok(
+                json!({"protocolVersion": PROTOCOL_VERSION, "imported": imported, "needsReview": needs_review}),
+            )
+        })();
         let _ = fs::remove_dir_all(&staging);
-        Ok(
-            json!({"protocolVersion": PROTOCOL_VERSION, "imported": imported, "needsReview": needs_review}),
-        )
+        import_result
     }
 
     fn verify_all(&self) -> Result<Value, String> {
@@ -1022,11 +1053,30 @@ impl RuntimeManager {
 
     fn save_job(&self, job: RuntimeJob) -> Result<(), String> {
         let persisted = job.clone();
-        self.state
+        let mut jobs = self
+            .state
             .jobs
             .lock()
-            .map_err(|_| "Runtime job state is unavailable.".to_owned())?
-            .insert(job.job_id.clone(), job);
+            .map_err(|_| "Runtime job state is unavailable.".to_owned())?;
+        trim_runtime_jobs(&mut jobs);
+        if !runtime_job_is_terminal(&job)
+            && jobs
+                .values()
+                .filter(|candidate| !runtime_job_is_terminal(candidate))
+                .count()
+                >= MAX_ACTIVE_RUNTIME_JOBS
+        {
+            return Err(format!(
+                "Runtime installation is busy; at most {MAX_ACTIVE_RUNTIME_JOBS} install job may run at once."
+            ));
+        }
+        if jobs.len() >= MAX_RETAINED_RUNTIME_JOBS {
+            return Err(format!(
+                "Runtime job history reached its {MAX_RETAINED_RUNTIME_JOBS}-job safety limit."
+            ));
+        }
+        jobs.insert(job.job_id.clone(), job);
+        drop(jobs);
         self.persist_job(&persisted)
     }
 
@@ -1165,6 +1215,32 @@ impl RuntimeManager {
     }
 }
 
+fn runtime_job_is_terminal(job: &RuntimeJob) -> bool {
+    matches!(
+        job.status.as_str(),
+        "Installed" | "Failed" | "Blocked" | "NeedsReview" | "Cancelled"
+    )
+}
+
+fn trim_runtime_jobs(jobs: &mut HashMap<String, RuntimeJob>) {
+    if jobs.len() < MAX_RETAINED_RUNTIME_JOBS {
+        return;
+    }
+    let mut terminal = jobs
+        .iter()
+        .filter(|(_, job)| runtime_job_is_terminal(job))
+        .map(|(id, job)| (id.clone(), job.updated_at))
+        .collect::<Vec<_>>();
+    terminal.sort_by_key(|(_, updated_at)| *updated_at);
+    while jobs.len() >= MAX_RETAINED_RUNTIME_JOBS {
+        let Some((id, _)) = terminal.first().cloned() else {
+            break;
+        };
+        terminal.remove(0);
+        jobs.remove(&id);
+    }
+}
+
 fn required_string(payload: &Value, names: &[&str]) -> Result<String, String> {
     names
         .iter()
@@ -1180,7 +1256,7 @@ fn required_string(payload: &Value, names: &[&str]) -> Result<String, String> {
 }
 
 fn read_manifest(root: &Path) -> Option<Value> {
-    serde_json::from_str(&fs::read_to_string(root.join("manifest.json")).ok()?).ok()
+    serde_json::from_str(&read_bounded_metadata(&root.join("manifest.json")).ok()?).ok()
 }
 
 fn load_selected_root(workspace: &Path) -> Option<PathBuf> {
@@ -1249,8 +1325,7 @@ fn inspect_manifest_pack(
     let source_sha256 = pack
         .get("sourceSha256")
         .and_then(Value::as_str)
-        .map(str::to_owned)
-        .or_else(|| entry.and_then(|entry| entry.source.sha256.clone()));
+        .map(str::to_owned);
     let verified = pack.get("verified").and_then(Value::as_bool) == Some(true)
         && architecture == TARGET_ARCHITECTURE
         && pack
@@ -1334,22 +1409,80 @@ fn append_imported_manifest_pack(root: &Path, pack: &Value) -> Result<(), String
 }
 
 fn write_manifest_atomic(root: &Path, manifest: &Value) -> Result<(), String> {
-    let temporary = root.join("manifest.json.tmp");
+    let temporary = root.join(format!("manifest.json.{}.tmp", now_nanos()));
+    let destination = root.join("manifest.json");
     let content = serde_json::to_vec_pretty(&manifest).map_err(|error| error.to_string())?;
     let mut file = File::create(&temporary).map_err(|error| error.to_string())?;
     file.write_all(&content)
         .map_err(|error| error.to_string())?;
     file.sync_all().map_err(|error| error.to_string())?;
-    fs::rename(temporary, root.join("manifest.json"))
-        .map_err(|error| format!("Unable to atomically publish runtime manifest: {error}"))
+    replace_file_atomic(&temporary, &destination).map_err(|error| {
+        let _ = fs::remove_file(&temporary);
+        format!("Unable to atomically publish runtime manifest: {error}")
+    })
+}
+
+#[cfg(windows)]
+fn replace_file_atomic(source: &Path, destination: &Path) -> io::Result<()> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows_sys::Win32::Storage::FileSystem::{
+        MoveFileExW, MOVEFILE_REPLACE_EXISTING, MOVEFILE_WRITE_THROUGH,
+    };
+
+    let source = source
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let destination = destination
+        .as_os_str()
+        .encode_wide()
+        .chain(Some(0))
+        .collect::<Vec<_>>();
+    let result = unsafe {
+        MoveFileExW(
+            source.as_ptr(),
+            destination.as_ptr(),
+            MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH,
+        )
+    };
+    if result == 0 {
+        return Err(io::Error::last_os_error());
+    }
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn replace_file_atomic(source: &Path, destination: &Path) -> io::Result<()> {
+    fs::rename(source, destination)
 }
 
 fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), String> {
     let file = File::open(archive_path).map_err(|error| error.to_string())?;
     let mut archive =
         ZipArchive::new(file).map_err(|error| format!("ZIP archive is invalid: {error}"))?;
+    if archive.len() > MAX_ARCHIVE_ENTRIES {
+        return Err(format!(
+            "ZIP archive exceeds the {MAX_ARCHIVE_ENTRIES}-entry safety limit."
+        ));
+    }
+    let mut expanded_bytes = 0_u64;
     for index in 0..archive.len() {
         let mut entry = archive.by_index(index).map_err(|error| error.to_string())?;
+        if entry.size() > MAX_ARCHIVE_ENTRY_BYTES {
+            return Err(format!(
+                "ZIP entry '{}' exceeds the {MAX_ARCHIVE_ENTRY_BYTES}-byte safety limit.",
+                entry.name()
+            ));
+        }
+        expanded_bytes = expanded_bytes
+            .checked_add(entry.size())
+            .filter(|bytes| *bytes <= MAX_ARCHIVE_EXPANDED_BYTES)
+            .ok_or_else(|| {
+                format!(
+                    "ZIP archive exceeds the {MAX_ARCHIVE_EXPANDED_BYTES}-byte expanded safety limit."
+                )
+            })?;
         let raw_name = entry.name().replace('\\', "/");
         if raw_name.is_empty() {
             continue;
@@ -1381,7 +1514,12 @@ fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), String> {
             .create_new(true)
             .open(&output)
             .map_err(|error| error.to_string())?;
-        io::copy(&mut entry, &mut target).map_err(|error| error.to_string())?;
+        let copied = io::copy(&mut entry, &mut target).map_err(|error| error.to_string())?;
+        if copied != entry.size() {
+            return Err(format!(
+                "ZIP entry '{raw_name}' ended before its declared size."
+            ));
+        }
     }
     Ok(())
 }
@@ -1467,7 +1605,13 @@ fn run_health_command(
         }
         if started.elapsed() >= Duration::from_secs(HEALTH_COMMAND_TIMEOUT_SECONDS) {
             let _ = child.kill();
-            let _ = child.wait();
+            let force_deadline = Instant::now() + Duration::from_secs(2);
+            while Instant::now() < force_deadline {
+                match child.try_wait() {
+                    Ok(Some(_)) | Err(_) => break,
+                    Ok(None) => thread::sleep(Duration::from_millis(25)),
+                }
+            }
             return Ok(HealthCommandResult {
                 passed: false,
                 reason: Some(format!(
@@ -1624,5 +1768,37 @@ mod tests {
     fn progress_limit_is_positive_and_hashes_are_strict() {
         assert!(MAX_DOWNLOAD_BYTES > 0);
         assert!(is_sha256(&"a".repeat(64)));
+    }
+
+    fn runtime_job(id: usize, status: &str) -> RuntimeJob {
+        RuntimeJob {
+            job_id: format!("job-{id}"),
+            operation: "install".to_owned(),
+            pack_ids: vec!["nodejs".to_owned()],
+            status: status.to_owned(),
+            progress: None,
+            reason: None,
+            started_at: id as u64,
+            updated_at: id as u64,
+        }
+    }
+
+    #[test]
+    fn runtime_jobs_are_single_active_and_history_bounded() {
+        let root = std::env::temp_dir().join(format!("automateplus-jobs-{}", now_nanos()));
+        let manager = RuntimeManager::new(root);
+        manager
+            .save_job(runtime_job(0, "Downloading"))
+            .expect("first active job");
+        assert!(manager
+            .save_job(runtime_job(1, "Downloading"))
+            .is_err_and(|message| message.contains("at most 1")));
+        manager.finish_job("job-0", "Installed", None);
+        for id in 1..=MAX_RETAINED_RUNTIME_JOBS + 5 {
+            manager
+                .save_job(runtime_job(id, "Installed"))
+                .expect("terminal history entry");
+        }
+        assert!(manager.state.jobs.lock().expect("jobs").len() <= MAX_RETAINED_RUNTIME_JOBS);
     }
 }

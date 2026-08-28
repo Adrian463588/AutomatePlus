@@ -7,6 +7,7 @@ import {
 } from './errors.js';
 import { createRuntimeId } from './runtime-id.js';
 import type { NativeProtocolMethodMap } from './native.interface.js';
+import { MAX_IPC_LINE_CHARS } from './limits.js';
 
 export const IPC_PROTOCOL_VERSION = '1.0' as const;
 export type IpcProtocolVersion = typeof IPC_PROTOCOL_VERSION;
@@ -215,15 +216,30 @@ export function createCancel(
 
 export function serializeIpcMessage(message: IpcMessage): string {
   assertIpcMessage(message);
+  let serialized: string;
   try {
-    return `${stableStringify(message)}\n`;
+    serialized = stableStringify(message);
   } catch (error) {
     protocolFailure('IPC message is not JSON serializable', { cause: serializeAutomationError(error) });
   }
+  if (serialized.length > MAX_IPC_LINE_CHARS) {
+    protocolFailure('IPC message exceeds the configured size limit', {
+      maxChars: MAX_IPC_LINE_CHARS,
+      actualChars: serialized.length,
+    });
+  }
+  return `${serialized}\n`;
 }
 
 export function parseIpcLine(line: string): IpcMessage {
   if (typeof line !== 'string' || line.trim().length === 0) protocolFailure('IPC line must be a non-empty string');
+  const terminatorChars = line.endsWith('\r\n') ? 2 : line.endsWith('\n') ? 1 : 0;
+  if (line.length - terminatorChars > MAX_IPC_LINE_CHARS) {
+    protocolFailure('IPC line exceeds the configured size limit', {
+      maxChars: MAX_IPC_LINE_CHARS,
+      actualChars: line.length,
+    });
+  }
   const withoutTerminator = line.endsWith('\n') ? line.slice(0, -1).replace(/\r$/u, '') : line;
   if (withoutTerminator.includes('\n') || withoutTerminator.includes('\r')) protocolFailure('IPC input must contain exactly one NDJSON record');
 

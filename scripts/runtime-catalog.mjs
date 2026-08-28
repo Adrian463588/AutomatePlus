@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   existsSync,
   lstatSync,
@@ -8,6 +7,7 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sha256FileSync } from './lib/hash-file.mjs';
 
 export const REPOSITORY_ROOT = resolve(fileURLToPath(new URL('..', import.meta.url)));
 export const DEFAULT_CATALOG_PATH = join(REPOSITORY_ROOT, 'runtime-packs', 'catalog.json');
@@ -379,7 +379,7 @@ function safeExistingPackPath(root, value) {
 }
 
 export function sha256File(filePath) {
-  return createHash('sha256').update(readFileSync(filePath)).digest('hex');
+  return sha256FileSync(filePath);
 }
 
 function licenseMetadataPresent(pack) {

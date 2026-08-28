@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import {
   AutomationError,
+  BoundedNdjsonFramer,
+  MAX_IPC_LINE_CHARS,
   createCancel,
   createErrorResponse,
   createEvent,
@@ -72,6 +74,13 @@ describe('typed NDJSON IPC contracts', () => {
 
     expect(caught).toBeInstanceOf(AutomationError);
     expect((caught as AutomationError).code).toBe('PROTOCOL_ERROR');
+  });
+
+  it('bounds incomplete and oversized NDJSON records before parsing', () => {
+    const framer = new BoundedNdjsonFramer();
+    expect(framer.push('{"small":true}\n{"next":')).toEqual(['{"small":true}']);
+    expect(() => framer.finish()).toThrow(/incomplete NDJSON record/u);
+    expect(() => parseIpcLine('x'.repeat(MAX_IPC_LINE_CHARS + 3))).toThrow(/size limit/u);
   });
 
   it('emits deterministic error JSON and UUID correlation IDs', () => {

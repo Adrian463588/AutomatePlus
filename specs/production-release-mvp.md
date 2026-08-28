@@ -31,6 +31,7 @@ cloud control plane.
 | Native Windows folder and archive selection | `native.dialog.pick` IPC 1.0 | Async parent-aware Rust `rfd` dialog boundary, versioned desktop bridge, Create Project and Runtime Manager | Picker contract tests; native Windows folder/file selection evidence | Implemented in source; manual host evidence pending |
 | Real web/API target checks | FR-03/05/08/11 | Explicit online E2E harness | Playwright MCP completed real SauceDemo login and DemoQA text-box interactions; `verify:web-generators` and `verify:api-generators` materialize generated projects against the declared real targets; local framework/browser/API packs and ReqRes credential remain unavailable | NeedsReview/Blocked |
 | Responsive accessible UI | NFR-05/09 | React renderer | UI contract, lint/build, Playwright viewport and accessibility evidence | Implemented in shell; native retest pending |
+| Bounded OOM/EOF behavior | NFR-12, ADR-005 | Streaming pack verifiers; bounded metadata/artifact reads; Rust runtime/farm/process/ADB; TS IPC/IR/recorder/k6 | `verify:memory-bounds`; oversized IPC/session tests; bounded follower/k6/process tests; Rust test/clippy | Component Verified; large installed-pack soak pending |
 | Safe publication | Change discipline | Reviewed allowlist and Git checks | Local/remote SHA match | Verified |
 
 ## Required behavior
@@ -74,6 +75,7 @@ npm run verify:offline-install
 npm run verify:release-manifest
 npm run verify:docs
 npm run verify:authenticity
+npm run verify:memory-bounds
 cargo fmt --manifest-path backend/Cargo.toml -- --check
 cargo clippy --manifest-path backend/Cargo.toml --offline -- -D warnings
 cargo test --manifest-path backend/Cargo.toml --offline

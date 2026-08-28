@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -33,9 +33,15 @@ if (!online) {
   log(`BLOCKED: native manifest is missing: ${manifest}`);
   process.exitCode = 2;
 } else {
-  const generated = run('cargo', ['generate-lockfile', '--manifest-path', manifest]);
-  if (generated.error != null || generated.status !== 0) {
-    log('FAILED: Cargo could not resolve backend/Cargo.lock.');
+  let lockReady = existsSync(lockfile);
+  if (!lockReady) {
+    const generated = run('cargo', ['generate-lockfile', '--manifest-path', manifest]);
+    lockReady = generated.error == null && generated.status === 0 && existsSync(lockfile);
+  } else {
+    log('Using the existing tracked backend/Cargo.lock; dependency versions will not be re-resolved.');
+  }
+  if (!lockReady) {
+    log('FAILED: Cargo could not create the missing backend/Cargo.lock.');
     process.exitCode = 1;
   } else {
     const fetched = run('cargo', ['fetch', '--manifest-path', manifest, '--locked']);

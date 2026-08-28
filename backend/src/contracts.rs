@@ -1,8 +1,28 @@
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::Value;
+use std::io::{self, Write};
 
 pub const CONTRACT_VERSION: u32 = 1;
 pub const PROTOCOL_VERSION: &str = "1.0";
+const MAX_NATIVE_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+
+struct RequestSizeWriter {
+    bytes_written: usize,
+}
+
+impl Write for RequestSizeWriter {
+    fn write(&mut self, buffer: &[u8]) -> io::Result<usize> {
+        if self.bytes_written.saturating_add(buffer.len()) > MAX_NATIVE_REQUEST_BYTES {
+            return Err(io::Error::other("native request size limit exceeded"));
+        }
+        self.bytes_written += buffer.len();
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+    }
+}
 
 #[derive(Debug, Clone, Default, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -385,6 +405,10 @@ pub struct NativeResponse {
 
 impl NativeRequest {
     pub fn validate(&self) -> Result<(), String> {
+        let mut size_writer = RequestSizeWriter { bytes_written: 0 };
+        serde_json::to_writer(&mut size_writer, self).map_err(|_| {
+            format!("Native request exceeds the {MAX_NATIVE_REQUEST_BYTES}-byte payload limit.")
+        })?;
         if self.protocol_version != PROTOCOL_VERSION {
             return Err(format!(
                 "Unsupported native protocol version '{}'.",
@@ -431,7 +455,7 @@ impl NativeRequest {
         Ok(())
     }
     pub fn decode_payload<T: DeserializeOwned>(&self) -> Result<T, String> {
-        serde_json::from_value(self.payload.clone())
+        T::deserialize(&self.payload)
             .map_err(|error| format!("Invalid payload for '{}': {error}", self.method))
     }
 }
@@ -489,4 +513,24 @@ pub fn runtime_id(prefix: &str) -> String {
             .unwrap_or_default()
             .as_nanos()
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_request_rejects_oversized_payload_before_dispatch_clone() {
+        let request = NativeRequest {
+            protocol_version: PROTOCOL_VERSION.to_owned(),
+            kind: "request".to_owned(),
+            correlation_id: "a0eebc99-9c0b-4ef8-bb6d-6bb9bd380a11".to_owned(),
+            method: "native.health".to_owned(),
+            payload: Value::String("x".repeat(MAX_NATIVE_REQUEST_BYTES + 1)),
+        };
+
+        assert!(request
+            .validate()
+            .is_err_and(|message| message.contains("payload limit")));
+    }
 }

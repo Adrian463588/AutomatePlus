@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
   copyFileSync,
   cpSync,
@@ -13,6 +12,7 @@ import {
 import { basename, dirname, join, relative, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { sha256FileSync } from './lib/hash-file.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const native = join(root, 'backend');
@@ -56,7 +56,7 @@ function isVerifiedRuntimeFile(path) {
   }
 }
 function sha256(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
+  return sha256FileSync(path);
 }
 function commandExists(command, args = ['--version']) {
   const result = spawnSync(command, args, {
@@ -261,19 +261,21 @@ function preflight() {
       offlineCache: cargoOfflineCacheReady(),
     },
   };
-  const reasons = [];
-  if (!result.tools.cargo || !result.tools.rustc) reasons.push('Rust toolchain is unavailable');
-  if (!result.tools.node) reasons.push('Node.js is unavailable');
-  if (!result.cargo.lockfile) reasons.push('backend/Cargo.lock is missing; provision native dependencies explicitly');
-  else if (!result.cargo.offlineCache) reasons.push('Cargo.lock exists but the complete native dependency cache is unavailable offline');
-  if (!result.packs.verified.length) reasons.push(result.packs.issue ?? 'no verified offline packs are present');
-  if (catalog.error) reasons.push(catalog.error);
-  if (!existsSync(result.frontendDist)) reasons.push('frontend/dist is missing; build the real renderer first');
-  if (!result.tools.tauriCli) reasons.push('cargo-tauri is unavailable in the local toolchain');
-  if (!result.tools.webview2) reasons.push('fixed WebView2 runtime is not staged or installed');
+  const hostReasons = [];
+  if (!result.tools.cargo || !result.tools.rustc) hostReasons.push('Rust toolchain is unavailable');
+  if (!result.tools.node) hostReasons.push('Node.js is unavailable');
+  if (!result.cargo.lockfile) hostReasons.push('backend/Cargo.lock is missing; provision native dependencies explicitly');
+  else if (!result.cargo.offlineCache) hostReasons.push('Cargo.lock exists but the complete native dependency cache is unavailable offline');
+  if (!existsSync(result.frontendDist)) hostReasons.push('frontend/dist is missing; build the real renderer first');
+  if (!result.tools.tauriCli) hostReasons.push('cargo-tauri is unavailable in the local toolchain');
+  if (!result.tools.webview2) hostReasons.push('fixed WebView2 runtime is not staged or installed');
+  const runtimeReasons = [];
+  if (!result.packs.verified.length) runtimeReasons.push(result.packs.issue ?? 'no verified offline packs are present');
+  if (catalog.error) runtimeReasons.push(catalog.error);
+  const reasons = [...hostReasons, ...runtimeReasons];
   const capabilityPacks = result.packs.verified;
   result.capabilities = {
-    host: reasons.length === 0,
+    host: hostReasons.length === 0,
     runtimePacks: result.packs.verified.length > 0,
     deviceDiscovery: Boolean(runtimeTools.adb),
     androidRecording: Boolean(runtimeTools.adb && runtimeTools.scrcpy)
@@ -284,8 +286,8 @@ function preflight() {
       && capabilityPacks.some((pack) => packProvides(pack, 'native-execution')),
   };
   result.host = {
-    status: reasons.length === 0 ? 'ready' : 'blocked',
-    reasons,
+    status: hostReasons.length === 0 ? 'ready' : 'blocked',
+    reasons: hostReasons,
   };
   result.runtimePacks = {
     status: result.packs.verified.length > 0 ? 'ready' : 'blocked',
@@ -379,7 +381,7 @@ function main() {
   }
   const report = preflight();
   if (mode === '--preflight') return report.status === 'ready' ? 0 : blockedCode;
-  if (report.status !== 'ready') return fail(report.reasons.join('; '));
+  if (report.host.status !== 'ready') return fail(report.host.reasons.join('; '));
   if (run('cargo', ['fmt', '--manifest-path', cargoManifestPath, '--', '--check']).status !== 0) return 1;
   if (run('cargo', ['test', '--manifest-path', cargoManifestPath, '--offline', '--locked']).status !== 0) return 1;
   if (mode === '--check') {

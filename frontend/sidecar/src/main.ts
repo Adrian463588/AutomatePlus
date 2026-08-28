@@ -1,5 +1,6 @@
-import readline from 'node:readline';
+import { StringDecoder } from 'node:string_decoder';
 import {
+  BoundedNdjsonFramer,
   IpcMessage,
   IpcRequest,
   createErrorResponse,
@@ -12,12 +13,26 @@ import { GeneratorFactory } from '@automate-plus/generators';
 import { migrateSessionIR, validateSessionIR } from '@automate-plus/ir-schema';
 
 const controllers = new Map<string, AbortController>();
-const input = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
 const EXPECTED_GENERATOR_COUNT = 27;
+const STDOUT_DRAIN_TIMEOUT_MS = 10_000;
 
-for await (const line of input) {
-  if (!line.trim()) continue;
-  await handleLine(line);
+await readInput();
+
+async function readInput(): Promise<void> {
+  const decoder = new StringDecoder('utf8');
+  const framer = new BoundedNdjsonFramer();
+  try {
+    for await (const chunk of process.stdin) {
+      const text = decoder.write(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+      for (const line of framer.push(text)) await handleLine(line);
+    }
+    const trailingText = decoder.end();
+    for (const line of framer.push(trailingText)) await handleLine(line);
+    framer.finish();
+  } catch (error) {
+    process.stderr.write(`[protocol] ${error instanceof Error ? error.message : String(error)}\n`);
+    process.exitCode = 2;
+  }
 }
 
 async function handleLine(line: string): Promise<void> {
@@ -100,5 +115,40 @@ function stringValue(value: unknown, field: string): string {
 }
 
 async function writeMessage(message: IpcMessage): Promise<void> {
-  process.stdout.write(serializeIpcMessage(message));
+  if (!process.stdout.write(serializeIpcMessage(message))) {
+    await waitForStdoutDrain();
+  }
+}
+
+async function waitForStdoutDrain(): Promise<void> {
+  if (process.stdout.destroyed || process.stdout.writableEnded) {
+    throw new Error('Sidecar stdout closed before IPC backpressure drained.');
+  }
+  await new Promise<void>((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      process.stdout.off('drain', onDrain);
+      process.stdout.off('error', onError);
+      process.stdout.off('close', onClose);
+    };
+    const onDrain = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const onClose = () => {
+      cleanup();
+      reject(new Error('Sidecar stdout closed while waiting for IPC backpressure.'));
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      reject(new Error(`Sidecar stdout did not drain within ${STDOUT_DRAIN_TIMEOUT_MS}ms.`));
+    }, STDOUT_DRAIN_TIMEOUT_MS);
+    process.stdout.once('drain', onDrain);
+    process.stdout.once('error', onError);
+    process.stdout.once('close', onClose);
+  });
 }

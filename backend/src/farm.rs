@@ -22,6 +22,7 @@ const FARM_PORT_COUNT: usize = 4;
 const APPIUM_START_TIMEOUT: Duration = Duration::from_secs(30);
 const APPIUM_REQUEST_TIMEOUT: Duration = Duration::from_secs(20);
 const MAX_RETAINED_RUNS: usize = 32;
+const MAX_ACTIVE_FARM_RUNS: usize = 4;
 const MAX_FARM_DEVICE_TARGETS: usize = 64;
 const MAX_FARM_ITERATIONS_PER_DEVICE: u32 = 50;
 const MAX_FARM_TOTAL_ITERATIONS: u32 = 3_200;
@@ -29,6 +30,7 @@ const MAX_FARM_ACTIONS: usize = 1_000;
 const MAX_ITERATION_EVIDENCE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_APPIUM_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_SCREENSHOT_BYTES: usize = 8 * 1024 * 1024;
+const MAX_ERROR_SUMMARY_CHARS: usize = 8 * 1024;
 
 #[derive(Clone, Default)]
 pub(crate) struct FarmRunManager {
@@ -187,6 +189,16 @@ impl FarmRunManager {
                 .state
                 .lock()
                 .map_err(|_| "Farm state is unavailable.".to_owned())?;
+            let active_runs = state
+                .runs
+                .values()
+                .filter(|entry| !farm_run_is_terminal(&entry.summary))
+                .count();
+            if active_runs >= MAX_ACTIVE_FARM_RUNS {
+                return Err(format!(
+                    "Farm is busy; at most {MAX_ACTIVE_FARM_RUNS} runs may be active at once."
+                ));
+            }
             if targets
                 .iter()
                 .any(|(device, _)| state.active_devices.contains(&device.device_id))
@@ -339,6 +351,13 @@ fn trim_runs(state: &mut FarmState) {
         ids.remove(0);
         state.runs.remove(&id);
     }
+}
+
+fn farm_run_is_terminal(summary: &LegacyFarmSummary) -> bool {
+    matches!(
+        summary.status.as_str(),
+        "passed" | "failed" | "blocked" | "cancelled"
+    )
 }
 
 fn recalculate_summary(summary: &mut LegacyFarmSummary) {
@@ -1792,17 +1811,17 @@ fn scalar_value(value: &Value) -> Result<String, String> {
 }
 
 fn appium_error(value: &Value) -> String {
-    value
+    let message = value
         .get("value")
         .and_then(|item| item.get("message").or_else(|| item.get("error")))
         .and_then(Value::as_str)
         .or_else(|| value.get("message").and_then(Value::as_str))
-        .unwrap_or("unknown Appium error")
-        .to_owned()
+        .unwrap_or("unknown Appium error");
+    bounded_error_summary(message)
 }
 
 fn appium_error_status(error: &str) -> &'static str {
-    let normalized = error.to_ascii_lowercase();
+    let normalized = bounded_error_summary(error).to_ascii_lowercase();
     if [
         "securityexception",
         "install_failed_user_restricted",
@@ -1818,6 +1837,19 @@ fn appium_error_status(error: &str) -> &'static str {
         "BLOCKED"
     } else {
         "FAILED"
+    }
+}
+
+fn bounded_error_summary(value: &str) -> String {
+    let mut characters = value.chars();
+    let bounded = characters
+        .by_ref()
+        .take(MAX_ERROR_SUMMARY_CHARS)
+        .collect::<String>();
+    if characters.next().is_some() {
+        format!("{bounded}… [error truncated]")
+    } else {
+        bounded
     }
 }
 

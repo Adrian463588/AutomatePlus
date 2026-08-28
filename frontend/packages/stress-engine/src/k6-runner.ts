@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises';
+import type { FileHandle } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, dirname, join } from 'node:path';
 import crypto from 'node:crypto';
@@ -43,7 +44,7 @@ export interface K6ProcessRequest {
 
 export interface K6ProcessHandle {
   completion: Promise<{ exitCode: number; signal?: NodeJS.Signals | null }>;
-  terminate: () => void;
+  terminate: () => Promise<void>;
 }
 
 export type K6ProcessFactory = (request: K6ProcessRequest) => K6ProcessHandle;
@@ -68,8 +69,29 @@ function createChildProcess(request: K6ProcessRequest): K6ProcessHandle {
 
   return {
     completion,
-    terminate: () => {
-      if (!child.killed) child.kill('SIGTERM');
+    terminate: async () => {
+      if (child.exitCode !== null) return;
+      if (process.platform === 'win32' && typeof child.pid === 'number') {
+        const taskkill = join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'taskkill.exe');
+        await new Promise<void>((resolve) => {
+          const killer = spawn(taskkill, ['/PID', String(child.pid), '/T', '/F'], {
+            stdio: 'ignore',
+            windowsHide: true,
+          });
+          killer.once('error', () => resolve());
+          killer.once('close', () => resolve());
+        });
+      } else {
+        child.kill('SIGTERM');
+      }
+      const stopped = await settlesWithin(completion, K6_TERMINATION_GRACE_MS);
+      if (!stopped && child.exitCode === null) {
+        child.kill('SIGKILL');
+        const forceStopped = await settlesWithin(completion, K6_FORCE_KILL_GRACE_MS);
+        if (!forceStopped) {
+          throw new AutomationError('PROCESS_TIMEOUT', 'k6 process tree did not terminate after forced cleanup.');
+        }
+      }
     },
   };
 }
@@ -89,13 +111,36 @@ interface K6Summary {
   metrics?: Record<string, K6SummaryMetric>;
 }
 
-function metricValue(metric: K6SummaryMetric | undefined, key: keyof K6SummaryMetric): number {
+function metricValue(metric: K6SummaryMetric | undefined, key: keyof K6SummaryMetric, metricName: string): number {
   const value = metric?.[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : 0;
+  if (typeof value !== 'number' || !Number.isFinite(value)) {
+    throw new AutomationError('PROTOCOL_ERROR', `k6 summary metric '${metricName}.${String(key)}' is missing or invalid.`);
+  }
+  return value;
+}
+
+function validateMeasuredMetrics(values: {
+  actualRps: number;
+  totalRequests: number;
+  errorRate: number;
+}): void {
+  if (values.actualRps <= 0 || values.totalRequests <= 0) {
+    throw new AutomationError('PROTOCOL_ERROR', 'k6 completed without measured HTTP requests.', values);
+  }
+  if (values.errorRate < 0 || values.errorRate > 1) {
+    throw new AutomationError('PROTOCOL_ERROR', 'k6 reported an invalid HTTP failure rate.', values);
+  }
 }
 
 const MAX_K6_DIAGNOSTIC_CHARS = 256 * 1024;
 const MAX_K6_LOG_CHUNK_CHARS = 16 * 1024;
+const MAX_K6_SUMMARY_BYTES = 2 * 1024 * 1024;
+const K6_PROCESS_GRACE_MS = 60_000;
+const K6_TERMINATION_GRACE_MS = 10_000;
+const K6_FORCE_KILL_GRACE_MS = 2_000;
+const MAX_K6_TARGET_RPS = 10_000;
+const MAX_K6_DURATION_SECONDS = 3_600;
+const MAX_K6_VUS = 10_000;
 
 function appendDiagnosticTail(current: string, chunk: string): string {
   if (chunk.length >= MAX_K6_DIAGNOSTIC_CHARS) return chunk.slice(-MAX_K6_DIAGNOSTIC_CHARS);
@@ -111,22 +156,113 @@ function boundLiveLogChunk(chunk: string): string {
 }
 
 function validateOptions(options: K6StressOptions): void {
-  if (!Number.isFinite(options.targetRps) || options.targetRps <= 0) {
-    throw new CapabilityError('CapabilityError: targetRps must be greater than zero', { targetRps: options.targetRps });
+  if (!Number.isFinite(options.targetRps) || options.targetRps <= 0 || options.targetRps > MAX_K6_TARGET_RPS) {
+    throw new CapabilityError(`CapabilityError: targetRps must be between 0 and ${MAX_K6_TARGET_RPS}`, {
+      targetRps: options.targetRps,
+    });
   }
-  if (!Number.isFinite(options.durationSeconds) || options.durationSeconds <= 0) {
-    throw new CapabilityError('CapabilityError: durationSeconds must be greater than zero', {
+  if (!Number.isFinite(options.durationSeconds) || options.durationSeconds <= 0 || options.durationSeconds > MAX_K6_DURATION_SECONDS) {
+    throw new CapabilityError(`CapabilityError: durationSeconds must be between 0 and ${MAX_K6_DURATION_SECONDS}`, {
       durationSeconds: options.durationSeconds,
     });
   }
-  if (options.maxVUs !== undefined && (!Number.isInteger(options.maxVUs) || options.maxVUs <= 0)) {
-    throw new CapabilityError('CapabilityError: maxVUs must be a positive integer', { maxVUs: options.maxVUs });
+  if (options.maxVUs !== undefined
+      && (!Number.isInteger(options.maxVUs) || options.maxVUs <= 0 || options.maxVUs > MAX_K6_VUS)) {
+    throw new CapabilityError(`CapabilityError: maxVUs must be an integer between 1 and ${MAX_K6_VUS}`, {
+      maxVUs: options.maxVUs,
+    });
+  }
+}
+
+async function readK6Summary(summaryPath: string): Promise<K6Summary> {
+  let file: FileHandle;
+  try {
+    file = await open(summaryPath, 'r');
+  } catch (error) {
+    throw new AutomationError('PROJECT_PREREQUISITE_MISSING', 'k6 did not produce a summary artifact.', {
+      summaryPath,
+      cause: error instanceof Error ? error.message : String(error),
+    });
+  }
+  try {
+    const fileSize = (await file.stat()).size;
+    if (fileSize === 0) {
+      throw new AutomationError('PROTOCOL_ERROR', 'k6 summary artifact is empty or incomplete.', { summaryPath });
+    }
+    if (fileSize > MAX_K6_SUMMARY_BYTES) {
+      throw new AutomationError('PAYLOAD_TOO_LARGE', 'k6 summary artifact exceeds the safety limit.', {
+        summaryPath,
+        fileSize,
+        maxBytes: MAX_K6_SUMMARY_BYTES,
+      });
+    }
+    const buffer = Buffer.allocUnsafe(fileSize);
+    let offset = 0;
+    while (offset < fileSize) {
+      const { bytesRead } = await file.read(buffer, offset, fileSize - offset, offset);
+      if (bytesRead === 0) break;
+      offset += bytesRead;
+    }
+    if (offset !== fileSize || (await file.stat()).size !== fileSize) {
+      throw new AutomationError('PROTOCOL_ERROR', 'k6 summary artifact changed while it was being read.', {
+        summaryPath,
+        expectedBytes: fileSize,
+        actualBytes: offset,
+      });
+    }
+    try {
+      return JSON.parse(buffer.toString('utf8')) as K6Summary;
+    } catch {
+      throw new AutomationError('PROTOCOL_ERROR', 'k6 summary artifact is incomplete or invalid JSON.', {
+        summaryPath,
+        fileSize,
+      });
+    }
+  } finally {
+    await file.close();
+  }
+}
+
+async function waitForK6Process(
+  processHandle: K6ProcessHandle,
+  timeoutMs: number,
+): Promise<{ exitCode: number; signal?: NodeJS.Signals | null }> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    const outcome = await Promise.race([
+      processHandle.completion.then((completion) => ({ kind: 'completed' as const, completion })),
+      new Promise<{ kind: 'timeout' }>((resolve) => {
+        timeout = setTimeout(() => resolve({ kind: 'timeout' }), timeoutMs);
+      }),
+    ]);
+    if (outcome.kind === 'completed') return outcome.completion;
+    await processHandle.terminate();
+    throw new AutomationError('PROCESS_TIMEOUT', 'k6 process exceeded its bounded execution window.', {
+      timeoutMs,
+    });
+  } finally {
+    if (timeout) clearTimeout(timeout);
+  }
+}
+
+async function settlesWithin(promise: Promise<unknown>, timeoutMs: number): Promise<boolean> {
+  let timeout: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      promise.then(() => true, () => true),
+      new Promise<false>((resolve) => {
+        timeout = setTimeout(() => resolve(false), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timeout) clearTimeout(timeout);
   }
 }
 
 export class K6StressRunner {
   private activeProcess: K6ProcessHandle | undefined;
   private stopRequested = false;
+  private runInProgress = false;
 
   public constructor(
     private readonly processFactory: K6ProcessFactory = createChildProcess,
@@ -140,6 +276,23 @@ export class K6StressRunner {
     onMetric?: (metric: { rps: number; latencyMs: number; errorRate: number; maxVUs: number }) => void,
   ): Promise<K6StressMetrics> {
     validateOptions(options);
+    if (this.runInProgress) {
+      throw new CapabilityError('CapabilityError: a k6 stress run is already active for this runner.');
+    }
+    this.runInProgress = true;
+    try {
+      return await this.executeStressTest(session, options, onLog, onMetric);
+    } finally {
+      this.runInProgress = false;
+    }
+  }
+
+  private async executeStressTest(
+    session: SessionIR,
+    options: K6StressOptions,
+    onLog: RunLogCallback,
+    onMetric?: (metric: { rps: number; latencyMs: number; errorRate: number; maxVUs: number }) => void,
+  ): Promise<K6StressMetrics> {
     this.stopRequested = false;
     const runId = crypto.randomUUID();
     const generator = GeneratorFactory.getGenerator('k6', 'javascript');
@@ -147,6 +300,7 @@ export class K6StressRunner {
     const root = options.workspaceDirectory
       ? await mkdtemp(join(options.workspaceDirectory, `automateplus-k6-${runId}-`))
       : await mkdtemp(join(tmpdir(), `automateplus-k6-${runId}-`));
+    try {
     const scriptPath = join(root, project.entrypoint.replaceAll('/', delimiter));
     const summaryPath = join(root, 'k6-summary.json');
     const script = project.files.find((file) => file.relativePath === project.entrypoint)?.content;
@@ -200,7 +354,10 @@ export class K6StressRunner {
           onLog({ timestamp: Date.now(), type: 'stderr', message: boundLiveLogChunk(chunk).trimEnd() });
         },
       });
-      completion = await this.activeProcess.completion;
+      completion = await waitForK6Process(
+        this.activeProcess,
+        Math.ceil(options.durationSeconds * 1000) + K6_PROCESS_GRACE_MS,
+      );
     } finally {
       this.activeProcess = undefined;
     }
@@ -213,17 +370,18 @@ export class K6StressRunner {
       throw new Error(`k6 exited unsuccessfully: ${diagnostic}`);
     }
 
-    const summary = JSON.parse(await readFile(summaryPath, 'utf8')) as K6Summary;
+    const summary = await readK6Summary(summaryPath);
     const requests = summary.metrics?.http_reqs;
     const duration = summary.metrics?.http_req_duration;
     const failed = summary.metrics?.http_req_failed;
-    const actualRps = metricValue(requests, 'rate');
-    const totalRequests = metricValue(requests, 'count');
-    const p50LatencyMs = metricValue(duration, 'med');
-    const p90LatencyMs = metricValue(duration, 'p(90)');
-    const p95LatencyMs = metricValue(duration, 'p(95)');
-    const p99LatencyMs = metricValue(duration, 'p(99)');
-    const errorRate = metricValue(failed, 'rate');
+    const actualRps = metricValue(requests, 'rate', 'http_reqs');
+    const totalRequests = metricValue(requests, 'count', 'http_reqs');
+    const p50LatencyMs = metricValue(duration, 'med', 'http_req_duration');
+    const p90LatencyMs = metricValue(duration, 'p(90)', 'http_req_duration');
+    const p95LatencyMs = metricValue(duration, 'p(95)', 'http_req_duration');
+    const p99LatencyMs = metricValue(duration, 'p(99)', 'http_req_duration');
+    const errorRate = metricValue(failed, 'rate', 'http_req_failed');
+    validateMeasuredMetrics({ actualRps, totalRequests, errorRate });
     const maxVUs = options.maxVUs ?? 100;
     const metric = { rps: actualRps, latencyMs: p95LatencyMs, errorRate, maxVUs };
     onLog({
@@ -240,10 +398,6 @@ export class K6StressRunner {
       data: { summaryPath },
     });
 
-    if (!options.keepArtifacts) {
-      await rm(root, { recursive: true, force: true });
-    }
-
     return {
       runId,
       targetRps: options.targetRps,
@@ -258,10 +412,16 @@ export class K6StressRunner {
       durationSeconds: options.durationSeconds,
       artifactDirectory: options.keepArtifacts ? root : undefined,
     };
+    } finally {
+      this.activeProcess = undefined;
+      if (!options.keepArtifacts) {
+        await rm(root, { recursive: true, force: true });
+      }
+    }
   }
 
-  public stop(): void {
+  public async stop(): Promise<void> {
     this.stopRequested = true;
-    this.activeProcess?.terminate();
+    await this.activeProcess?.terminate();
   }
 }

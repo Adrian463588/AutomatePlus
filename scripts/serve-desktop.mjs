@@ -96,9 +96,19 @@ async function ensureDistBuilt() {
   });
 }
 
+function sendNotFound(res) {
+  res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end('Not Found');
+}
+
+function isSpaRoute(pathname) {
+  return pathname === '/' || path.posix.extname(pathname) === '';
+}
+
 function serveStatic(req, res) {
   const parsedUrl = new URL(req.url ?? '/', 'http://127.0.0.1');
   let pathname = decodeURIComponent(parsedUrl.pathname);
+  const spaRoute = isSpaRoute(pathname);
   if (pathname === '/') pathname = '/index.html';
 
   let filePath = path.join(DIST_DIR, pathname);
@@ -110,26 +120,40 @@ function serveStatic(req, res) {
     return;
   }
 
-  // Check file or fallback to index.html for SPA routing
-  if (!fs.existsSync(filePath) || fs.statSync(filePath).isDirectory()) {
+  // Only extensionless paths are client-side routes. Missing assets must stay
+  // 404 so a stale or incomplete lazy chunk cannot be served as HTML.
+  let fileStats;
+  try {
+    fileStats = fs.statSync(filePath);
+  } catch {
+    fileStats = undefined;
+  }
+  if (!fileStats || fileStats.isDirectory()) {
+    if (!spaRoute) {
+      sendNotFound(res);
+      return;
+    }
     filePath = path.join(DIST_DIR, 'index.html');
   }
 
   const ext = path.extname(filePath).toLowerCase();
   const contentType = MIME_TYPES[ext] || 'application/octet-stream';
-
-  fs.readFile(filePath, (err, data) => {
-    if (err) {
-      res.writeHead(500, { 'Content-Type': 'text/plain' });
-      res.end(`Server Error: ${err.message}`);
-      return;
-    }
-    res.writeHead(200, {
-      'Content-Type': contentType,
-      'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000',
-    });
-    res.end(data);
+  let size;
+  try {
+    size = fs.statSync(filePath).size;
+  } catch {
+    res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Static file is unavailable');
+    return;
+  }
+  res.writeHead(200, {
+    'Content-Type': contentType,
+    'Content-Length': size,
+    'Cache-Control': ext === '.html' ? 'no-cache' : 'public, max-age=31536000',
   });
+  const stream = fs.createReadStream(filePath);
+  stream.on('error', (error) => res.destroy(error));
+  stream.pipe(res);
 }
 
 async function main() {
@@ -216,7 +240,7 @@ async function main() {
     console.log('======================================================');
     console.log(`  Local URL:  ${url}`);
     console.log('  Mode:       Offline Desktop App / Migration Shell');
-    console.log('  Status:     [READY] Application is live and running');
+    console.log('  Status:     [READY] Browser migration shell; native capabilities unavailable');
     console.log('======================================================\n');
     if (shouldOpen) {
       console.log(`[AutomatePlus] Opening ${url} in your default browser...`);

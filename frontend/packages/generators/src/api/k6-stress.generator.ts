@@ -22,6 +22,7 @@ export class K6StressGenerator extends BaseCodeGenerator {
       `if (!Number.isInteger(maxVUs) || maxVUs < preAllocatedVUs) throw new Error('MAX_VUS must be an integer greater than or equal to PREALLOCATED_VUS.');`,
       ``,
       `export const options = {`,
+      `  summaryTrendStats: ['avg', 'min', 'med', 'max', 'p(90)', 'p(95)', 'p(99)'],`,
       `  scenarios: {`,
       `    constant_rps: {`,
       `      executor: 'constant-arrival-rate',`,

@@ -4,6 +4,7 @@ import { normalizeLocatorRanking } from './locators.js';
 import { migrateActionIR, migrateSessionIR } from './migration.js';
 import { SessionIR, SessionIRSchema } from './session.js';
 import { CURRENT_IR_SCHEMA_VERSION, isRecord, LEGACY_IR_SCHEMA_VERSION, SchemaMigrationError } from './version.js';
+import { SessionLimitError } from './limits.js';
 
 export interface ValidationIssue {
   path: Array<string | number>;
@@ -87,6 +88,10 @@ export function validateSessionIR(raw: unknown): ValidationResult<SessionIR> {
 }
 
 function migrationErrorResult<T>(error: unknown): ValidationResult<T> {
+  if (error instanceof SessionLimitError) {
+    const issue: ValidationIssue = { path: [], code: 'payload_limit', message: error.message };
+    return { success: false, errors: [`<root>: ${error.message}`], issues: [issue], migrated: false };
+  }
   if (error instanceof SchemaMigrationError) {
     const issue: ValidationIssue = { path: ['schemaVersion'], code: 'schema_migration_error', message: error.message };
     return { success: false, errors: [`schemaVersion: ${error.message}`], issues: [issue], migrated: false };

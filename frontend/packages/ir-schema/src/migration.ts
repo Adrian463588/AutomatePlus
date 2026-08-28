@@ -1,6 +1,7 @@
 import { ASSERTION_ACTIONS, isSecretRef } from './actions.js';
 import { normalizeLocatorRanking } from './locators.js';
 import { getSchemaVersion, CURRENT_IR_SCHEMA_VERSION, isRecord } from './version.js';
+import { assertSessionWithinLimits } from './limits.js';
 
 type UnknownRecord = Record<string, unknown>;
 
@@ -50,6 +51,7 @@ export function migrateActionIR(raw: unknown): unknown {
 }
 
 export function migrateSessionIR(raw: unknown): unknown {
+  assertSessionWithinLimits(raw);
   if (!isRecord(raw)) return raw;
   const legacy = getSchemaVersion(raw) === 1;
   const migrated: UnknownRecord = { ...raw };

@@ -47,6 +47,10 @@ Hash observed hardware identity/model/product into a stable local deviceId. Stor
 
 single, all-devices, and split-iterations are contract-level strategies. They become executable only when verified Appium/UiAutomator2/scrcpy packs, a target app, authorized devices, and a real executor are present. Missing prerequisites are Blocked; no fallback executor or simulated pass exists.
 
+### ADR-005 — Large and asynchronous boundaries are bounded
+
+Runtime-pack SHA-256 uses fixed-size streaming buffers in Rust and Node. Native and NDJSON IPC reject records above 8 MiB before dispatch/parsing; SessionIR migration rejects more than 1,000 actions or an estimated 8 MiB object graph before cloning. Runtime catalog/manifest metadata is capped at 8 MiB and artifact listing rejects responses above 1,000 rows. Sidecar stdout honors stream backpressure with close/error/timeout handling, incomplete NDJSON reports a protocol error, and k6 uses an atomic bounded read, requires real HTTP metrics, caps RPS/duration/VUs, and waits for process-tree cleanup instead of exposing raw JSON EOF. Runtime installs, farm runs, supervised processes, follower observations, archive expansion, retained job history, and executable runners each have explicit concurrency or size limits. Limits fail closed and never truncate an action into a pass.
+
 ## 3. Runtime topology
 
 Topology: Browser migration shell or Tauri window → React renderer → desktopBridge and IPC 1.0 → Rust native host. The host owns SQLite, ADB with a leased serial, loopback Appium/UiAutomator2, device-bound scrcpy, checksum-verified packs, and process cleanup. The bridge also reaches the TypeScript sidecar for IR, selectors, and generators.
@@ -175,7 +179,7 @@ The artifact index stores relative path, kind/media type, and SHA-256. Screensho
 
 ## 12. Security and offline distribution
 
-The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. They never download dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present, then a bundled bootstrap executable when the main host is absent; if neither exists it reports a setup blocker and exits. The browser-safe migration shell is an explicit `--browser` mode and keeps Android/device capabilities Blocked. Native folder and archive selection is performed by the Rust host through the pinned `rfd` dependency; browser mode never emulates it with a prompt or shell command.
+The launcher and native preflight verify the local manifest, SHA-256 packs, frontend build, Rust toolchain, Tauri CLI, ADB/Appium/scrcpy availability, WebView2, and process conditions. Host readiness is computed only from host prerequisites; automation-pack and target capabilities are reported separately so missing packs cannot prevent a healthy desktop host from building or opening. Overall production acceptance remains Blocked while required pack or target capabilities are unavailable. The launcher never downloads dependencies. Run-AutomatePlus.bat starts a published Tauri executable when present, then a bundled bootstrap executable when the main host is absent; if neither exists it reports a setup blocker and exits. The browser-safe migration shell is an explicit `--browser` mode and keeps Android/device capabilities Blocked. Native folder and archive selection is performed by the Rust host through the pinned `rfd` dependency; browser mode never emulates it with a prompt or shell command.
 
 Runtime Manager uses the bundled metadata-only `runtime-packs/catalog.json`; startup never contacts a remote catalog. Known roots are the user-selected root, workspace `runtime-packs`, `%LOCALAPPDATA%\AutomatePlus\runtime-packs`, `%ProgramData%\AutomatePlus\runtime-packs`, and bundled resources. The native manager stores root selection, job state, installed-pack records, license acceptance, and evidence in the versioned SQLite migration. Downloads are HTTPS-only, host-allowlisted, cancellation-aware, size-limited, streamed to staging, SHA-256 checked, safely extracted, health-checked, and atomically published. ZIP traversal, symlink, junction, executable-path, and overwrite risks fail closed. An online transfer can start only from the explicit Runtime Manager action with accepted licenses and `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`; execution after installation resolves local verified evidence only.
 
@@ -212,6 +216,7 @@ The renderer uses a deliberate Windows desktop workbench direction. This is a pr
 | Packages/UI | build:packages, build:sidecar, build:desktop | Required before release |
 | Smoke/docs | verify:sidecar, verify:k6:fixture, verify:docs, verify:authenticity | Component evidence only; verify:k6 is target-online and separately gated |
 | Runtime distribution | verify:runtime-catalog, verify:runtime-manager, verify:offline-install, verify:release-manifest | Catalog completeness is component-verified; unresolved artifact metadata is Blocked/NeedsReview |
+| Memory/process safety | verify:memory-bounds, IPC/IR/stress tests, Rust test/clippy | Streaming hashes plus bounded IPC, jobs, workers, processes, extraction, diagnostics, and cleanup are required |
 | Rust source | cargo fmt --check | Must pass independently |
 | Rust build/test | cargo clippy --offline, cargo test --offline | Required with the committed lockfile and cached crates |
 | Tauri build | npm run native:build | Requires local Tauri CLI, WebView2, and verified packs |
@@ -232,6 +237,7 @@ Fixtures may exercise parsers, selectors, IPC, lease logic, and failure transiti
 | Native folder/archive picker | `native.dialog.pick`, IPC 1.0 | Rust `rfd` boundary, desktop bridge, Sidebar, Runtime Manager | contract tests and manual Windows picker evidence | Implemented in contract; native host evidence pending |
 | Truthful UI | NFR-05/NFR-16 | DeviceFarmView, bridge/store | authenticity/build/viewport evidence | Implemented in shell |
 | Persistence/evidence | FR-18 | Rust migration/persistence | SQLite gate | Source implemented; crate cache blocked |
+| Bounded memory and EOF handling | NFR-12, ADR-005 | Rust preflight/runtime/farm/process/ADB; TS IPC/IR/recorder/k6; Node launcher scripts | 128 MiB low-heap hash probe, payload/backpressure/summary tests, Rust test/clippy | Implemented and component-verified; large real-pack soak remains release evidence |
 
 ## 16. Legacy boundary
 

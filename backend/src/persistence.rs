@@ -5,6 +5,8 @@ use std::fs;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+const MAX_ARTIFACT_LIST_ROWS: usize = 1_000;
+
 #[derive(Debug)]
 pub struct Database {
     path: PathBuf,
@@ -168,30 +170,37 @@ impl Database {
         )? > 0)
     }
 
-    pub fn list_artifacts(&self, run_id: Option<&str>) -> Result<Vec<Value>> {
-        let connection = Connection::open(&self.path)?;
+    pub fn list_artifacts(&self, run_id: Option<&str>) -> std::result::Result<Vec<Value>, String> {
+        let connection = Connection::open(&self.path).map_err(|error| error.to_string())?;
         let mut statement = connection.prepare(
             if run_id.is_some() {
-                "SELECT artifact_id, run_id, path, sha256, media_type, created_at FROM artifact_index WHERE run_id = ?1 ORDER BY created_at"
+                "SELECT artifact_id, run_id, path, sha256, media_type, created_at FROM artifact_index WHERE run_id = ?1 ORDER BY created_at DESC LIMIT 1001"
             } else {
-                "SELECT artifact_id, run_id, path, sha256, media_type, created_at FROM artifact_index ORDER BY created_at"
+                "SELECT artifact_id, run_id, path, sha256, media_type, created_at FROM artifact_index ORDER BY created_at DESC LIMIT 1001"
             },
-        )?;
+        ).map_err(|error| error.to_string())?;
         let mut rows = if let Some(run_id) = run_id {
-            statement.query(params![run_id])?
+            statement
+                .query(params![run_id])
+                .map_err(|error| error.to_string())?
         } else {
-            statement.query([])?
+            statement.query([]).map_err(|error| error.to_string())?
         };
         let mut artifacts = Vec::new();
-        while let Some(row) = rows.next()? {
+        while let Some(row) = rows.next().map_err(|error| error.to_string())? {
             artifacts.push(serde_json::json!({
-                "artifactId": row.get::<_, String>(0)?,
-                "runId": row.get::<_, Option<String>>(1)?,
-                "relativePath": row.get::<_, String>(2)?,
-                "sha256": row.get::<_, String>(3)?,
-                "mediaType": row.get::<_, String>(4)?,
-                "createdAt": row.get::<_, i64>(5)?
+                "artifactId": row.get::<_, String>(0).map_err(|error| error.to_string())?,
+                "runId": row.get::<_, Option<String>>(1).map_err(|error| error.to_string())?,
+                "relativePath": row.get::<_, String>(2).map_err(|error| error.to_string())?,
+                "sha256": row.get::<_, String>(3).map_err(|error| error.to_string())?,
+                "mediaType": row.get::<_, String>(4).map_err(|error| error.to_string())?,
+                "createdAt": row.get::<_, i64>(5).map_err(|error| error.to_string())?
             }));
+        }
+        if artifacts.len() > MAX_ARTIFACT_LIST_ROWS {
+            return Err(format!(
+                "Artifact query exceeds the {MAX_ARTIFACT_LIST_ROWS}-row response limit; filter by runId."
+            ));
         }
         Ok(artifacts)
     }

@@ -9,8 +9,6 @@ set "DOCTOR=0"
 set "BUILD_DEV=0"
 set "BROWSER_DEV=0"
 set "NO_OPEN=0"
-set "PROVISION_NATIVE=0"
-set "INSTALL_TAURI_CLI=0"
 set "PORT="
 set "AUTOMATE_PLUS_PORT="
 set "INVALID_ARGS=0"
@@ -24,10 +22,6 @@ rem HELP   Run-AutomatePlus.bat --browser        Start explicit browser migratio
 rem HELP   Run-AutomatePlus.bat --browser --dev --port=5173 --no-open
 rem HELP                                           Start Vite migration shell without auto-opening a browser.
 rem HELP   Run-AutomatePlus.bat --build-dev      Build native host only after offline preflight.
-rem HELP   Run-AutomatePlus.bat --provision-native
-rem HELP                                           Explicitly provision Cargo cache online; never runs automatically.
-rem HELP   Run-AutomatePlus.bat --provision-native --install-tauri-cli
-rem HELP                                           Also install pinned cargo-tauri CLI for local native builds.
 rem HELP   Run-AutomatePlus.bat --no-pause       Do not pause after a non-zero result.
 rem HELP.
 rem HELP Exit codes: 0 normal, 1 runtime/build failure, 2 blocked or invalid arguments.
@@ -56,16 +50,6 @@ if /I "!ARG!"=="--doctor" (
 )
 if /I "!ARG!"=="--build-dev" (
   set "BUILD_DEV=1"
-  shift
-  goto parse_args
-)
-if /I "!ARG!"=="--provision-native" (
-  set "PROVISION_NATIVE=1"
-  shift
-  goto parse_args
-)
-if /I "!ARG!"=="--install-tauri-cli" (
-  set "INSTALL_TAURI_CLI=1"
   shift
   goto parse_args
 )
@@ -102,19 +86,17 @@ shift
 goto parse_args
 
 :args_parsed
+if defined PORT (
+  set "PORT_REMAINDER=!PORT!"
+  for %%D in (0 1 2 3 4 5 6 7 8 9) do set "PORT_REMAINDER=!PORT_REMAINDER:%%D=!"
+  if defined PORT_REMAINDER set "INVALID_ARGS=1"
+)
 if "!DOCTOR!"=="1" if not "!MODE!"=="native" set "INVALID_ARGS=1"
 if "!DOCTOR!"=="1" if "!BUILD_DEV!"=="1" set "INVALID_ARGS=1"
 if "!DOCTOR!"=="1" if "!BROWSER_DEV!"=="1" set "INVALID_ARGS=1"
 if "!DOCTOR!"=="1" if "!NO_OPEN!"=="1" set "INVALID_ARGS=1"
 if "!DOCTOR!"=="1" if defined PORT set "INVALID_ARGS=1"
 if "!BUILD_DEV!"=="1" if "!MODE!"=="browser" set "INVALID_ARGS=1"
-if "!PROVISION_NATIVE!"=="1" if not "!MODE!"=="native" set "INVALID_ARGS=1"
-if "!PROVISION_NATIVE!"=="1" if "!DOCTOR!"=="1" set "INVALID_ARGS=1"
-if "!PROVISION_NATIVE!"=="1" if "!BUILD_DEV!"=="1" set "INVALID_ARGS=1"
-if "!PROVISION_NATIVE!"=="1" if "!BROWSER_DEV!"=="1" set "INVALID_ARGS=1"
-if "!PROVISION_NATIVE!"=="1" if "!NO_OPEN!"=="1" set "INVALID_ARGS=1"
-if "!PROVISION_NATIVE!"=="1" if defined PORT set "INVALID_ARGS=1"
-if "!INSTALL_TAURI_CLI!"=="1" if not "!PROVISION_NATIVE!"=="1" set "INVALID_ARGS=1"
 if "!MODE!"=="native" if "!BROWSER_DEV!"=="1" set "INVALID_ARGS=1"
 if "!MODE!"=="native" if "!NO_OPEN!"=="1" set "INVALID_ARGS=1"
 if "!MODE!"=="native" if defined PORT set "INVALID_ARGS=1"
@@ -126,7 +108,6 @@ set "AUTOMATE_PLUS_WORKSPACE=!AUTOMATEPLUS_ROOT!"
 if defined PORT set "AUTOMATE_PLUS_PORT=!PORT!"
 
 if "!DOCTOR!"=="1" goto doctor
-if "!PROVISION_NATIVE!"=="1" goto provision_native
 if "!MODE!"=="browser" goto browser
 goto native
 
@@ -215,20 +196,6 @@ if errorlevel 1 (
   goto finish
 )
 set "EXIT_CODE=0"
-goto finish
-
-:provision_native
-call :require_node
-if errorlevel 1 goto finish_blocked
-if not exist "!AUTOMATEPLUS_ROOT!\scripts\provision-native-deps.mjs" (
-  echo [AutomatePlus] BLOCKED: native provisioning script is missing.
-  goto finish_blocked
-)
-echo [AutomatePlus] Explicit online provisioning requested. Runtime execution remains offline after provisioning.
-set "PROVISION_ARGS=--online"
-if "!INSTALL_TAURI_CLI!"=="1" set "PROVISION_ARGS=!PROVISION_ARGS! --install-tauri-cli"
-node "!AUTOMATEPLUS_ROOT!\scripts\provision-native-deps.mjs" !PROVISION_ARGS!
-set "EXIT_CODE=!ERRORLEVEL!"
 goto finish
 
 :require_node

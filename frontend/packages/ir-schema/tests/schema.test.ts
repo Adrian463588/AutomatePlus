@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   ActionIRSchema,
   CURRENT_IR_SCHEMA_VERSION,
+  MAX_SESSION_IR_ESTIMATED_BYTES,
+  MAX_SESSION_STEPS,
   migrateActionIR,
   migrateSessionIR,
   normalizeActionIR,
@@ -273,5 +275,27 @@ describe('Automation IR Schema Validation', () => {
     expect(result.success).toBe(true);
     expect(result.data?.action).toBe('scroll');
     expect(result.data?.scrollOffset?.deltaY).toBe(800);
+  });
+
+  it('rejects oversized sessions before migration can amplify memory', () => {
+    const base = {
+      id: 'b0eebc99-9c0b-4ef8-bb6d-6bb9bd380a22',
+      projectId: 'c0eebc99-9c0b-4ef8-bb6d-6bb9bd380a33',
+      name: 'Bounded session',
+      platform: 'web',
+      targetConfig: {},
+    };
+    const tooManySteps = validateSessionIR({
+      ...base,
+      steps: Array.from({ length: MAX_SESSION_STEPS + 1 }, () => null),
+    });
+    const oversizedPayload = validateSessionIR({
+      ...base,
+      description: 'x'.repeat(Math.floor(MAX_SESSION_IR_ESTIMATED_BYTES / 2) + 1),
+      steps: [],
+    });
+
+    expect(tooManySteps.issues?.[0]?.code).toBe('payload_limit');
+    expect(oversizedPayload.issues?.[0]?.code).toBe('payload_limit');
   });
 });

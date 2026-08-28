@@ -99,4 +99,63 @@ describe('Android primary/follower recording', () => {
 
     expect(statuses).toEqual(['BLOCKED']);
   });
+
+  it('bounds follower observation backlog instead of retaining unlimited promises', async () => {
+    let releaseHierarchy: (() => void) | undefined;
+    const hierarchyGate = new Promise<void>((resolve) => {
+      releaseHierarchy = resolve;
+    });
+    const recorder = new AndroidRecorder(bridge());
+    const observer = new AndroidFollowerLocatorObserver({
+      dumpUiHierarchy: async () => {
+        await hierarchyGate;
+        return '<hierarchy/>';
+      },
+    });
+    const coordinator = new AndroidPrimaryFollowerRecorder(recorder, observer);
+    const errorCodes: Array<string | undefined> = [];
+
+    await coordinator.start(
+      plan(),
+      {
+        primary: { deviceId: 'primary-id', adbSerialSnapshot: primarySerial },
+        followers: [{ deviceId: 'follower-id', adbSerialSnapshot: followerSerial }],
+      },
+      (event) => errorCodes.push(event.observations[0]?.errorCode),
+    );
+    for (let index = 0; index < 65; index += 1) {
+      recorder.recordTouchEvent('tap', {
+        resourceId: `com.example:id/item_${index}`,
+        bounds: { left: 0, top: 0, right: 100, bottom: 100 },
+      });
+    }
+
+    expect(errorCodes).toContain('DEVICE_BUSY');
+    releaseHierarchy?.();
+    await coordinator.stop();
+    expect(errorCodes).toHaveLength(65);
+  });
+
+  it('clears follower queue state when primary startup fails', async () => {
+    let discoveryAttempts = 0;
+    const primaryBridge = bridge();
+    primaryBridge.listDevices = async () => {
+      discoveryAttempts += 1;
+      if (discoveryAttempts === 1) {
+        throw new AndroidBridgeError('ADB_UNAVAILABLE', 'adb unavailable', { blocked: true });
+      }
+      return bridge().listDevices();
+    };
+    const recorder = new AndroidRecorder(primaryBridge);
+    const observer = new AndroidFollowerLocatorObserver({ dumpUiHierarchy: async () => '<hierarchy/>' });
+    const coordinator = new AndroidPrimaryFollowerRecorder(recorder, observer);
+    const bindings = {
+      primary: { deviceId: 'primary-id', adbSerialSnapshot: primarySerial },
+      followers: [{ deviceId: 'follower-id', adbSerialSnapshot: followerSerial }],
+    };
+
+    await expect(coordinator.start(plan(), bindings, () => undefined)).rejects.toThrow('adb unavailable');
+    await expect(coordinator.start(plan(), bindings, () => undefined)).resolves.toBeUndefined();
+    await expect(coordinator.stop()).resolves.toBeUndefined();
+  });
 });

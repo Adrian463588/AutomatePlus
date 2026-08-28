@@ -67,6 +67,8 @@ const DEFAULT_EXECUTABLES = [
   'robot',
   'selenium',
 ];
+const PROCESS_TERMINATION_GRACE_MS = 10_000;
+const PROCESS_FORCE_KILL_GRACE_MS = 2_000;
 
 function isAllowedExecutable(executablePath: string, allowlist: readonly string[]): boolean {
   const executableName = basename(executablePath).toLowerCase();
@@ -74,8 +76,7 @@ function isAllowedExecutable(executablePath: string, allowlist: readonly string[
 }
 
 async function terminateChildTree(child: ChildProcess): Promise<void> {
-  if (!child.pid || child.killed) return;
-  child.kill('SIGTERM');
+  if (!child.pid || child.exitCode !== null) return;
   if (process.platform === 'win32') {
     const taskkill = spawn('taskkill.exe', ['/PID', String(child.pid), '/T', '/F'], {
       shell: false,
@@ -86,7 +87,41 @@ async function terminateChildTree(child: ChildProcess): Promise<void> {
       taskkill.once('close', () => resolveTaskkill());
       taskkill.once('error', () => resolveTaskkill());
     });
+  } else {
+    child.kill('SIGTERM');
   }
+  const stopped = await childSettlesWithin(child, PROCESS_TERMINATION_GRACE_MS);
+  if (!stopped && child.exitCode === null) {
+    child.kill('SIGKILL');
+    if (!await childSettlesWithin(child, PROCESS_FORCE_KILL_GRACE_MS)) {
+      throw new AutomationError('PROCESS_TIMEOUT', 'Runner process tree did not terminate after forced cleanup.');
+    }
+  }
+}
+
+async function childSettlesWithin(child: ChildProcess, timeoutMs: number): Promise<boolean> {
+  if (child.exitCode !== null) return true;
+  return new Promise<boolean>((resolve) => {
+    const cleanup = () => {
+      clearTimeout(timeout);
+      child.off('close', onClose);
+      child.off('error', onError);
+    };
+    const onClose = () => {
+      cleanup();
+      resolve(true);
+    };
+    const onError = () => {
+      cleanup();
+      resolve(true);
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
+      resolve(false);
+    }, timeoutMs);
+    child.once('close', onClose);
+    child.once('error', onError);
+  });
 }
 
 function createProcess(request: ProcessExecutionRequest): ProcessExecutionHandle {
@@ -102,12 +137,14 @@ function createProcess(request: ProcessExecutionRequest): ProcessExecutionHandle
   child.stdout?.on('data', request.onStdout);
   child.stderr?.on('data', request.onStderr);
 
+  let timedOut = false;
   const completion = new Promise<{ exitCode: number; signal?: NodeJS.Signals | null }>((resolveCompletion, rejectCompletion) => {
     const timeout = setTimeout(() => {
+      timedOut = true;
       void terminateChildTree(child).then(() => rejectCompletion(new AutomationError('PROCESS_TIMEOUT', 'Process exceeded its timeout', {
         executablePath: request.command.executablePath,
         timeoutMs: request.timeoutMs,
-      })));
+      })), rejectCompletion);
     }, request.timeoutMs);
     child.once('error', (error) => {
       clearTimeout(timeout);
@@ -115,6 +152,7 @@ function createProcess(request: ProcessExecutionRequest): ProcessExecutionHandle
     });
     child.once('close', (exitCode, signal) => {
       clearTimeout(timeout);
+      if (timedOut) return;
       resolveCompletion({ exitCode: exitCode ?? -1, signal });
     });
   });
@@ -130,6 +168,7 @@ export class ProcessRunner implements ITestRunner {
   private _status: RunnerStatus = 'queued';
   private activeProcess: ProcessExecutionHandle | undefined;
   private stopRequested = false;
+  private runInProgress = false;
 
   public constructor(private readonly options: ProcessRunnerOptions = {}) {}
 
@@ -138,6 +177,33 @@ export class ProcessRunner implements ITestRunner {
   }
 
   public async run(
+    session: SessionIR,
+    options: ProcessRunOptions,
+    onLog: RunLogCallback,
+  ): Promise<RunSummary> {
+    if (this.runInProgress) {
+      const error = 'A runner process is already active for this runner instance.';
+      onLog({ timestamp: Date.now(), type: 'error', message: error, data: { code: 'DEVICE_BUSY' } });
+      return {
+        runId: crypto.randomUUID(),
+        sessionId: session.id,
+        status: 'blocked',
+        passedSteps: 0,
+        failedSteps: 0,
+        totalSteps: session.steps.length,
+        durationMs: 0,
+        error,
+      };
+    }
+    this.runInProgress = true;
+    try {
+      return await this.executeRun(session, options, onLog);
+    } finally {
+      this.runInProgress = false;
+    }
+  }
+
+  private async executeRun(
     session: SessionIR,
     options: ProcessRunOptions,
     onLog: RunLogCallback,

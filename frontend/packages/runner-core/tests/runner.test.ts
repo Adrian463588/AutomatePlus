@@ -101,4 +101,26 @@ describe('Runner Core (Interactive Player & Process Runner)', () => {
     expect(terminateCalled).toBe(true);
     expect(summary.status).toBe('cancelled');
   });
+
+  it('blocks a second run instead of sharing cancellation state', async () => {
+    let resolveCompletion: ((result: { exitCode: number }) => void) | undefined;
+    const runner = new ProcessRunner({
+      processFactory: () => ({
+        completion: new Promise((resolve) => { resolveCompletion = resolve; }),
+        terminate: async () => undefined,
+      }),
+    });
+    const options = {
+      executionMode: 'native' as const,
+      command: { executablePath: 'node', args: [] },
+    };
+
+    const first = runner.run(sampleSession, options, () => undefined);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const second = await runner.run(sampleSession, options, () => undefined);
+    resolveCompletion?.({ exitCode: 0 });
+
+    expect(second.status).toBe('blocked');
+    await expect(first).resolves.toMatchObject({ status: 'passed' });
+  });
 });

@@ -1,11 +1,16 @@
 use crate::adb::AdbClient;
 use crate::contracts::{DeviceProfile, NativeCapabilities, NativeHealth};
-use crate::runtime_catalog::discover_known_roots;
+use crate::runtime_catalog::{
+    discover_known_roots, is_sha256, read_bounded_metadata, RuntimeCatalog,
+};
 use serde::Serialize;
 use serde_json::Value;
 use sha2::{Digest, Sha256};
-use std::fs;
+use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
+
+const HASH_CHUNK_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PreflightReason {
@@ -71,7 +76,7 @@ pub fn run(root: &Path) -> PreflightReport {
     let manifest_path = runtime.join("manifest.json");
     let mut reasons = Vec::new();
     let manifest_present = manifest_path.is_file();
-    let manifest = fs::read_to_string(&manifest_path)
+    let manifest = read_bounded_metadata(&manifest_path)
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
     let manifest_valid = manifest.as_ref().map(manifest_is_valid).unwrap_or(false);
@@ -270,6 +275,12 @@ fn pack_is_verified(runtime: &Path, pack: &Value, architecture: &str) -> bool {
     };
     let path = pack_path(runtime, path_text);
     pack.get("verified").and_then(Value::as_bool) == Some(true)
+        && pack.get("licenseAccepted").and_then(Value::as_bool) == Some(true)
+        && pack.get("healthStatus").and_then(Value::as_str) == Some("Passed")
+        && pack
+            .get("sourceSha256")
+            .and_then(Value::as_str)
+            .is_some_and(is_sha256)
         && pack
             .get("name")
             .and_then(Value::as_str)
@@ -285,10 +296,50 @@ fn pack_is_verified(runtime: &Path, pack: &Value, architecture: &str) -> bool {
         && pack.get("architecture").and_then(Value::as_str) == Some(architecture)
         && license_metadata_is_valid(runtime, pack)
         && health_command_is_valid(pack)
+        && catalog_entry_matches(runtime, pack)
         && is_runtime_path(runtime, &path)
         && sha256_file(&path)
             .as_deref()
             .is_some_and(|actual| actual.eq_ignore_ascii_case(expected))
+}
+
+fn catalog_entry_matches(runtime: &Path, pack: &Value) -> bool {
+    let Ok(catalog) = RuntimeCatalog::load(&runtime.join("catalog.json")) else {
+        return false;
+    };
+    let Some(id) = pack.get("id").and_then(Value::as_str) else {
+        return false;
+    };
+    let Some(entry) = catalog.entries.iter().find(|entry| entry.id == id) else {
+        return false;
+    };
+    let executable = pack.get("executable").and_then(Value::as_str);
+    let health_command = pack
+        .get("healthCommand")
+        .and_then(Value::as_array)
+        .map(|values| values.iter().filter_map(Value::as_str).collect::<Vec<_>>());
+    entry.status.as_deref() == Some("Ready")
+        && entry.version.as_deref() == pack.get("version").and_then(Value::as_str)
+        && entry.architecture
+            == pack
+                .get("architecture")
+                .and_then(Value::as_str)
+                .unwrap_or_default()
+        && entry.source.sha256.as_deref() == pack.get("sourceSha256").and_then(Value::as_str)
+        && executable.is_some_and(|path| {
+            entry
+                .archive
+                .executable_paths
+                .iter()
+                .any(|allowed| allowed == path)
+        })
+        && health_command.is_some_and(|command| {
+            command.len() == entry.health_command.len()
+                && command
+                    .iter()
+                    .zip(entry.health_command.iter())
+                    .all(|(actual, expected)| *actual == expected)
+        })
 }
 
 fn license_metadata_is_valid(runtime: &Path, pack: &Value) -> bool {
@@ -340,7 +391,7 @@ fn resolve_tool(root: &Path, name: &str) -> Option<PathBuf> {
     }
     let extension = if cfg!(windows) { ".exe" } else { "" };
     let expected = normalize_tool_name(name);
-    let manifest = fs::read_to_string(root.join("manifest.json"))
+    let manifest = read_bounded_metadata(&root.join("manifest.json"))
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok());
     let architecture = manifest
@@ -387,7 +438,7 @@ pub fn verified_tool_path(root: &Path, name: &str) -> Option<PathBuf> {
 
 fn is_verified_file(runtime: &Path, candidate: &Path) -> bool {
     let manifest_path = runtime.join("manifest.json");
-    let Some(manifest) = fs::read_to_string(manifest_path)
+    let Some(manifest) = read_bounded_metadata(&manifest_path)
         .ok()
         .and_then(|text| serde_json::from_str::<Value>(&text).ok())
     else {
@@ -425,8 +476,16 @@ fn is_runtime_path(root: &Path, path: &Path) -> bool {
     candidate.is_file() && candidate.starts_with(runtime)
 }
 fn sha256_file(path: &Path) -> Option<String> {
+    let mut file = File::open(path).ok()?;
     let mut hasher = Sha256::new();
-    hasher.update(fs::read(path).ok()?);
+    let mut buffer = [0_u8; HASH_CHUNK_BYTES];
+    loop {
+        let bytes_read = file.read(&mut buffer).ok()?;
+        if bytes_read == 0 {
+            break;
+        }
+        hasher.update(&buffer[..bytes_read]);
+    }
     Some(
         hasher
             .finalize()
@@ -530,6 +589,7 @@ fn normalize_tool_name(value: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::fs;
 
     fn temporary_root(name: &str) -> PathBuf {
         let path = std::env::temp_dir().join(format!(

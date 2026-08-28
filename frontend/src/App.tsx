@@ -1,18 +1,83 @@
-import React, { useEffect, useState } from 'react';
+import React, { lazy, Suspense, useEffect, useMemo, useState } from 'react';
 import { useAppStore } from './store/appStore.js';
 import { Header } from './components/layout/Header.js';
 import { Sidebar } from './components/layout/Sidebar.js';
-import { VisualCanvas } from './components/recorder/VisualCanvas.js';
-import { ApiBuilderView } from './components/api-builder/ApiBuilderView.js';
-import { DeviceFarmView } from './components/farm/DeviceFarmView.js';
-import { MonacoView } from './components/editor/MonacoView.js';
 import { TerminalPanel } from './components/terminal/TerminalPanel.js';
-import { StressModal } from './components/stress/StressModal.js';
-import {
-  RuntimeManagerContainer,
-  type RuntimeNativePickerCallbacks,
-} from './components/runtime/RuntimeManagerContainer.js';
+import type { RuntimeNativePickerCallbacks } from './components/runtime/RuntimeManagerContainer.js';
 import { bridge } from './services/desktopBridge.js';
+
+const loadVisualCanvas = () => import('./components/recorder/VisualCanvas.js').then((module) => ({ default: module.VisualCanvas }));
+const loadApiBuilderView = () => import('./components/api-builder/ApiBuilderView.js').then((module) => ({ default: module.ApiBuilderView }));
+const loadDeviceFarmView = () => import('./components/farm/DeviceFarmView.js').then((module) => ({ default: module.DeviceFarmView }));
+const loadMonacoView = () => import('./components/editor/MonacoView.js').then((module) => ({ default: module.MonacoView }));
+const loadStressModal = () => import('./components/stress/StressModal.js').then((module) => ({ default: module.StressModal }));
+const loadRuntimeManager = () => import('./components/runtime/RuntimeManagerContainer.js').then((module) => ({ default: module.RuntimeManagerContainer }));
+
+const LoadingWorkspace: React.FC<{ label: string }> = ({ label }) => (
+  <div className="workspace-loading" role="status" aria-live="polite" aria-busy="true">
+    Loading {label}…
+  </div>
+);
+
+interface LazyLoadBoundaryProps {
+  label: string;
+  onRetry: () => void;
+  children: React.ReactNode;
+}
+
+interface LazyLoadBoundaryState {
+  error: Error | null;
+}
+
+class LazyLoadBoundary extends React.Component<LazyLoadBoundaryProps, LazyLoadBoundaryState> {
+  public override state: LazyLoadBoundaryState = { error: null };
+
+  public static getDerivedStateFromError(error: Error): LazyLoadBoundaryState {
+    return { error };
+  }
+
+  private retry = (): void => {
+    this.setState({ error: null });
+    this.props.onRetry();
+  };
+
+  public override render(): React.ReactNode {
+    if (this.state.error) {
+      return (
+        <section className="workspace-loading" role="alert" aria-live="assertive">
+          <strong>Unable to load {this.props.label}.</strong>
+          <span>Retry loading the local workspace chunk.</span>
+          <button type="button" onClick={this.retry} aria-label={`Retry loading ${this.props.label}`}>
+            Retry
+          </button>
+        </section>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+type LazyLoader<Props extends object> = () => Promise<{ default: React.ComponentType<Props> }>;
+
+function LazySlot<Props extends object>({
+  load,
+  label,
+  componentProps,
+}: {
+  load: LazyLoader<Props>;
+  label: string;
+  componentProps: Props;
+}): React.ReactElement {
+  const [retryToken, setRetryToken] = useState(0);
+  const LazyComponent = useMemo(() => lazy(load), [load, retryToken]);
+  return (
+    <LazyLoadBoundary label={label} onRetry={() => setRetryToken((token) => token + 1)}>
+      <Suspense fallback={<LoadingWorkspace label={label} />}>
+        {React.createElement(LazyComponent as unknown as React.ComponentType<Props>, componentProps)}
+      </Suspense>
+    </LazyLoadBoundary>
+  );
+}
 
 export const App: React.FC = () => {
   const { loadInitialData, activeTab } = useAppStore();
@@ -46,14 +111,14 @@ export const App: React.FC = () => {
   const renderCenterView = () => {
     switch (activeTab) {
       case 'api_builder':
-        return <ApiBuilderView />;
+        return <LazySlot load={loadApiBuilderView} label="API Builder" componentProps={{}} />;
       case 'device_farm':
-        return <DeviceFarmView />;
+        return <LazySlot load={loadDeviceFarmView} label="Device Farm" componentProps={{}} />;
       case 'runtime':
-        return <RuntimeManagerContainer nativePickers={runtimeNativePickers} />;
+        return <LazySlot load={loadRuntimeManager} label="Runtime Manager" componentProps={{ nativePickers: runtimeNativePickers }} />;
       case 'visual':
       default:
-        return <VisualCanvas />;
+        return <LazySlot load={loadVisualCanvas} label="Recorder" componentProps={{}} />;
     }
   };
 
@@ -66,13 +131,18 @@ export const App: React.FC = () => {
       <main className={`${workspaceLayoutClass} flex-1 min-h-0`} data-layout={showsGeneratedCode ? 'editor' : 'full-workspace'}>
         <Sidebar />
         {renderCenterView()}
-        {showsGeneratedCode ? <MonacoView /> : null}
+        {showsGeneratedCode ? (
+          <LazySlot load={loadMonacoView} label="generated code" componentProps={{}} />
+        ) : null}
       </main>
       <TerminalPanel />
-      <StressModal
-        isOpen={isStressModalOpen}
-        onClose={() => setIsStressModalOpen(false)}
-      />
+      {isStressModalOpen ? (
+        <LazySlot
+          load={loadStressModal}
+          label="stress test dialog"
+          componentProps={{ isOpen: true, onClose: () => setIsStressModalOpen(false) }}
+        />
+      ) : null}
     </div>
   );
 };

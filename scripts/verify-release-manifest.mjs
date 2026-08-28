@@ -1,7 +1,7 @@
-import { createHash } from 'node:crypto';
-import { existsSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, statSync, writeFileSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { sha256FileSync } from './lib/hash-file.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const releaseRoot = join(root, 'release');
@@ -13,7 +13,7 @@ const requiredArtifacts = [
 ];
 
 function digest(path) {
-  return createHash('sha256').update(readFileSync(path)).digest('hex');
+  return sha256FileSync(path);
 }
 
 function artifact(path) {
