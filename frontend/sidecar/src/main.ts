@@ -6,8 +6,8 @@ import {
   createErrorResponse,
   createEvent,
   createResponse,
+  encodeNativeIpcMessage,
   parseIpcLine,
-  serializeIpcMessage,
 } from '@automate-plus/contracts';
 import { GeneratorFactory } from '@automate-plus/generators';
 import { migrateSessionIR, validateSessionIR } from '@automate-plus/ir-schema';
@@ -115,7 +115,7 @@ function stringValue(value: unknown, field: string): string {
 }
 
 async function writeMessage(message: IpcMessage): Promise<void> {
-  if (!process.stdout.write(serializeIpcMessage(message))) {
+  if (!process.stdout.write(encodeNativeIpcMessage(message))) {
     await waitForStdoutDrain();
   }
 }

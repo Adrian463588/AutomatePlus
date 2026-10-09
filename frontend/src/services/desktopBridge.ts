@@ -23,7 +23,7 @@ import type {
   RunSummary,
   SerializedAutomationError,
 } from '@automate-plus/contracts';
-import { createRequest, createRuntimeId } from '@automate-plus/contracts';
+import { createRequest, createRuntimeId, encodeNativeIpcMessage } from '@automate-plus/contracts';
 import type { IpcResponse } from '@automate-plus/contracts';
 import type { SessionIR } from '@automate-plus/ir-schema';
 import { ApiFunctionalRunner } from '@automate-plus/runner-core/browser';
@@ -38,7 +38,7 @@ import {
   type RuntimeMethodResponses,
 } from './runtimeManager.js';
 
-type NativeCommand = (command: string, args?: Record<string, unknown>) => Promise<unknown>;
+type NativeCommand = (command: string, body?: unknown) => Promise<unknown>;
 
 export interface NativeHostStatus {
   available: boolean;
@@ -406,7 +406,7 @@ class NativeCapabilityAdapter {
       throw new NativeIpcError('CAPABILITY_ERROR', BROWSER_RUNTIME_BLOCKED_REASON, { method, mode: 'browser' });
     }
     const request = createRequest(method, payload);
-    const raw = await bridge.invoke('automate_plus_dispatch', { request });
+    const raw = await bridge.invoke('automate_plus_dispatch', encodeNativeIpcMessage(request));
     if (!isRecord(raw) || raw.protocolVersion !== '1.0' || raw.kind !== 'response' || !isRecord(raw.payload)) {
       throw new Error('Native host returned an invalid versioned IPC response.');
     }

@@ -102,6 +102,25 @@ describe('Runner Core (Interactive Player & Process Runner)', () => {
     expect(summary.status).toBe('cancelled');
   });
 
+  it('terminates a noisy runner when its combined output exceeds the memory budget', async () => {
+    const runner = new ProcessRunner();
+    const summary = await runner.run(
+      sampleSession,
+      {
+        executionMode: 'native',
+        command: {
+          executablePath: process.execPath,
+          args: ['-e', "process.stdout.write('x'.repeat(8192))"],
+        },
+        maxOutputBytes: 1024,
+      },
+      () => undefined,
+    );
+
+    expect(summary.status).toBe('failed');
+    expect(summary.error).toMatch(/output exceeded/u);
+  });
+
   it('blocks a second run instead of sharing cancellation state', async () => {
     let resolveCompletion: ((result: { exitCode: number }) => void) | undefined;
     const runner = new ProcessRunner({

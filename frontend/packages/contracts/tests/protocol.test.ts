@@ -9,6 +9,7 @@ import {
   createCorrelationId,
   createRequest,
   deserializeAutomationError,
+  encodeNativeIpcMessage,
   parseIpcLine,
   serializeAutomationError,
   stringifyAutomationError,
@@ -26,6 +27,22 @@ describe('typed NDJSON IPC contracts', () => {
 
     expect(line.endsWith('\n')).toBe(true);
     expect(parsed).toEqual(request);
+  });
+
+  it('encodes native IPC as bounded raw UTF-8 bytes', () => {
+    const request = createRequest(requestId, 'session.validate', { session: { id: requestId } });
+    const bytes = encodeNativeIpcMessage(request);
+
+    expect(bytes).toBeInstanceOf(Uint8Array);
+    expect(parseIpcLine(new TextDecoder().decode(bytes))).toEqual(request);
+  });
+
+  it('rejects multibyte native IPC payloads by bytes, not JavaScript characters', () => {
+    const request = createRequest(requestId, 'session.validate', {
+      session: { value: '😀'.repeat(2_100_000) },
+    });
+
+    expect(() => encodeNativeIpcMessage(request)).toThrow(/byte limit/u);
   });
 
   it('validates event sequence and cancellation payloads', () => {

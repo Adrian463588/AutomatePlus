@@ -51,6 +51,11 @@ export const RuntimeManagerContainer: React.FC<RuntimeManagerContainerProps> = (
       : initialHost.reason ?? 'Runtime Manager is blocked in browser mode.';
   });
   const managerRef = useRef(bridge.getRuntimeManager());
+  const mountedRef = useRef(true);
+
+  useEffect(() => () => {
+    mountedRef.current = false;
+  }, []);
 
   const installedPacks = useMemo<RuntimeInstalledPack[]>(
     () => roots.flatMap((root) => root.installedPacks),
@@ -122,7 +127,9 @@ export const RuntimeManagerContainer: React.FC<RuntimeManagerContainerProps> = (
     if (TERMINAL_JOB_STATUSES.has(job.status)) return;
     for (let attempt = 0; attempt < 240; attempt += 1) {
       await wait(500);
+      if (!mountedRef.current) return;
       const response = await managerRef.current.installStatus(job.jobId);
+      if (!mountedRef.current) return;
       setActiveJob(response.job);
       if (TERMINAL_JOB_STATUSES.has(response.job.status)) return;
     }

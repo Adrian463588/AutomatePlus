@@ -9,6 +9,7 @@ use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 const MAX_ADB_STREAM_BYTES: usize = 512 * 1024;
+const MAX_DISCOVERED_DEVICES: usize = 64;
 const ADB_COMMAND_TIMEOUT: Duration = Duration::from_secs(30);
 const ADB_READER_TIMEOUT: Duration = Duration::from_secs(2);
 const ADB_FORCE_KILL_TIMEOUT: Duration = Duration::from_secs(2);
@@ -164,6 +165,11 @@ fn parse_devices_with_details(adb: &Path, text: &str) -> Result<Vec<DeviceProfil
             "unauthorized" => "unauthorized",
             _ => "offline",
         };
+        if devices.len() >= MAX_DISCOVERED_DEVICES {
+            return Err(format!(
+                "ADB discovery exceeded the {MAX_DISCOVERED_DEVICES}-device safety limit."
+            ));
+        }
         let details = if status == "device" {
             query_device_details(adb, serial)
         } else {
@@ -448,7 +454,7 @@ fn now() -> u64 {
 mod tests {
     use super::{
         parse_density, parse_devices, parse_getprop, parse_resolution, read_bounded_stream,
-        stable_device_id, MAX_ADB_STREAM_BYTES,
+        stable_device_id, MAX_ADB_STREAM_BYTES, MAX_DISCOVERED_DEVICES,
     };
     use std::io::Cursor;
 
@@ -496,5 +502,15 @@ mod tests {
         let (retained, truncated) = read_bounded_stream(Cursor::new(input)).expect("read");
         assert_eq!(retained.len(), MAX_ADB_STREAM_BYTES);
         assert!(truncated);
+    }
+
+    #[test]
+    fn rejects_device_fanout_above_the_supported_limit() {
+        let mut output = String::from("List of devices attached\n");
+        for index in 0..=MAX_DISCOVERED_DEVICES {
+            output.push_str(&format!("serial-{index}\tunauthorized\n"));
+        }
+        let error = parse_devices(&output).expect_err("device fanout must be bounded");
+        assert!(error.contains("device safety limit"));
     }
 }

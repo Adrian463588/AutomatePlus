@@ -46,7 +46,13 @@ export type RuntimeManagerPanelInput = Partial<RuntimeManagerPanelProps>;
 
 type LicenseDialogPurpose = 'install' | 'import';
 
-const ACTIVE_JOB_STATUSES: readonly RuntimePackStatus[] = ['Scanning', 'Downloading', 'Verifying', 'Installing'];
+const ACTIVE_JOB_STATUSES: readonly RuntimePackStatus[] = [
+  'Scanning',
+  'Downloading',
+  'Verifying',
+  'Installing',
+  'Cancelling',
+];
 
 const DEFAULT_HOST: RuntimeManagerHostState = {
   mode: 'browser',

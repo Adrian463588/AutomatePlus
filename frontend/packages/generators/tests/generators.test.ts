@@ -163,6 +163,17 @@ describe('Polyglot Code Generators', () => {
     expect(project.files.map((file) => file.relativePath)).toContain('tests/automateplus-healing.ts');
   });
 
+  it('reports generated runtime healing only for generators that emit a retry helper', async () => {
+    const supported = await GeneratorFactory.getGenerator('playwright', 'typescript').generateFullProject(sampleWebSession);
+    const unsupported = await GeneratorFactory.getGenerator('playwright', 'python').generateFullProject(sampleWebSession);
+    const supportedManifest = JSON.parse(supported.files.find((file) => file.relativePath === 'automateplus.manifest.json')?.content ?? '{}');
+    const unsupportedManifest = JSON.parse(unsupported.files.find((file) => file.relativePath === 'automateplus.manifest.json')?.content ?? '{}');
+
+    expect(supportedManifest.selfHealing.runtimeRetry.status).toBe('generated');
+    expect(unsupportedManifest.selfHealing.runtimeRetry.status).toBe('not-generated');
+    expect(unsupported.files.map((file) => file.relativePath)).not.toContain('tests/automateplus-healing.py');
+  });
+
   it('emits an HTML id locator as an id selector for real web targets', async () => {
     const generator = GeneratorFactory.getGenerator('playwright', 'typescript');
     const session: SessionIR = {

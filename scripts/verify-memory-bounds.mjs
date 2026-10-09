@@ -27,14 +27,25 @@ for (const source of sources) {
 }
 
 const rustPreflight = readFileSync(join(root, 'backend', 'src', 'preflight.rs'), 'utf8');
+const rustDispatch = readFileSync(join(root, 'backend', 'src', 'lib.rs'), 'utf8');
+const rustFarm = readFileSync(join(root, 'backend', 'src', 'farm.rs'), 'utf8');
 if (/hasher\.update\(fs::read\(/u.test(rustPreflight)) {
   throw new Error('Rust preflight still hashes a full in-memory file buffer.');
+}
+if (!rustDispatch.includes('InvokeBody::Raw(bytes)') || !rustDispatch.includes('NativeRequest::from_bounded_slice(bytes)')) {
+  throw new Error('Native Tauri dispatch does not reject oversized requests before JSON deserialization.');
+}
+if (!rustFarm.includes('farm_worker_count(targets.len(), spec.max_parallel_devices)')) {
+  throw new Error('Android farm does not bound worker creation before spawning threads.');
 }
 
 const runtimeSource = readFileSync(join(root, 'backend', 'src', 'runtime.rs'), 'utf8');
 const catalogSource = readFileSync(join(root, 'backend', 'src', 'runtime_catalog.rs'), 'utf8');
 const persistenceSource = readFileSync(join(root, 'backend', 'src', 'persistence.rs'), 'utf8');
 const k6Source = readFileSync(join(root, 'frontend', 'packages', 'stress-engine', 'src', 'k6-runner.ts'), 'utf8');
+const protocolSource = readFileSync(join(root, 'frontend', 'packages', 'contracts', 'src', 'protocol.ts'), 'utf8');
+const processRunnerSource = readFileSync(join(root, 'frontend', 'packages', 'runner-core', 'src', 'process-runner.ts'), 'utf8');
+const sidecarSource = readFileSync(join(root, 'frontend', 'sidecar', 'src', 'main.ts'), 'utf8');
 if (!runtimeSource.includes('read_bounded_metadata(&root.join("manifest.json"))')) {
   throw new Error('Runtime manifests are not using the bounded metadata reader.');
 }
@@ -46,6 +57,15 @@ if (!persistenceSource.includes('LIMIT 1001')) {
 }
 if (/readFile\(summaryPath/u.test(k6Source)) {
   throw new Error('k6 summary still uses a race-prone unbounded readFile call.');
+}
+if (!protocolSource.includes('encodeNativeIpcMessage') || !protocolSource.includes('MAX_NATIVE_IPC_BYTES')) {
+  throw new Error('TypeScript native IPC has no byte-bounded raw encoder.');
+}
+if (!processRunnerSource.includes('DEFAULT_MAX_PROCESS_OUTPUT_BYTES') || !processRunnerSource.includes('outputLimitExceeded')) {
+  throw new Error('Generated runner process output has no enforced memory budget.');
+}
+if (!sidecarSource.includes('encodeNativeIpcMessage(message)')) {
+  throw new Error('TypeScript sidecar output is not byte-bounded before stdout writes.');
 }
 
 const probeRoot = mkdtempSync(join(tmpdir(), 'automate-plus-memory-probe-'));

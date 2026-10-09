@@ -129,9 +129,12 @@ export abstract class BaseCodeGenerator implements ICodeGenerator {
           entrypoint,
           capability: this.manifest,
           selfHealing: {
-            policy: 'retry-ordered-recorded-locators-only',
+            evidencePolicy: 'recorded-locators-only',
             maxCandidatesPerAction: MAX_GENERATED_HEALING_CANDIDATES,
             targetSelection: 'deterministic-platform-aware-ranking',
+            runtimeRetry: this.supportsGeneratedHealing()
+              ? { status: 'generated', policy: 'retry-ordered-recorded-locators-only' }
+              : { status: 'not-generated', reason: 'This framework/language generator emits ranked locator evidence but has no production retry helper.' },
           },
           validation: ['format', 'lint', 'typecheck-or-compile', 'local-smoke'],
         },
@@ -345,6 +348,11 @@ export async function withAppiumLocatorHealing(driver, actionId, selectors, oper
     }
 
     return undefined;
+  }
+
+  private supportsGeneratedHealing(): boolean {
+    return (this.framework === 'playwright' || this.framework === 'appium')
+      && (this.language === 'typescript' || this.language === 'javascript');
   }
 
   private runtimeDependency(): { name: string; version: string } | undefined {

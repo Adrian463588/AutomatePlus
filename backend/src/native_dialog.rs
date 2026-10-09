@@ -1,6 +1,8 @@
 use crate::contracts::{NativeDialogPickArgs, NativeDialogPickMode, PROTOCOL_VERSION};
 use rfd::AsyncFileDialog;
 use serde_json::{json, Value};
+#[cfg(windows)]
+use std::path::{Component, Prefix};
 use std::path::{Path, PathBuf};
 use tauri::Window;
 
@@ -95,6 +97,41 @@ fn canonical_selected_path(path: &Path, mode: &NativeDialogPickMode) -> Result<P
 }
 
 fn is_network_path(path: &Path) -> bool {
-    let text = path.to_string_lossy();
-    text.starts_with("\\\\") || text.starts_with("//")
+    #[cfg(windows)]
+    {
+        matches!(
+            path.components().next(),
+            Some(Component::Prefix(prefix))
+                if matches!(prefix.kind(), Prefix::UNC(_, _) | Prefix::VerbatimUNC(_, _))
+        )
+    }
+    #[cfg(not(windows))]
+    path.to_string_lossy().starts_with("//")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn accepts_canonical_local_folder() {
+        let path =
+            std::env::temp_dir().join(format!("automate-plus-picker-{}", std::process::id()));
+        fs::create_dir_all(&path).expect("temporary picker folder");
+
+        let selected = canonical_selected_path(&path, &NativeDialogPickMode::Folder)
+            .expect("local canonical folder must be accepted");
+        assert!(selected.is_dir());
+
+        let _ = fs::remove_dir_all(path);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn rejects_unc_but_allows_verbatim_disk_prefix() {
+        assert!(is_network_path(Path::new(r"\\server\share\folder")));
+        assert!(is_network_path(Path::new(r"\\?\UNC\server\share\folder")));
+        assert!(!is_network_path(Path::new(r"\\?\D:\local\folder")));
+    }
 }

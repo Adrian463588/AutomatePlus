@@ -24,6 +24,7 @@ export interface ProcessExecutionRequest {
   cwd: string;
   environment: NodeJS.ProcessEnv;
   timeoutMs: number;
+  maxOutputBytes: number;
   onStdout: (chunk: string) => void;
   onStderr: (chunk: string) => void;
 }
@@ -46,6 +47,7 @@ export interface ProcessRunOptions extends RunOptions {
   project?: GeneratedProject;
   command?: ProcessCommand;
   timeoutMs?: number;
+  maxOutputBytes?: number;
   workingDirectory?: string;
   environmentVariables?: Record<string, string>;
   keepArtifacts?: boolean;
@@ -69,6 +71,13 @@ const DEFAULT_EXECUTABLES = [
 ];
 const PROCESS_TERMINATION_GRACE_MS = 10_000;
 const PROCESS_FORCE_KILL_GRACE_MS = 2_000;
+const DEFAULT_MAX_PROCESS_OUTPUT_BYTES = 4 * 1024 * 1024;
+const MAX_PROCESS_OUTPUT_BYTES = 64 * 1024 * 1024;
+const MAX_GENERATED_PROJECT_FILES = 128;
+const MAX_GENERATED_PROJECT_BYTES = 16 * 1024 * 1024;
+const MAX_GENERATED_FILE_BYTES = 8 * 1024 * 1024;
+const MAX_COMMAND_ARGUMENTS = 256;
+const MAX_COMMAND_ARGUMENT_BYTES = 256 * 1024;
 
 function isAllowedExecutable(executablePath: string, allowlist: readonly string[]): boolean {
   const executableName = basename(executablePath).toLowerCase();
@@ -134,10 +143,10 @@ function createProcess(request: ProcessExecutionRequest): ProcessExecutionHandle
   });
   child.stdout?.setEncoding('utf8');
   child.stderr?.setEncoding('utf8');
-  child.stdout?.on('data', request.onStdout);
-  child.stderr?.on('data', request.onStderr);
 
   let timedOut = false;
+  let outputLimitExceeded = false;
+  let outputBytes = 0;
   const completion = new Promise<{ exitCode: number; signal?: NodeJS.Signals | null }>((resolveCompletion, rejectCompletion) => {
     const timeout = setTimeout(() => {
       timedOut = true;
@@ -153,9 +162,31 @@ function createProcess(request: ProcessExecutionRequest): ProcessExecutionHandle
     child.once('close', (exitCode, signal) => {
       clearTimeout(timeout);
       if (timedOut) return;
+      if (outputLimitExceeded) {
+        rejectCompletion(new AutomationError(
+          'PAYLOAD_TOO_LARGE',
+          `Runner output exceeded the ${request.maxOutputBytes}-byte safety limit.`,
+          { maxOutputBytes: request.maxOutputBytes },
+        ));
+        return;
+      }
       resolveCompletion({ exitCode: exitCode ?? -1, signal });
     });
   });
+
+  const forwardBoundedOutput = (chunk: string, callback: (value: string) => void): void => {
+    if (outputLimitExceeded || timedOut) return;
+    const chunkBytes = Buffer.byteLength(chunk, 'utf8');
+    if (outputBytes + chunkBytes > request.maxOutputBytes) {
+      outputLimitExceeded = true;
+      void terminateChildTree(child).catch(() => undefined);
+      return;
+    }
+    outputBytes += chunkBytes;
+    callback(chunk);
+  };
+  child.stdout?.on('data', (chunk: string) => forwardBoundedOutput(chunk, request.onStdout));
+  child.stderr?.on('data', (chunk: string) => forwardBoundedOutput(chunk, request.onStderr));
 
   return {
     pid: child.pid,
@@ -250,6 +281,7 @@ export class ProcessRunner implements ITestRunner {
 
     let workspace: string | undefined;
     try {
+      this.validateCommand(options.command);
       workspace = await this.writeProject(options.project);
       const cwd = options.workingDirectory ?? workspace ?? this.options.workspaceDirectory ?? process.cwd();
       const environment = { ...process.env, ...(options.environmentVariables ?? {}) };
@@ -265,6 +297,7 @@ export class ProcessRunner implements ITestRunner {
         cwd,
         environment,
         timeoutMs: options.timeoutMs ?? options.durationMs ?? 120_000,
+        maxOutputBytes: this.resolveMaxOutputBytes(options.maxOutputBytes),
         onStdout: (chunk) => onLog({ timestamp: Date.now(), type: 'stdout', message: chunk.trimEnd() }),
         onStderr: (chunk) => onLog({ timestamp: Date.now(), type: 'stderr', message: chunk.trimEnd() }),
       });
@@ -327,6 +360,26 @@ export class ProcessRunner implements ITestRunner {
 
   private async writeProject(project?: GeneratedProject): Promise<string | undefined> {
     if (!project) return undefined;
+    if (project.files.length > MAX_GENERATED_PROJECT_FILES) {
+      throw new AutomationError(
+        'PAYLOAD_TOO_LARGE',
+        `Generated project exceeds the ${MAX_GENERATED_PROJECT_FILES}-file safety limit.`,
+      );
+    }
+    let projectBytes = 0;
+    for (const file of project.files) {
+      const fileBytes = Buffer.byteLength(file.content, 'utf8');
+      if (fileBytes > MAX_GENERATED_FILE_BYTES) {
+        throw new AutomationError('PAYLOAD_TOO_LARGE', `Generated file is too large: ${file.relativePath}`);
+      }
+      projectBytes += fileBytes;
+      if (projectBytes > MAX_GENERATED_PROJECT_BYTES) {
+        throw new AutomationError(
+          'PAYLOAD_TOO_LARGE',
+          `Generated project exceeds the ${MAX_GENERATED_PROJECT_BYTES}-byte safety limit.`,
+        );
+      }
+    }
     const root = await mkdtemp(join(this.options.workspaceDirectory ?? tmpdir(), 'automate-plus-run-'));
     for (const file of project.files) {
       const target = resolve(root, file.relativePath.replaceAll('/', delimiter));
@@ -337,5 +390,35 @@ export class ProcessRunner implements ITestRunner {
       await writeFile(target, file.content, 'utf8');
     }
     return root;
+  }
+
+  private resolveMaxOutputBytes(value: number | undefined): number {
+    const resolved = value ?? DEFAULT_MAX_PROCESS_OUTPUT_BYTES;
+    if (!Number.isInteger(resolved) || resolved < 1 || resolved > MAX_PROCESS_OUTPUT_BYTES) {
+      throw new AutomationError(
+        'PAYLOAD_TOO_LARGE',
+        `Runner output limit must be between 1 and ${MAX_PROCESS_OUTPUT_BYTES} bytes.`,
+      );
+    }
+    return resolved;
+  }
+
+  private validateCommand(command: ProcessCommand): void {
+    if (command.args.length > MAX_COMMAND_ARGUMENTS) {
+      throw new AutomationError(
+        'PAYLOAD_TOO_LARGE',
+        `Runner command exceeds the ${MAX_COMMAND_ARGUMENTS}-argument safety limit.`,
+      );
+    }
+    const argumentBytes = command.args.reduce(
+      (total, argument) => total + Buffer.byteLength(argument, 'utf8'),
+      0,
+    );
+    if (argumentBytes > MAX_COMMAND_ARGUMENT_BYTES) {
+      throw new AutomationError(
+        'PAYLOAD_TOO_LARGE',
+        `Runner command arguments exceed the ${MAX_COMMAND_ARGUMENT_BYTES}-byte safety limit.`,
+      );
+    }
   }
 }

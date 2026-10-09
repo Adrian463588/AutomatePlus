@@ -59,7 +59,7 @@ impl ProcessSupervisor {
         else {
             return Ok(false);
         };
-        terminate_child(id, &mut child);
+        terminate_child(id, &mut child)?;
         Ok(true)
     }
 }
@@ -75,16 +75,19 @@ impl Drop for ProcessSupervisor {
             .map(|mut children| children.drain().collect::<Vec<_>>())
             .unwrap_or_default();
         for (id, mut child) in children {
-            terminate_child(id, &mut child);
+            let _ = terminate_child(id, &mut child);
         }
     }
 }
 
 fn reap_finished(children: &mut HashMap<u32, Child>) {
-    children.retain(|_, child| matches!(child.try_wait(), Ok(None)));
+    children.retain(|_, child| !matches!(child.try_wait(), Ok(Some(_))));
 }
 
-fn terminate_child(id: u32, child: &mut Child) {
+fn terminate_child(id: u32, child: &mut Child) -> Result<(), String> {
+    if matches!(child.try_wait(), Ok(Some(_))) {
+        return Ok(());
+    }
     #[cfg(windows)]
     if let Ok(mut taskkill) = Command::new(r"C:\Windows\System32\taskkill.exe")
         .args(["/PID", &id.to_string(), "/T", "/F"])
@@ -93,12 +96,20 @@ fn terminate_child(id: u32, child: &mut Child) {
         .stderr(Stdio::null())
         .spawn()
     {
-        let _ = wait_for_exit(&mut taskkill, PROCESS_FORCE_KILL_TIMEOUT);
+        if !wait_for_exit(&mut taskkill, PROCESS_FORCE_KILL_TIMEOUT) {
+            let _ = taskkill.kill();
+        }
     }
     #[cfg(not(windows))]
     let _ = child.kill();
 
-    let _ = wait_for_exit(child, PROCESS_STOP_TIMEOUT);
+    if wait_for_exit(child, PROCESS_STOP_TIMEOUT) {
+        Ok(())
+    } else {
+        Err(format!(
+            "Process tree {id} did not terminate within the safety timeout."
+        ))
+    }
 }
 
 fn wait_for_exit(child: &mut Child, timeout: Duration) -> bool {

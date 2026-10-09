@@ -404,6 +404,16 @@ pub struct NativeResponse {
 }
 
 impl NativeRequest {
+    pub fn from_bounded_slice(bytes: &[u8]) -> Result<Self, String> {
+        if bytes.len() > MAX_NATIVE_REQUEST_BYTES {
+            return Err(format!(
+                "Native request exceeds the {MAX_NATIVE_REQUEST_BYTES}-byte payload limit."
+            ));
+        }
+        serde_json::from_slice(bytes)
+            .map_err(|error| format!("Native request JSON is invalid: {error}"))
+    }
+
     pub fn validate(&self) -> Result<(), String> {
         let mut size_writer = RequestSizeWriter { bytes_written: 0 };
         serde_json::to_writer(&mut size_writer, self).map_err(|_| {
@@ -532,5 +542,19 @@ mod tests {
         assert!(request
             .validate()
             .is_err_and(|message| message.contains("payload limit")));
+    }
+
+    #[test]
+    fn bounded_decoder_rejects_before_json_deserialization() {
+        let bytes = vec![b'x'; MAX_NATIVE_REQUEST_BYTES + 1];
+        let error = NativeRequest::from_bounded_slice(&bytes).expect_err("oversized request");
+        assert!(error.contains("payload limit"));
+    }
+
+    #[test]
+    fn bounded_decoder_accepts_valid_envelope() {
+        let bytes = br#"{"protocolVersion":"1.0","kind":"request","correlationId":"00000000-0000-4000-8000-000000000000","method":"native.health","payload":{}}"#;
+        let request = NativeRequest::from_bounded_slice(bytes).expect("valid request");
+        request.validate().expect("valid envelope");
     }
 }

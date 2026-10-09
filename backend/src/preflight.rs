@@ -11,6 +11,13 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const HASH_CHUNK_BYTES: usize = 64 * 1024;
+// Capability flags require both verified packs and a registered production
+// executor. Recording and generic native execution remain unavailable until
+// their production pipelines are wired. Farm replay has a concrete executor
+// in `farm.rs`, so its readiness is derived from its own dependencies below.
+const ANDROID_RECORDING_EXECUTOR_AVAILABLE: bool = false;
+const ANDROID_FARM_EXECUTOR_AVAILABLE: bool = true;
+const NATIVE_EXECUTION_EXECUTOR_AVAILABLE: bool = false;
 
 #[derive(Debug, Clone, Serialize)]
 pub struct PreflightReason {
@@ -530,13 +537,16 @@ fn capabilities(
     let device_discovery = adb_path.is_some();
     let android_recording = device_discovery
         && scrcpy_path.is_some()
+        && ANDROID_RECORDING_EXECUTOR_AVAILABLE
         && declares_capability(runtime, manifest, "android-recording");
-    let farm_replay = android_recording
+    let farm_replay = device_discovery
         && appium_path.is_some()
         && authorized_device_count > 0
-        && declares_capability(runtime, manifest, "farm-replay");
+        && ANDROID_FARM_EXECUTOR_AVAILABLE
+        && declares_capability(runtime, manifest, "appium-uiautomator2");
     let native_execution = node_path.is_some()
         && webview2_available
+        && NATIVE_EXECUTION_EXECUTOR_AVAILABLE
         && declares_capability(runtime, manifest, "native-execution");
     NativeCapabilities {
         device_discovery,

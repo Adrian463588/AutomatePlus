@@ -13,6 +13,7 @@ export type RuntimePackStatus =
   | 'Downloading'
   | 'Verifying'
   | 'Installing'
+  | 'Cancelling'
   | 'Installed'
   | 'Cancelled'
   | 'Failed'

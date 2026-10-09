@@ -1,8 +1,9 @@
 # AutomatePlus (Sprint 2)
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-160%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-167%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Latest Release](https://img.shields.io/badge/Release-v1.0.0-blue.svg)](https://github.com/Adrian463588/AutomatePlus/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
@@ -82,6 +83,33 @@ AutomatePlus empowers QA engineers, developers, and automation specialists to vi
 | **IR & Schema Validation** | Zod (v3.23) Schema Contracts |
 | **Selector Engine** | Multi-attribute scoring algorithm (Test ID, Role, Text, CSS, XPath) |
 | **Stress & Looping Engine** | k6 runner (constant-arrival-rate), interactive stepping looper |
+
+---
+
+## 📥 Download & Release History
+
+AutomatePlus binaries and offline execution bundles are published directly via GitHub Releases.
+
+### Official Releases & Downloads
+
+| Release | Platform | Distribution | Download Link |
+|---|---|---|---|
+| **v1.0.0 (Latest)** | Windows x64 | Standalone Desktop & 1-Click Launchers | [Latest Release (v1.0.0)](https://github.com/Adrian463588/AutomatePlus/releases/latest) |
+| **All Versions** | Windows x64 | Version Archive & Changelog | [Release Archive](https://github.com/Adrian463588/AutomatePlus/releases) |
+
+### 1-Click Desktop Launch
+
+For instant local execution on Windows without manual build steps:
+
+1. Clone or download the repository / release archive.
+2. Double-click `Run-AutomatePlus.bat` (or `automate-plus.bat`).
+3. The launcher compiles prerequisites on first run, allocates an open loopback port, and launches the precision desktop interface.
+
+### Version History & Changelog
+
+| Version | Release Date | Architecture | Key Features & Enhancements |
+|---|---|---|---|
+| **v1.0.0** | 2026-10-09 | Tauri 2 + Rust / TypeScript | • Multiplatform Web automation (13 targets across Playwright, Cypress, Selenium, Puppeteer, Robot Framework)<br>• Android Device Farm (9 targets, Appium, Maestro, Espresso, Robolectric, multi-device replication & distribution)<br>• API Functional & Load Suite (5 targets, HTTP TS/JS/Python/Java, k6 constant RPS)<br>• Precision Workbench Dark UI with 48px interactive touch targets<br>• DevSecOps isolation protecting research references and internal documents<br>• 1-Click local Windows execution via `Run-AutomatePlus.bat` |
 
 ---
 

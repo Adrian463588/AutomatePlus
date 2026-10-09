@@ -102,9 +102,23 @@ interface K6SummaryMetric {
   value?: number;
   med?: number;
   avg?: number;
+  passes?: number;
+  fails?: number;
   ['p(90)']?: number;
   ['p(95)']?: number;
   ['p(99)']?: number;
+  values?: {
+    count?: number;
+    rate?: number;
+    value?: number;
+    med?: number;
+    avg?: number;
+    passes?: number;
+    fails?: number;
+    ['p(90)']?: number;
+    ['p(95)']?: number;
+    ['p(99)']?: number;
+  };
 }
 
 interface K6Summary {
@@ -112,9 +126,28 @@ interface K6Summary {
 }
 
 function metricValue(metric: K6SummaryMetric | undefined, key: keyof K6SummaryMetric, metricName: string): number {
-  const value = metric?.[key];
+  const directValue = metric?.[key];
+  const nestedValue = metric?.values?.[key as keyof NonNullable<K6SummaryMetric['values']>];
+  let value = typeof directValue === 'number' && Number.isFinite(directValue)
+    ? directValue
+    : (typeof nestedValue === 'number' && Number.isFinite(nestedValue) ? nestedValue : undefined);
+
+  if (value === undefined && key === 'rate') {
+    const rateVal = metric?.values?.value ?? metric?.value;
+    if (typeof rateVal === 'number' && Number.isFinite(rateVal)) {
+      value = rateVal;
+    } else if (typeof metric?.values?.passes === 'number' && typeof metric?.values?.fails === 'number') {
+      const total = metric.values.passes + metric.values.fails;
+      value = total > 0 ? metric.values.passes / total : 0;
+    }
+  }
+
   if (typeof value !== 'number' || !Number.isFinite(value)) {
-    throw new AutomationError('PROTOCOL_ERROR', `k6 summary metric '${metricName}.${String(key)}' is missing or invalid.`);
+    throw new AutomationError('PROTOCOL_ERROR', `k6 summary metric '${metricName}.${String(key)}' is missing or invalid.`, {
+      metricName,
+      key,
+      metric,
+    });
   }
   return value;
 }

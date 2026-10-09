@@ -27,6 +27,8 @@ const MAX_RETAINED_RUNTIME_JOBS: usize = 32;
 const MAX_ARCHIVE_ENTRIES: usize = 100_000;
 const MAX_ARCHIVE_ENTRY_BYTES: u64 = 20 * 1024 * 1024 * 1024;
 const MAX_ARCHIVE_EXPANDED_BYTES: u64 = 40 * 1024 * 1024 * 1024;
+const PROGRESS_PERSIST_INTERVAL: Duration = Duration::from_millis(250);
+const PROGRESS_PERSIST_BYTES: u64 = 8 * 1024 * 1024;
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -685,6 +687,8 @@ impl RuntimeManager {
         let mut hasher = Sha256::new();
         let mut total_read = 0_u64;
         let mut buffer = [0_u8; 64 * 1024];
+        let mut last_persisted_at = Instant::now();
+        let mut last_persisted_bytes = 0_u64;
         loop {
             if self.is_cancelled(job_id) {
                 drop(file);
@@ -706,12 +710,19 @@ impl RuntimeManager {
             hasher.update(&buffer[..read]);
             file.write_all(&buffer[..read])
                 .map_err(|error| error.to_string())?;
-            self.update_job(job_id, |job| {
+            self.update_job_memory(job_id, |job| {
                 job.progress = Some(RuntimeProgress {
                     downloaded_bytes: downloaded_before.saturating_add(total_read),
                     total_bytes: (total > 0).then_some(total),
                 });
             });
+            if last_persisted_at.elapsed() >= PROGRESS_PERSIST_INTERVAL
+                || total_read.saturating_sub(last_persisted_bytes) >= PROGRESS_PERSIST_BYTES
+            {
+                self.persist_current_job(job_id)?;
+                last_persisted_at = Instant::now();
+                last_persisted_bytes = total_read;
+            }
         }
         file.flush().map_err(|error| error.to_string())?;
         let actual = hex_digest(hasher.finalize());
@@ -757,7 +768,7 @@ impl RuntimeManager {
                 job.status.as_str(),
                 "Installed" | "Failed" | "Blocked" | "NeedsReview"
             ) {
-                job.status = "Cancelled".to_owned();
+                job.status = "Cancelling".to_owned();
                 job.reason = Some(
                     "Cancellation requested; the worker will remove partial files before exit."
                         .to_owned(),
@@ -784,18 +795,19 @@ impl RuntimeManager {
         fs::create_dir_all(&staging).map_err(|error| error.to_string())?;
         let import_result = (|| -> Result<Value, String> {
             if source.is_dir() {
-                copy_tree(&source, &staging)?;
-            } else {
-                let extension = source
-                    .extension()
-                    .and_then(|value| value.to_str())
-                    .unwrap_or_default();
-                if !extension.eq_ignore_ascii_case("zip") {
-                    let _ = fs::remove_dir_all(&staging);
-                    return Err("Only local ZIP imports are enabled; MSI/install scripts are never executed implicitly.".to_owned());
-                }
-                extract_zip(&source, &staging)?;
+                return Err(
+                    "Runtime import accepts a bounded local ZIP archive, not a directory tree."
+                        .to_owned(),
+                );
             }
+            let extension = source
+                .extension()
+                .and_then(|value| value.to_str())
+                .unwrap_or_default();
+            if !extension.eq_ignore_ascii_case("zip") {
+                return Err("Only local ZIP imports are enabled; MSI/install scripts are never executed implicitly.".to_owned());
+            }
+            extract_zip(&source, &staging)?;
             let imported_manifest = read_manifest(&staging).ok_or_else(|| {
                 "Imported archive must contain a manifest.json at its root.".to_owned()
             })?;
@@ -1077,14 +1089,29 @@ impl RuntimeManager {
         }
         jobs.insert(job.job_id.clone(), job);
         drop(jobs);
-        self.persist_job(&persisted)
+        if let Err(error) = self.persist_job(&persisted) {
+            if let Ok(mut jobs) = self.state.jobs.lock() {
+                jobs.remove(&persisted.job_id);
+            }
+            return Err(error);
+        }
+        Ok(())
     }
 
     fn update_job<F>(&self, job_id: &str, update: F)
     where
         F: FnOnce(&mut RuntimeJob),
     {
-        let updated = if let Ok(mut jobs) = self.state.jobs.lock() {
+        if let Some(job) = self.update_job_memory(job_id, update) {
+            let _ = self.persist_job(&job);
+        }
+    }
+
+    fn update_job_memory<F>(&self, job_id: &str, update: F) -> Option<RuntimeJob>
+    where
+        F: FnOnce(&mut RuntimeJob),
+    {
+        if let Ok(mut jobs) = self.state.jobs.lock() {
             if let Some(job) = jobs.get_mut(job_id) {
                 update(job);
                 job.updated_at = now();
@@ -1094,10 +1121,19 @@ impl RuntimeManager {
             }
         } else {
             None
-        };
-        if let Some(job) = updated {
-            let _ = self.persist_job(&job);
         }
+    }
+
+    fn persist_current_job(&self, job_id: &str) -> Result<(), String> {
+        let job = self
+            .state
+            .jobs
+            .lock()
+            .map_err(|_| "Runtime job state is unavailable.".to_owned())?
+            .get(job_id)
+            .cloned()
+            .ok_or_else(|| format!("Runtime job '{job_id}' was not found."))?;
+        self.persist_job(&job)
     }
 
     fn persist_job(&self, job: &RuntimeJob) -> Result<(), String> {
@@ -1524,31 +1560,6 @@ fn extract_zip(archive_path: &Path, destination: &Path) -> Result<(), String> {
     Ok(())
 }
 
-fn copy_tree(source: &Path, destination: &Path) -> Result<(), String> {
-    for entry in fs::read_dir(source).map_err(|error| error.to_string())? {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let file_type = entry.file_type().map_err(|error| error.to_string())?;
-        let name = entry.file_name().to_string_lossy().into_owned();
-        if !is_safe_relative_path(&name) {
-            return Err(format!("Import contains unsafe path '{name}'."));
-        }
-        let target = destination.join(&name);
-        if file_type.is_symlink() {
-            return Err("Symlinked files are not allowed in runtime imports.".to_owned());
-        }
-        if file_type.is_dir() {
-            fs::create_dir_all(&target).map_err(|error| error.to_string())?;
-            copy_tree(&entry.path(), &target)?;
-        } else if file_type.is_file() {
-            if let Some(parent) = target.parent() {
-                fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-            }
-            fs::copy(entry.path(), target).map_err(|error| error.to_string())?;
-        }
-    }
-    Ok(())
-}
-
 fn run_health_command(
     root: &Path,
     command: &[String],
@@ -1800,5 +1811,47 @@ mod tests {
                 .expect("terminal history entry");
         }
         assert!(manager.state.jobs.lock().expect("jobs").len() <= MAX_RETAINED_RUNTIME_JOBS);
+    }
+
+    #[test]
+    fn cancellation_remains_active_until_worker_cleanup_finishes() {
+        let root = std::env::temp_dir().join(format!("automateplus-cancel-{}", now_nanos()));
+        let manager = RuntimeManager::new(root);
+        manager
+            .save_job(runtime_job(0, "Downloading"))
+            .expect("active job");
+
+        manager.install_cancel("job-0").expect("cancel request");
+        assert_eq!(
+            manager
+                .state
+                .jobs
+                .lock()
+                .expect("jobs")
+                .get("job-0")
+                .map(|job| job.status.as_str()),
+            Some("Cancelling")
+        );
+        assert!(manager
+            .save_job(runtime_job(1, "Downloading"))
+            .is_err_and(|message| message.contains("at most 1")));
+    }
+
+    #[test]
+    fn import_rejects_unbounded_directory_trees() {
+        let root = std::env::temp_dir().join(format!("automateplus-import-{}", now_nanos()));
+        let source = root.join("source-directory");
+        fs::create_dir_all(&source).expect("source directory");
+        let manager = RuntimeManager::new(root.clone());
+
+        let error = manager
+            .import_archive(&json!({
+                "archivePath": source.to_string_lossy(),
+                "licenseAccepted": true,
+            }))
+            .expect_err("directory import must fail closed");
+        assert!(error.contains("ZIP archive"));
+
+        let _ = fs::remove_dir_all(root);
     }
 }

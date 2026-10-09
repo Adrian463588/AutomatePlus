@@ -1,11 +1,16 @@
 use crate::contracts::DeviceProfile;
-use rusqlite::{params, Connection, OptionalExtension, Result};
+use rusqlite::{params, types::Type, Connection, OptionalExtension, Result};
 use serde_json::Value;
 use std::fs;
+use std::io;
 use std::path::PathBuf;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_ARTIFACT_LIST_ROWS: usize = 1_000;
+const MAX_DEVICE_GROUP_ROWS: usize = 256;
+const MAX_KNOWN_DEVICE_ROWS: usize = 1_024;
+const MAX_GROUP_DEVICE_JSON_BYTES: usize = 64 * 1024;
+const MAX_STORED_IDENTIFIER_BYTES: usize = 256;
 
 #[derive(Debug)]
 pub struct Database {
@@ -110,13 +115,27 @@ impl Database {
 
     pub fn list_groups(&self) -> Result<Vec<Value>> {
         let connection = Connection::open(&self.path)?;
+        let (row_count, largest_json, largest_id): (i64, i64, i64) = connection.query_row(
+            "SELECT COUNT(*), COALESCE(MAX(length(device_ids_json)), 0), COALESCE(MAX(length(group_id)), 0) FROM device_groups",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+        )?;
+        if row_count > MAX_DEVICE_GROUP_ROWS as i64
+            || largest_json > MAX_GROUP_DEVICE_JSON_BYTES as i64
+            || largest_id > MAX_STORED_IDENTIFIER_BYTES as i64
+        {
+            return Err(limit_error(
+                "Stored device-group data exceeds its safety limit.",
+            ));
+        }
         let mut statement = connection.prepare(
-            "SELECT group_id, name, device_ids_json, description, primary_device_id, created_at, updated_at FROM device_groups ORDER BY name",
+            "SELECT group_id, name, device_ids_json, description, primary_device_id, created_at, updated_at FROM device_groups ORDER BY name LIMIT 257",
         )?;
         let rows = statement.query_map([], |row| {
             let device_ids_json: String = row.get(2)?;
-            let device_ids =
-                serde_json::from_str::<Value>(&device_ids_json).unwrap_or(Value::Array(Vec::new()));
+            let device_ids = serde_json::from_str::<Value>(&device_ids_json).map_err(|error| {
+                rusqlite::Error::FromSqlConversionFailure(2, Type::Text, Box::new(error))
+            })?;
             Ok(serde_json::json!({
                 "id": row.get::<_, String>(0)?,
                 "name": row.get::<_, String>(1)?,
@@ -132,7 +151,20 @@ impl Database {
 
     pub fn known_device_ids(&self) -> Result<std::collections::HashSet<String>> {
         let connection = Connection::open(&self.path)?;
-        let mut statement = connection.prepare("SELECT device_id FROM device_profiles")?;
+        let (row_count, largest_id): (i64, i64) = connection.query_row(
+            "SELECT COUNT(*), COALESCE(MAX(length(device_id)), 0) FROM device_profiles",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )?;
+        if row_count > MAX_KNOWN_DEVICE_ROWS as i64
+            || largest_id > MAX_STORED_IDENTIFIER_BYTES as i64
+        {
+            return Err(limit_error(
+                "Stored device registry exceeds its safety limit.",
+            ));
+        }
+        let mut statement =
+            connection.prepare("SELECT device_id FROM device_profiles LIMIT 1025")?;
         let rows = statement.query_map([], |row| row.get::<_, String>(0))?;
         rows.collect()
     }
@@ -148,6 +180,29 @@ impl Database {
         let timestamp = now();
         let device_ids_json = serde_json::to_string(device_ids)
             .map_err(|error| rusqlite::Error::ToSqlConversionFailure(Box::new(error)))?;
+        if device_ids_json.len() > MAX_GROUP_DEVICE_JSON_BYTES {
+            return Err(limit_error(
+                "Device-group membership exceeds its storage limit.",
+            ));
+        }
+        let exists = connection
+            .query_row(
+                "SELECT 1 FROM device_groups WHERE group_id = ?1",
+                params![group_id],
+                |row| row.get::<_, i64>(0),
+            )
+            .optional()?
+            .is_some();
+        if !exists {
+            let count = connection.query_row("SELECT COUNT(*) FROM device_groups", [], |row| {
+                row.get::<_, i64>(0)
+            })?;
+            if count >= MAX_DEVICE_GROUP_ROWS as i64 {
+                return Err(limit_error(
+                    "Device-group registry reached its safety limit.",
+                ));
+            }
+        }
         connection.execute(
             "INSERT INTO device_groups (group_id, name, device_ids_json, description, primary_device_id, created_at, updated_at) VALUES (?1, ?2, ?3, NULL, ?4, ?5, ?5) ON CONFLICT(group_id) DO UPDATE SET name = excluded.name, device_ids_json = excluded.device_ids_json, primary_device_id = excluded.primary_device_id, updated_at = excluded.updated_at",
             params![group_id, name, device_ids_json, primary_device_id, timestamp],
@@ -227,4 +282,8 @@ fn now() -> i64 {
         .duration_since(UNIX_EPOCH)
         .map(|duration| duration.as_millis() as i64)
         .unwrap_or_default()
+}
+
+fn limit_error(message: &str) -> rusqlite::Error {
+    rusqlite::Error::ToSqlConversionFailure(Box::new(io::Error::other(message.to_owned())))
 }

@@ -16,8 +16,9 @@ function success(data: unknown): Record<string, unknown> {
   };
 }
 
-function requestFrom(args: Record<string, unknown> | undefined): NativeRequestFixture {
-  const request = args?.request;
+function requestFrom(body: unknown): NativeRequestFixture {
+  if (!(body instanceof Uint8Array)) throw new Error('Missing raw request fixture.');
+  const request = JSON.parse(new TextDecoder().decode(body)) as unknown;
   if (typeof request !== 'object' || request === null) throw new Error('Missing request fixture.');
   const method = (request as { method?: unknown }).method;
   const payload = (request as { payload?: unknown }).payload;
@@ -42,8 +43,8 @@ describe('[ComponentTest] desktop native bridge', () => {
   });
 
   it('sends a typed native.dialog.pick request and preserves cancellation', async () => {
-    const invoke = vi.fn(async (_command: string, args?: Record<string, unknown>) => {
-      const request = requestFrom(args);
+    const invoke = vi.fn(async (_command: string, body?: unknown) => {
+      const request = requestFrom(body);
       expect(request.method).toBe('native.dialog.pick');
       expect(request.payload).toEqual({ mode: 'folder', title: 'Choose AutomatePlus workspace folder' });
       return success({ protocolVersion: '1.0', selectedPath: null, cancelled: true });
@@ -68,8 +69,8 @@ describe('[ComponentTest] desktop native bridge', () => {
   });
 
   it('uses the native file mode and ZIP filter for archive selection', async () => {
-    const invoke = vi.fn(async (_command: string, args?: Record<string, unknown>) => {
-      const request = requestFrom(args);
+    const invoke = vi.fn(async (_command: string, body?: unknown) => {
+      const request = requestFrom(body);
       expect(request.method).toBe('native.dialog.pick');
       expect(request.payload).toEqual({
         mode: 'file',
@@ -119,8 +120,8 @@ describe('[ComponentTest] desktop native bridge', () => {
   });
 
   it('builds runtime preflight counts only from native catalog, roots, and health responses', async () => {
-    const invoke = vi.fn(async (_command: string, args?: Record<string, unknown>) => {
-      const request = requestFrom(args);
+    const invoke = vi.fn(async (_command: string, body?: unknown) => {
+      const request = requestFrom(body);
       if (request.method === 'native.health') {
         return success({
           protocolVersion: '1.0',

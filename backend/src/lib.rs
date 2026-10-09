@@ -21,12 +21,18 @@ use process::ProcessSupervisor;
 use runtime::RuntimeManager;
 use serde_json::{json, Value};
 use std::fs::{self, File, OpenOptions};
-use std::io::Write;
+use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
 #[cfg(windows)]
 use std::process::Command;
 use std::sync::Mutex;
 use tauri::{State, Window};
+
+const MAX_DEVICE_GROUP_MEMBERS: usize = 64;
+const MAX_GROUP_ID_CHARS: usize = 128;
+const MAX_GROUP_NAME_CHARS: usize = 128;
+const MAX_DEVICE_ID_CHARS: usize = 256;
+const MAX_INSTANCE_LOCK_BYTES: u64 = 64;
 
 pub struct AppState {
     pub ports: PortLeaseManager,
@@ -508,16 +514,24 @@ impl AppState {
             .map(str::trim)
             .filter(|value| !value.is_empty())
             .ok_or_else(|| "Device group name is required.".to_owned())?;
+        if id.chars().count() > MAX_GROUP_ID_CHARS || name.chars().count() > MAX_GROUP_NAME_CHARS {
+            return Err("Device group id or name exceeds its safety limit.".to_owned());
+        }
         let device_ids = group
             .get("deviceIds")
             .and_then(Value::as_array)
             .ok_or_else(|| "Device group deviceIds must be an array.".to_owned())?;
+        if device_ids.len() > MAX_DEVICE_GROUP_MEMBERS {
+            return Err(format!(
+                "Device group cannot contain more than {MAX_DEVICE_GROUP_MEMBERS} devices."
+            ));
+        }
         let ids = device_ids
             .iter()
             .map(|value| {
                 value
                     .as_str()
-                    .filter(|id| !id.trim().is_empty())
+                    .filter(|id| !id.trim().is_empty() && id.chars().count() <= MAX_DEVICE_ID_CHARS)
                     .map(str::to_owned)
                     .ok_or_else(|| "Device group contains an invalid device id.".to_owned())
             })
@@ -740,9 +754,18 @@ impl InstanceLock {
     }
 
     fn is_stale(path: &Path) -> bool {
-        let Ok(contents) = fs::read_to_string(path) else {
+        let Ok(file) = File::open(path) else {
             return false;
         };
+        let mut contents = String::new();
+        if file
+            .take(MAX_INSTANCE_LOCK_BYTES + 1)
+            .read_to_string(&mut contents)
+            .is_err()
+            || contents.len() as u64 > MAX_INSTANCE_LOCK_BYTES
+        {
+            return false;
+        }
         let Ok(pid) = contents.trim().parse::<u32>() else {
             return false;
         };
@@ -754,7 +777,7 @@ fn process_is_running(pid: u32) -> bool {
     #[cfg(windows)]
     {
         let filter = format!("PID eq {pid}");
-        Command::new("tasklist")
+        Command::new(r"C:\Windows\System32\tasklist.exe")
             .args(["/FI", filter.as_str(), "/FO", "CSV", "/NH"])
             .output()
             .map(|output| {
@@ -805,8 +828,12 @@ fn format_blocked(health: &contracts::NativeHealth) -> String {
 async fn automate_plus_dispatch(
     state: State<'_, AppState>,
     window: Window,
-    request: NativeRequest,
+    ipc_request: tauri::ipc::Request<'_>,
 ) -> Result<NativeResponse, String> {
+    let tauri::ipc::InvokeBody::Raw(bytes) = ipc_request.body() else {
+        return Err("AutomatePlus native IPC requires a bounded raw JSON request body.".to_owned());
+    };
+    let request = NativeRequest::from_bounded_slice(bytes)?;
     if request.method == "native.dialog.pick" {
         Ok(state.dispatch_dialog(&window, request).await)
     } else {
@@ -824,7 +851,9 @@ pub fn run() -> tauri::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::contracts::{NativeDialogPickArgs, NativeRequest};
+    use super::{InstanceLock, MAX_INSTANCE_LOCK_BYTES};
     use serde_json::json;
+    use std::fs::{self, File};
 
     #[test]
     fn rejects_non_versioned_requests() {
@@ -872,5 +901,20 @@ mod tests {
         let args: NativeDialogPickArgs =
             request.decode_payload().expect("decodable dialog payload");
         assert!(args.validate().is_err());
+    }
+
+    #[test]
+    fn oversized_instance_lock_is_not_read_or_deleted_as_stale() {
+        let path = std::env::temp_dir().join(format!(
+            "automate-plus-instance-lock-{}",
+            std::process::id()
+        ));
+        let file = File::create(&path).expect("temporary lock");
+        file.set_len(MAX_INSTANCE_LOCK_BYTES + 1)
+            .expect("sparse lock size");
+
+        assert!(!InstanceLock::is_stale(&path));
+
+        let _ = fs::remove_file(path);
     }
 }

@@ -37,7 +37,7 @@ Browser mode cannot provide native evidence. It displays empty or Blocked states
 
 ### ADR-002 — Sidecar state crosses a versioned boundary
 
-Use IpcRequest/IpcResponse envelopes with protocolVersion "1.0", UUID correlationId, method, and typed payload. Tauri invokes the same dispatch contract through automate_plus_dispatch; the native dialog method is dispatched through an asynchronous parent-aware command so the WebView main thread remains responsive. A future packaged Node sidecar uses NDJSON over stdin/stdout. Unknown protocol versions or methods fail closed with a serialized error.
+Use IpcRequest/IpcResponse envelopes with protocolVersion "1.0", UUID correlationId, method, and typed payload. The renderer UTF-8 encodes the envelope as a bounded raw Tauri body; Rust checks the 8 MiB byte ceiling before Serde JSON deserialization, then invokes the same dispatch contract through automate_plus_dispatch. The native dialog method is dispatched through an asynchronous parent-aware command so the WebView main thread remains responsive. The packaged Node sidecar uses bounded NDJSON over stdin/stdout. Unknown protocol versions, JSON bodies, or methods fail closed with a serialized error.
 
 ### ADR-003 — Device identity is not the ADB serial
 
@@ -49,7 +49,7 @@ single, all-devices, and split-iterations are contract-level strategies. They be
 
 ### ADR-005 — Large and asynchronous boundaries are bounded
 
-Runtime-pack SHA-256 uses fixed-size streaming buffers in Rust and Node. Native and NDJSON IPC reject records above 8 MiB before dispatch/parsing; SessionIR migration rejects more than 1,000 actions or an estimated 8 MiB object graph before cloning. Runtime catalog/manifest metadata is capped at 8 MiB and artifact listing rejects responses above 1,000 rows. Sidecar stdout honors stream backpressure with close/error/timeout handling, incomplete NDJSON reports a protocol error, and k6 uses an atomic bounded read, requires real HTTP metrics, caps RPS/duration/VUs, and waits for process-tree cleanup instead of exposing raw JSON EOF. Runtime installs, farm runs, supervised processes, follower observations, archive expansion, retained job history, and executable runners each have explicit concurrency or size limits. Limits fail closed and never truncate an action into a pass.
+Runtime-pack SHA-256 uses fixed-size streaming buffers in Rust and Node. Native raw IPC rejects bodies above 8 MiB before JSON deserialization; NDJSON rejects oversized UTF-8 output before writing; SessionIR migration rejects more than 1,000 actions or an estimated 8 MiB object graph before cloning. Runtime catalog/manifest metadata is capped at 8 MiB and artifact listing rejects responses above 1,000 rows. Sidecar stdout honors stream backpressure with close/error/timeout handling, incomplete NDJSON reports a protocol error, and k6 uses an atomic bounded read, requires real HTTP metrics, caps RPS/duration/VUs, and waits for process-tree cleanup instead of exposing raw JSON EOF. Farm thread creation is capped before spawning, generated projects and command arguments have aggregate budgets, and noisy runner processes are terminated when their combined stdout/stderr exceeds the configured budget. Runtime installs, farm runs, supervised processes, follower observations, archive expansion, retained job history, and executable runners each have explicit concurrency or size limits. Limits fail closed and never truncate an action into a pass.
 
 ## 3. Runtime topology
 

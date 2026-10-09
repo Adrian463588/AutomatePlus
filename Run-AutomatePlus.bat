@@ -21,7 +21,7 @@ rem HELP   Run-AutomatePlus.bat --doctor         Print native and runtime prefli
 rem HELP   Run-AutomatePlus.bat --browser        Start explicit browser migration shell.
 rem HELP   Run-AutomatePlus.bat --browser --dev --port=5173 --no-open
 rem HELP                                           Start Vite migration shell without auto-opening a browser.
-rem HELP   Run-AutomatePlus.bat --build-dev      Build native host only after offline preflight.
+rem HELP   Run-AutomatePlus.bat --build-dev      Rebuild the native host from the locked offline toolchain.
 rem HELP   Run-AutomatePlus.bat --no-pause       Do not pause after a non-zero result.
 rem HELP.
 rem HELP Exit codes: 0 normal, 1 runtime/build failure, 2 blocked or invalid arguments.
@@ -112,6 +112,7 @@ if "!MODE!"=="browser" goto browser
 goto native
 
 :native
+if "!BUILD_DEV!"=="1" goto build_dev
 set "NATIVE=!AUTOMATEPLUS_ROOT!\release\AutomatePlus.exe"
 if exist "!NATIVE!" goto launch_native
 set "NATIVE=!AUTOMATEPLUS_ROOT!\backend\target\release\AutomatePlus.exe"
@@ -135,12 +136,8 @@ if not exist "!AUTOMATEPLUS_ROOT!\scripts\build-native-offline.mjs" (
   goto finish_blocked
 )
 echo [AutomatePlus] Running native offline preflight...
-node "!AUTOMATEPLUS_ROOT!\scripts\build-native-offline.mjs" --preflight
-if errorlevel 1 (
-  echo [AutomatePlus] Native build blocked by the preflight result above.
-  goto finish_blocked
-)
-echo [AutomatePlus] Building Tauri/Rust host offline...
+echo [AutomatePlus] Building Tauri/Rust host with the locked local cache.
+echo [AutomatePlus] Missing automation packs remain Blocked without preventing the host build.
 node "!AUTOMATEPLUS_ROOT!\scripts\build-native-offline.mjs" --build
 if errorlevel 1 (
   echo [AutomatePlus] Native build failed.

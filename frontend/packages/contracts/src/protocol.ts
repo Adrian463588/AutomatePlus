@@ -7,7 +7,7 @@ import {
 } from './errors.js';
 import { createRuntimeId } from './runtime-id.js';
 import type { NativeProtocolMethodMap } from './native.interface.js';
-import { MAX_IPC_LINE_CHARS } from './limits.js';
+import { MAX_IPC_LINE_CHARS, MAX_NATIVE_IPC_BYTES } from './limits.js';
 
 export const IPC_PROTOCOL_VERSION = '1.0' as const;
 export type IpcProtocolVersion = typeof IPC_PROTOCOL_VERSION;
@@ -229,6 +229,18 @@ export function serializeIpcMessage(message: IpcMessage): string {
     });
   }
   return `${serialized}\n`;
+}
+
+/** Encodes a native Tauri command body with a byte limit before IPC dispatch. */
+export function encodeNativeIpcMessage(message: IpcMessage): Uint8Array {
+  const bytes = new TextEncoder().encode(serializeIpcMessage(message));
+  if (bytes.byteLength > MAX_NATIVE_IPC_BYTES) {
+    protocolFailure('Native IPC message exceeds the configured byte limit', {
+      maxBytes: MAX_NATIVE_IPC_BYTES,
+      actualBytes: bytes.byteLength,
+    });
+  }
+  return bytes;
 }
 
 export function parseIpcLine(line: string): IpcMessage {

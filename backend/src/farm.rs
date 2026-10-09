@@ -9,12 +9,13 @@ use reqwest::blocking::Client;
 use reqwest::Method;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
-use std::collections::{HashMap, HashSet};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::fs;
 use std::io::Read;
+use std::panic::{catch_unwind, AssertUnwindSafe};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Condvar, Mutex};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
@@ -31,6 +32,12 @@ const MAX_ITERATION_EVIDENCE_BYTES: usize = 8 * 1024 * 1024;
 const MAX_APPIUM_RESPONSE_BYTES: usize = 16 * 1024 * 1024;
 const MAX_SCREENSHOT_BYTES: usize = 8 * 1024 * 1024;
 const MAX_ERROR_SUMMARY_CHARS: usize = 8 * 1024;
+const MAX_ACTION_TEXT_CHARS: usize = 64 * 1024;
+const MAX_LOCATOR_CANDIDATES: usize = 8;
+const MAX_LOCATOR_VALUE_CHARS: usize = 4 * 1024;
+const MAX_ATTRIBUTE_NAME_CHARS: usize = 256;
+const MAX_ACTION_TIMEOUT_MS: u64 = 120_000;
+const MAX_ACTION_SLEEP_MS: u64 = 600_000;
 
 #[derive(Clone, Default)]
 pub(crate) struct FarmRunManager {
@@ -46,36 +53,6 @@ struct FarmState {
 struct FarmRunEntry {
     summary: LegacyFarmSummary,
     cancel: Arc<AtomicBool>,
-}
-
-struct ConcurrencyGate {
-    limit: usize,
-    active: Mutex<usize>,
-    changed: Condvar,
-}
-
-impl ConcurrencyGate {
-    fn new(limit: usize) -> Self {
-        Self {
-            limit: limit.max(1),
-            active: Mutex::new(0),
-            changed: Condvar::new(),
-        }
-    }
-
-    fn acquire(&self) {
-        let mut active = self.active.lock().expect("farm concurrency state");
-        while *active >= self.limit {
-            active = self.changed.wait(active).expect("farm concurrency state");
-        }
-        *active += 1;
-    }
-
-    fn release(&self) {
-        let mut active = self.active.lock().expect("farm concurrency state");
-        *active = active.saturating_sub(1);
-        self.changed.notify_one();
-    }
 }
 
 impl FarmRunManager {
@@ -108,6 +85,7 @@ impl FarmRunManager {
                 "BLOCKED: Farm replay supports at most {MAX_FARM_ACTIONS} actions per session to keep evidence bounded."
             ));
         }
+        validate_steps(steps)?;
         let requested_ids = spec.device_ids.clone().ok_or_else(|| {
             "Farm deviceIds must contain the latest real ADB snapshot.".to_owned()
         })?;
@@ -223,14 +201,17 @@ impl FarmRunManager {
 
         let manager = self.clone();
         let session = Arc::new(session);
-        let gate = Arc::new(ConcurrencyGate::new(
-            spec.max_parallel_devices.min(targets.len() as u32) as usize,
-        ));
-        for ((device, planned_iterations), initial_run) in
-            targets.into_iter().zip(summary.device_runs.iter().cloned())
-        {
+        let worker_count = farm_worker_count(targets.len(), spec.max_parallel_devices);
+        let queue = Arc::new(Mutex::new(VecDeque::from(
+            targets
+                .into_iter()
+                .zip(summary.device_runs.iter().cloned())
+                .collect::<Vec<_>>(),
+        )));
+        let mut spawned_workers = 0_usize;
+        for worker_index in 0..worker_count {
             let manager = manager.clone();
-            let gate = gate.clone();
+            let queue = Arc::clone(&queue);
             let session = Arc::clone(&session);
             let package = package.clone();
             let activity = activity.clone();
@@ -241,27 +222,55 @@ impl FarmRunManager {
             let workspace = workspace.clone();
             let ports = ports.clone();
             let processes = processes.clone();
-            thread::spawn(move || {
-                gate.acquire();
-                manager.mark_device_running(&farm_run_id, &initial_run.device_run_id);
-                let result = execute_device(
+            let spawn_result = thread::Builder::new()
+                .name(format!("automate-plus-farm-{worker_index}"))
+                .spawn(move || loop {
+                    let next = queue.lock().ok().and_then(|mut queue| queue.pop_front());
+                    let Some(((device, planned_iterations), initial_run)) = next else {
+                        break;
+                    };
+                    manager.mark_device_running(&farm_run_id, &initial_run.device_run_id);
+                    let panic_result = initial_run.clone();
+                    let result = catch_unwind(AssertUnwindSafe(|| {
+                        execute_device(
+                            &farm_run_id,
+                            &session,
+                            &package,
+                            &activity,
+                            &spec,
+                            device,
+                            planned_iterations,
+                            initial_run.device_run_id.clone(),
+                            Arc::clone(&cancel),
+                            adb_path.clone(),
+                            workspace.clone(),
+                            ports.clone(),
+                            processes.clone(),
+                        )
+                    }))
+                    .unwrap_or_else(|_| {
+                        failed_device_result(
+                            panic_result,
+                            "Farm worker panicked; owned resources were cleaned up.",
+                        )
+                    });
+                    manager.finish_device(&farm_run_id, result);
+                });
+            if spawn_result.is_ok() {
+                spawned_workers += 1;
+            }
+        }
+        if spawned_workers == 0 {
+            let queued = queue
+                .lock()
+                .map(|mut queue| queue.drain(..).collect::<Vec<_>>())
+                .unwrap_or_default();
+            for ((_, _), initial_run) in queued {
+                self.finish_device(
                     &farm_run_id,
-                    &session,
-                    &package,
-                    &activity,
-                    &spec,
-                    device,
-                    planned_iterations,
-                    initial_run.device_run_id.clone(),
-                    cancel,
-                    adb_path,
-                    workspace,
-                    ports,
-                    processes,
+                    failed_device_result(initial_run, "Farm worker threads could not be started."),
                 );
-                manager.finish_device(&farm_run_id, result);
-                gate.release();
-            });
+            }
         }
 
         Ok(summary)
@@ -325,6 +334,55 @@ impl FarmRunManager {
             }
             trim_runs(&mut state);
         }
+    }
+}
+
+fn failed_device_result(mut result: DeviceRunResult, message: &str) -> DeviceRunResult {
+    result.status = "failed".to_owned();
+    result.error = Some(message.to_owned());
+    result.duration_ms = 0;
+    result
+}
+
+fn farm_worker_count(target_count: usize, max_parallel_devices: u32) -> usize {
+    target_count.min(max_parallel_devices as usize)
+}
+
+struct DeviceResources {
+    ports: PortLeaseManager,
+    processes: ProcessSupervisor,
+    port_lease_id: Option<String>,
+    appium_process_id: Option<u32>,
+    appium_session: Option<(AppiumClient, String)>,
+}
+
+impl DeviceResources {
+    fn new(ports: PortLeaseManager, processes: ProcessSupervisor) -> Self {
+        Self {
+            ports,
+            processes,
+            port_lease_id: None,
+            appium_process_id: None,
+            appium_session: None,
+        }
+    }
+
+    fn release(&mut self) {
+        if let Some((client, session_id)) = self.appium_session.take() {
+            let _ = client.delete_session(&session_id);
+        }
+        if let Some(process_id) = self.appium_process_id.take() {
+            let _ = self.processes.stop(process_id);
+        }
+        if let Some(lease_id) = self.port_lease_id.take() {
+            let _ = self.ports.release(&lease_id);
+        }
+    }
+}
+
+impl Drop for DeviceResources {
+    fn drop(&mut self) {
+        self.release();
     }
 }
 
@@ -447,9 +505,7 @@ fn execute_device(
         artifacts: Vec::new(),
         error: None,
     };
-    let mut port_lease_id = None;
-    let mut appium_process_id = None;
-    let mut appium_session = None;
+    let mut resources = DeviceResources::new(ports, processes);
     let execution = (|| -> Result<(), String> {
         if cancel.load(Ordering::SeqCst) {
             return Err("CANCELLED: Farm run was cancelled before device preparation.".to_owned());
@@ -460,11 +516,13 @@ fn execute_device(
             return Err("CANCELLED: Farm run was cancelled after target validation.".to_owned());
         }
         let (lease_id, leased_ports) =
-            ports.reserve(farm_run_id, &device.device_id, FARM_PORT_COUNT)?;
-        ports.activate(&lease_id)?;
-        port_lease_id = Some(lease_id);
+            resources
+                .ports
+                .reserve(farm_run_id, &device.device_id, FARM_PORT_COUNT)?;
+        resources.ports.activate(&lease_id)?;
+        resources.port_lease_id = Some(lease_id);
         let appium_port = leased_ports[0];
-        let process_id = processes.start(
+        let process_id = resources.processes.start(
             &workspace,
             "appium",
             &[
@@ -476,7 +534,7 @@ fn execute_device(
                 "/".to_owned(),
             ],
         )?;
-        appium_process_id = Some(process_id);
+        resources.appium_process_id = Some(process_id);
         let client = AppiumClient::wait_for_server(appium_port, cancel.as_ref())?;
         let session_id = client.create_session(
             package,
@@ -486,9 +544,12 @@ fn execute_device(
             leased_ports[2],
             leased_ports[3],
         )?;
-        appium_session = Some((client, session_id));
+        resources.appium_session = Some((client, session_id));
 
-        let (client, session_id) = appium_session.as_ref().expect("Appium session set");
+        let (client, session_id) = resources
+            .appium_session
+            .as_ref()
+            .expect("Appium session set");
         let steps = session
             .get("steps")
             .and_then(Value::as_array)
@@ -566,15 +627,7 @@ fn execute_device(
         result.error = Some(error);
     }
 
-    if let Some((client, session_id)) = appium_session.take() {
-        let _ = client.delete_session(&session_id);
-    }
-    if let Some(process_id) = appium_process_id {
-        let _ = processes.stop(process_id);
-    }
-    if let Some(lease_id) = port_lease_id {
-        let _ = ports.release(&lease_id);
-    }
+    resources.release();
     result.duration_ms = now().saturating_sub(started_at);
     attach_device_evidence(&workspace, farm_run_id, &mut result);
     result
@@ -1222,6 +1275,101 @@ fn required_string(value: &Value, key: &str, label: &str) -> Result<String, Stri
         .ok_or_else(|| format!("BLOCKED: {label} is required."))
 }
 
+fn validate_steps(steps: &[Value]) -> Result<(), String> {
+    for (index, step) in steps.iter().enumerate() {
+        let label = format!("Android action {}", index + 1);
+        let action = step
+            .get("action")
+            .and_then(Value::as_str)
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| format!("BLOCKED: {label} has no action type."))?;
+        if action.chars().count() > 64 {
+            return Err(format!(
+                "BLOCKED: {label} action type exceeds its safety limit."
+            ));
+        }
+        if step
+            .get("timeoutMs")
+            .and_then(Value::as_u64)
+            .is_some_and(|value| value > MAX_ACTION_TIMEOUT_MS)
+        {
+            return Err(format!(
+                "BLOCKED: {label} timeout exceeds {MAX_ACTION_TIMEOUT_MS}ms."
+            ));
+        }
+        if action == "sleep"
+            && step
+                .get("value")
+                .and_then(Value::as_u64)
+                .is_some_and(|value| value > MAX_ACTION_SLEEP_MS)
+        {
+            return Err(format!(
+                "BLOCKED: {label} sleep exceeds {MAX_ACTION_SLEEP_MS}ms."
+            ));
+        }
+        for (field, limit) in [
+            ("value", MAX_ACTION_TEXT_CHARS),
+            ("expectedValue", MAX_ACTION_TEXT_CHARS),
+            ("attributeName", MAX_ATTRIBUTE_NAME_CHARS),
+        ] {
+            if step
+                .get(field)
+                .and_then(Value::as_str)
+                .is_some_and(|value| value.chars().count() > limit)
+            {
+                return Err(format!(
+                    "BLOCKED: {label} field '{field}' exceeds its safety limit."
+                ));
+            }
+        }
+        if let Some(locators) = step.get("locators") {
+            validate_locator_list(locators, &label)?;
+        }
+        if let Some(locators) = step
+            .get("dragTarget")
+            .and_then(|target| target.get("locators"))
+        {
+            validate_locator_list(locators, &format!("{label} drag target"))?;
+        }
+        if step
+            .get("swipeVector")
+            .and_then(|vector| vector.get("durationMs"))
+            .and_then(Value::as_u64)
+            .is_some_and(|value| value > MAX_ACTION_TIMEOUT_MS)
+        {
+            return Err(format!(
+                "BLOCKED: {label} swipe duration exceeds {MAX_ACTION_TIMEOUT_MS}ms."
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_locator_list(value: &Value, label: &str) -> Result<(), String> {
+    let locators = value
+        .as_array()
+        .ok_or_else(|| format!("BLOCKED: {label} locator candidates must be an array."))?;
+    if locators.len() > MAX_LOCATOR_CANDIDATES {
+        return Err(format!(
+            "BLOCKED: {label} has more than {MAX_LOCATOR_CANDIDATES} locator candidates."
+        ));
+    }
+    for locator in locators {
+        let strategy = locator.get("strategy").and_then(Value::as_str);
+        let locator_value = locator.get("value").and_then(Value::as_str);
+        if strategy.map_or(true, |value| value.is_empty() || value.chars().count() > 64)
+            || locator_value.map_or(true, |value| {
+                value.is_empty() || value.chars().count() > MAX_LOCATOR_VALUE_CHARS
+            })
+        {
+            return Err(format!(
+                "BLOCKED: {label} contains an invalid or oversized locator candidate."
+            ));
+        }
+    }
+    Ok(())
+}
+
 fn iteration_plan(spec: &FarmRunSpec, device_count: usize) -> Result<Vec<u32>, String> {
     if spec.strategy == "split-iterations" {
         let total = spec.total_iterations.unwrap_or_default();
@@ -1411,7 +1559,7 @@ impl AppiumClient {
         self.request(
             Method::POST,
             &session_path(session_id, &format!("element/{element_id}/value")),
-            Some(json!({ "text": text, "value": text.chars().map(|value| value.to_string()).collect::<Vec<_>>() })),
+            Some(json!({ "text": text })),
         )
         .map(|_| ())
     }
@@ -2005,7 +2153,10 @@ pub(crate) fn validate_spec(spec: &FarmRunSpec) -> Result<(), String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{appium_error_status, appium_locator, decode_base64, validate_spec};
+    use super::{
+        appium_error_status, appium_locator, decode_base64, farm_worker_count, validate_spec,
+        validate_steps, MAX_ACTION_TEXT_CHARS,
+    };
     use crate::contracts::FarmRunSpec;
 
     #[test]
@@ -2066,5 +2217,37 @@ mod tests {
             failure_policy: "continue-other-devices".to_owned(),
         };
         assert!(validate_spec(&spec).is_err());
+    }
+
+    #[test]
+    fn worker_count_is_bounded_before_threads_are_created() {
+        assert_eq!(farm_worker_count(64, 1), 1);
+        assert_eq!(farm_worker_count(2, 64), 2);
+    }
+
+    #[test]
+    fn rejects_oversized_android_action_fields_before_appium() {
+        let oversized_fill = serde_json::json!([{
+            "action": "fill",
+            "value": "x".repeat(MAX_ACTION_TEXT_CHARS + 1),
+            "locators": [{ "strategy": "resourceId", "value": "com.notifplus:id/input" }]
+        }]);
+        assert!(validate_steps(oversized_fill.as_array().expect("steps")).is_err());
+
+        let too_many_locators = serde_json::json!([{
+            "action": "tap",
+            "locators": (0..9).map(|index| serde_json::json!({
+                "strategy": "text",
+                "value": format!("target-{index}")
+            })).collect::<Vec<_>>()
+        }]);
+        assert!(validate_steps(too_many_locators.as_array().expect("steps")).is_err());
+
+        let excessive_wait = serde_json::json!([{
+            "action": "waitFor",
+            "timeoutMs": 120_001,
+            "locators": [{ "strategy": "text", "value": "Ready" }]
+        }]);
+        assert!(validate_steps(excessive_wait.as_array().expect("steps")).is_err());
     }
 }

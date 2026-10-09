@@ -16,6 +16,7 @@ export type RuntimeJobStatus =
   | 'Downloading'
   | 'Verifying'
   | 'Installing'
+  | 'Cancelling'
   | 'Installed'
   | 'Cancelled'
   | 'Failed'
