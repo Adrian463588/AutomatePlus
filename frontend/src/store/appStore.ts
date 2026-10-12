@@ -18,7 +18,7 @@ import {
   type RuntimePreflightSummary,
 } from '../services/desktopBridge.js';
 
-export type ActiveTab = 'visual' | 'api_builder' | 'device_farm' | 'runtime';
+export type ActiveTab = 'visual' | 'api_builder' | 'device_farm' | 'runtime' | 'mcp';
 export type FeedbackKind = 'idle' | 'pending' | 'success' | 'error' | 'blocked' | 'cancelled';
 
 export interface UiFeedback {

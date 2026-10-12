@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
-import { Play, PlaySquare, Repeat, Zap, Globe, Server, Layers, Square, Activity, Smartphone, HardDriveDownload } from 'lucide-react';
+import { Play, PlaySquare, Repeat, Zap, Globe, Server, Layers, Square, Activity, Smartphone, HardDriveDownload, Bot } from 'lucide-react';
 
 interface HeaderProps { onOpenStressModal: () => void; }
 
@@ -71,6 +71,19 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
         >
           <Server className="w-3.5 h-3.5 text-cyan-300" />
           <span>API Builder</span>
+        </button>
+
+        <button
+          type="button"
+          id="mcp-bridge-tab-button"
+          onClick={() => setActiveTab('mcp')}
+          aria-pressed={activeTab === 'mcp'}
+          aria-label="MCP Agent Bridge"
+          title="Model Context Protocol Bridge for AI Agents"
+          className="header-tab flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium"
+        >
+          <Bot className="w-3.5 h-3.5 text-cyan-300" />
+          <span>MCP Bridge</span>
         </button>
       </nav>
 

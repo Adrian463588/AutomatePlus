@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "automateplus": {
+      "command": "node",
+      "args": ["scripts/mcp-server.mjs"],
+      "description": "AutomatePlus MCP Server - Automated Web, Android, Phone Farm runner & Universal Test Script Generator"
+    }
+  }
+}

@@ -12,6 +12,7 @@ const loadDeviceFarmView = () => import('./components/farm/DeviceFarmView.js').t
 const loadMonacoView = () => import('./components/editor/MonacoView.js').then((module) => ({ default: module.MonacoView }));
 const loadStressModal = () => import('./components/stress/StressModal.js').then((module) => ({ default: module.StressModal }));
 const loadRuntimeManager = () => import('./components/runtime/RuntimeManagerContainer.js').then((module) => ({ default: module.RuntimeManagerContainer }));
+const loadMcpBridgeView = () => import('./components/mcp/McpBridgeView.js').then((module) => ({ default: module.McpBridgeView }));
 
 const LoadingWorkspace: React.FC<{ label: string }> = ({ label }) => (
   <div className="workspace-loading" role="status" aria-live="polite" aria-busy="true">
@@ -116,6 +117,8 @@ export const App: React.FC = () => {
         return <LazySlot load={loadDeviceFarmView} label="Device Farm" componentProps={{}} />;
       case 'runtime':
         return <LazySlot load={loadRuntimeManager} label="Runtime Manager" componentProps={{ nativePickers: runtimeNativePickers }} />;
+      case 'mcp':
+        return <LazySlot load={loadMcpBridgeView} label="MCP Bridge" componentProps={{}} />;
       case 'visual':
       default:
         return <LazySlot load={loadVisualCanvas} label="Recorder" componentProps={{}} />;

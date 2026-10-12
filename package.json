@@ -1,6 +1,6 @@
 {
   "name": "automate-plus",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "private": true,
   "description": "Offline-First Multiplatform Test Automation & Code Generation Platform",
   "author": "AutomatePlus Core Team",
@@ -27,6 +27,8 @@
     "e2e:android": "node scripts/verify-android-e2e.mjs",
     "e2e:android:appium": "node scripts/verify-android-appium.mjs",
     "verify:sidecar": "npm run build:packages && npm run build:sidecar && node scripts/verify-sidecar.mjs",
+    "verify:mcp": "node scripts/verify-mcp.mjs",
+    "mcp:start": "node scripts/mcp-server.mjs",
     "verify:docs": "node scripts/verify-markdown.mjs",
     "verify:authenticity": "node scripts/verify-authenticity.mjs",
     "verify:memory-bounds": "node scripts/verify-memory-bounds.mjs",
