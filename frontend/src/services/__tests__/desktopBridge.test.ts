@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionIR } from '@automate-plus/ir-schema';
 import { DesktopBridgeService, NativeIpcError } from '../desktopBridge.js';
+import { ORANGEHRM_TEMPLATE_STEPS, SAUCEDEMO_TEMPLATE_STEPS } from '../../components/recorder/VisualCanvas.js';
 
 interface NativeRequestFixture {
   method: string;
@@ -632,5 +633,86 @@ describe('[ComponentTest] desktop native bridge', () => {
     expect(farmSummary.totalFailedIterations).toBe(0);
     expect(farmSummary.deviceRuns.length).toBe(1);
     expect(farmSummary.deviceRuns[0].completedIterations).toBe(2);
+  });
+
+  it('executes in-app Web interactive run with WebInteractiveStepExecutor on SauceDemo session', async () => {
+    const service = new DesktopBridgeService();
+    const sauceSession: SessionIR = {
+      id: 'a0000000-0000-4000-8000-000000000001',
+      schemaVersion: 2,
+      projectId: '00000000-0000-0000-0000-000000000001',
+      name: 'SauceDemo E2E Flow',
+      platform: 'web',
+      targetConfig: { startUrl: 'https://www.saucedemo.com/' },
+      environmentVariables: {},
+      steps: SAUCEDEMO_TEMPLATE_STEPS,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const logs: string[] = [];
+    const summary = await service.runInteractiveTest(sauceSession, (log) => logs.push(log.message));
+
+    expect(summary.status).toBe('passed');
+    expect(summary.totalSteps).toBe(15);
+    expect(summary.passedSteps).toBe(15);
+    expect(summary.failedSteps).toBe(0);
+  });
+
+  it('executes in-app Web interactive run on OrangeHRM session', async () => {
+    const service = new DesktopBridgeService();
+    const orangeSession: SessionIR = {
+      id: 'b0000000-0000-4000-8000-000000000001',
+      schemaVersion: 2,
+      projectId: '00000000-0000-0000-0000-000000000001',
+      name: 'OrangeHRM E2E Flow',
+      platform: 'web',
+      targetConfig: { startUrl: 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login' },
+      environmentVariables: {},
+      steps: ORANGEHRM_TEMPLATE_STEPS,
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const logs: string[] = [];
+    const summary = await service.runInteractiveTest(orangeSession, (log) => logs.push(log.message));
+
+    expect(summary.status).toBe('passed');
+    expect(summary.totalSteps).toBe(6);
+    expect(summary.passedSteps).toBe(6);
+    expect(summary.failedSteps).toBe(0);
+  });
+
+  it('projects recorded web session across polyglot frameworks (Playwright, Cypress, Selenium, Puppeteer, Robot)', async () => {
+    const service = new DesktopBridgeService();
+    const webSession: SessionIR = {
+      id: 'c0000000-0000-4000-8000-000000000001',
+      schemaVersion: 2,
+      projectId: '00000000-0000-0000-0000-000000000001',
+      name: 'Universal Web Test',
+      platform: 'web',
+      targetConfig: { startUrl: 'https://www.saucedemo.com/' },
+      environmentVariables: {},
+      steps: SAUCEDEMO_TEMPLATE_STEPS.slice(0, 5),
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const targets = [
+      { framework: 'playwright', language: 'typescript' },
+      { framework: 'playwright', language: 'python' },
+      { framework: 'cypress', language: 'typescript' },
+      { framework: 'selenium', language: 'typescript' },
+      { framework: 'puppeteer', language: 'typescript' },
+      { framework: 'robot', language: 'robot' },
+    ];
+
+    for (const { framework, language } of targets) {
+      const project = await service.generateCode(webSession, framework, language);
+      expect(project.files.length).toBeGreaterThan(0);
+      const testFile = project.files.find((f) => f.relativePath.includes('test') || f.relativePath.includes('spec') || f.relativePath.includes('robot'));
+      expect(testFile).toBeDefined();
+      expect(testFile?.content).toContain('saucedemo.com');
+    }
   });
 });

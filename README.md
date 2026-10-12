@@ -1,9 +1,9 @@
 # AutomatePlus (Sprint 2)
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-172%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-175%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Latest Release](https://img.shields.io/badge/Release-v1.4.0-blue.svg)](https://github.com/Adrian463588/AutomatePlus/releases/latest)
+[![Latest Release](https://img.shields.io/badge/Release-v1.5.0-blue.svg)](https://github.com/Adrian463588/AutomatePlus/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
@@ -63,7 +63,7 @@ Farm runtime acceptance requires at least two authorized physical devices, a rea
 AutomatePlus empowers QA engineers, developers, and automation specialists to visually record, inspect, parameterize, and run tests without vendor lock-in. Instead of proprietary binary scripts, every recorded interaction translates into canonical, versioned JSON Intermediate Representation (`SessionIR` & `ActionIR`), which projects into **27 capability-checked framework/language combinations**. The production target is Tauri 2 + Rust with a versioned TypeScript sidecar and React renderer; ordinary browser mode remains a safe migration shell.
 
 ### Core Philosophy
-1. **Low-Code Visual Recording**: Click-and-record interactions through the native headed browser and ADB device bridge.
+1. **Low-Code Visual Recording**: Click-and-record interactions through the native headed browser, interactive WebDriver canvas, and ADB device bridge.
 2. **Canonical IR as Single Source of Truth**: The IR maintains semantic selectors, gesture coordinates, parameters, assertions, schema versions, and secret references. Generated code is a pure, deterministic projection.
 3. **True Polyglot Multiplatform**: Generate capability-checked runnable project candidates for 5 Web frameworks, 4 Android frameworks, and 2 API runners across Python, TypeScript, JavaScript, Java, Kotlin, and YAML.
 4. **Explicit Runtime Boundaries**: Host-side runners execute real local processes. Missing runtimes, devices, or project prerequisites are reported as `Blocked`; no simulator result is acceptance evidence.
@@ -94,10 +94,11 @@ AutomatePlus binaries and offline execution bundles are published directly via G
 
 | Release | Platform | Distribution | Download Link |
 |---|---|---|---|
-| **v1.4.0 (Latest)** | Windows x64 | Standalone Desktop Bundle | [Download AutomatePlus v1.4.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.4.0/AutomatePlus-v1.4.0-win-x64.zip) |
-| **v1.4.0 (Latest)** | Windows x64 | Standalone Executable | [Download AutomatePlus.exe](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.4.0/AutomatePlus.exe) |
-| **v1.4.0 (Latest)** | Windows x64 | 1-Click Launcher Script | [Download Run-AutomatePlus.bat](https://github.com/Adrian463588/AutomatePlus/raw/main/Run-AutomatePlus.bat) |
-| **v1.3.0** | Windows x64 | Previous Stable Release | [Download AutomatePlus v1.3.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.3.0/AutomatePlus-v1.3.0-win-x64.zip) |
+| **v1.5.0 (Latest)** | Windows x64 | Standalone Desktop Bundle | [Download AutomatePlus v1.5.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.5.0/AutomatePlus-v1.5.0-win-x64.zip) |
+| **v1.5.0 (Latest)** | Windows x64 | Standalone Executable | [Download AutomatePlus.exe](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.5.0/AutomatePlus.exe) |
+| **v1.5.0 (Latest)** | Windows x64 | 1-Click Launcher Script | [Download Run-AutomatePlus.bat](https://github.com/Adrian463588/AutomatePlus/raw/main/Run-AutomatePlus.bat) |
+| **v1.4.0** | Windows x64 | Previous Stable Release | [Download AutomatePlus v1.4.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.4.0/AutomatePlus-v1.4.0-win-x64.zip) |
+| **v1.3.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.3.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.3.0/AutomatePlus-v1.3.0-win-x64.zip) |
 | **v1.2.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.2.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.2.0/AutomatePlus-v1.2.0-win-x64.zip) |
 | **v1.1.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.1.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.1.0/AutomatePlus-v1.1.0-win-x64.zip) |
 | **v1.0.0** | Windows x64 | Initial Stable Release | [Download AutomatePlus v1.0.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.0.0/AutomatePlus-v1.0.0-win-x64.zip) |
@@ -115,6 +116,7 @@ For instant local execution on Windows without manual build steps:
 
 | Version | Release Date | Architecture | Key Features & Enhancements | Download |
 |---|---|---|---|---|
+| **v1.5.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Interactive WebDriver Canvas Viewport (`WebDriverCanvas`) enabling live visual click-and-run web automation from the user's POV on SauceDemo (`saucedemo.com`) and OrangeHRM (`orangehrmlive.com`)<br>• Visual step recording: filling credentials, clicking login, product inventory selection, shopping cart transitions, checkout flows, and assertions<br>• Universal multi-framework code generator projection: recorded web journeys generate clean, runnable scripts across Playwright, Cypress, Selenium, Puppeteer, and Robot Framework in TypeScript, JavaScript, Python, and Java<br>• Monorepo test suites expanded to 175 tests with full Playwright MCP live verification and zero console errors | [Download v1.5.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.5.0/AutomatePlus-v1.5.0-win-x64.zip) |
 | **v1.4.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Multi-Device Android Phone Farm Replay & Looping Runner (`MultiDeviceRunner`, `AndroidInteractiveStepExecutor`) supporting sequential looping replay (3x iterations) and distributed farm execution<br>• 1-Click interactive looping execution (`Run 3x Loop`) for NotiPlus and connected Android targets<br>• Seamless fail-fast and iteration distribution across `single`, `all-devices`, and `split-iterations` strategies<br>• Monorepo test suites expanded to 172 tests with full Playwright MCP live verification and zero console errors | [Download v1.4.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.4.0/AutomatePlus-v1.4.0-win-x64.zip) |
 | **v1.3.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Android Automation Interactive In-App Click-and-Run execution engine (`AndroidInteractiveStepExecutor`) for Android targets and connected ADB devices<br>• 1-Click preset action flows for ApiDemos (10 steps) and NotiPlus (6 steps) with real-time locator healing and visual feedback<br>• Polyglot test generator projection to Appium (TypeScript/JavaScript/Java/Kotlin) directly from interactive Android session IR<br>• Monorepo test suites expanded to 170 tests with full DevSecOps & Playwright MCP live verification | [Download v1.3.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.3.0/AutomatePlus-v1.3.0-win-x64.zip) |
 | **v1.2.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Web Automation Interactive In-App Click-and-Run execution engine (`WebInteractiveStepExecutor`) for web targets (SauceDemo, OrangeHRM)<br>• 1-Click preset action flows for SauceDemo (15 steps) and OrangeHRM (6 steps) with real-time locator healing and visual feedback<br>• Polyglot test generator projection to Playwright (TypeScript/JavaScript/Python/Java) and Cypress (TypeScript/JavaScript) directly from interactive sessions<br>• Monorepo test suites expanded to 169 tests with full DevSecOps & Playwright MCP live verification | [Download v1.2.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.2.0/AutomatePlus-v1.2.0-win-x64.zip) |

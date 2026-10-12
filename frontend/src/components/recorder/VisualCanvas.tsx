@@ -4,8 +4,9 @@ import { type ActionIR, type ActionType, type LocatorStrategy } from '@automate-
 import { useAppStore } from '../../store/appStore.js';
 import { ActionTimeline } from './ActionTimeline.js';
 import { DeviceFarmPanel } from './DeviceFarmPanel.js';
+import { WebDriverCanvas } from './WebDriverCanvas.js';
 
-const SAUCEDEMO_TEMPLATE_STEPS: ActionIR[] = [
+export const SAUCEDEMO_TEMPLATE_STEPS: ActionIR[] = [
   { id: 'a1000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'web', action: 'navigate', value: 'https://www.saucedemo.com/', timeoutMs: 5000, timestamp: 1000, optional: false },
   { id: 'a1000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'web', action: 'fill', value: 'standard_user', locators: [{ strategy: 'testId', value: 'username', score: 100 }, { strategy: 'css', value: '#user-name', score: 80 }], timeoutMs: 5000, timestamp: 1050, optional: false },
   { id: 'a1000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'web', action: 'fill', value: 'secret_sauce', locators: [{ strategy: 'testId', value: 'password', score: 100 }, { strategy: 'css', value: '#password', score: 80 }], timeoutMs: 5000, timestamp: 1100, optional: false },
@@ -23,13 +24,13 @@ const SAUCEDEMO_TEMPLATE_STEPS: ActionIR[] = [
   { id: 'a1000000-0000-4000-8000-000000000015', schemaVersion: 2, stepNumber: 15, platform: 'web', action: 'assertText', expectedValue: 'Thank you for your order!', locators: [{ strategy: 'testId', value: 'complete-header', score: 100 }], timeoutMs: 5000, timestamp: 1700, optional: false },
 ];
 
-const ORANGEHRM_TEMPLATE_STEPS: ActionIR[] = [
-  { id: 'o1000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'web', action: 'navigate', value: 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login', timeoutMs: 5000, timestamp: 1000, optional: false },
-  { id: 'o1000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'web', action: 'fill', value: 'Admin', locators: [{ strategy: 'css', value: 'input[name="username"]', score: 95 }, { strategy: 'testId', value: 'username', score: 90 }], timeoutMs: 5000, timestamp: 1050, optional: false },
-  { id: 'o1000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'web', action: 'fill', value: 'admin123', locators: [{ strategy: 'css', value: 'input[name="password"]', score: 95 }, { strategy: 'testId', value: 'password', score: 90 }], timeoutMs: 5000, timestamp: 1100, optional: false },
-  { id: 'o1000000-0000-4000-8000-000000000004', schemaVersion: 2, stepNumber: 4, platform: 'web', action: 'click', locators: [{ strategy: 'css', value: 'button[type="submit"]', score: 95 }, { strategy: 'role', value: 'button[name="Login"]', score: 90 }], timeoutMs: 5000, timestamp: 1150, optional: false },
-  { id: 'o1000000-0000-4000-8000-000000000005', schemaVersion: 2, stepNumber: 5, platform: 'web', action: 'assertUrl', expectedValue: 'https://opensource-demo.orangehrmlive.com/web/index.php/dashboard/index', timeoutMs: 5000, timestamp: 1200, optional: false },
-  { id: 'o1000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'web', action: 'assertVisible', locators: [{ strategy: 'css', value: '.oxd-topbar-header-breadcrumb', score: 95 }], timeoutMs: 5000, timestamp: 1250, optional: false },
+export const ORANGEHRM_TEMPLATE_STEPS: ActionIR[] = [
+  { id: 'b1000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'web', action: 'navigate', value: 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login', timeoutMs: 5000, timestamp: 1000, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'web', action: 'fill', value: 'Admin', locators: [{ strategy: 'css', value: 'input[name="username"]', score: 95 }, { strategy: 'testId', value: 'username', score: 90 }], timeoutMs: 5000, timestamp: 1050, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'web', action: 'fill', value: 'admin123', locators: [{ strategy: 'css', value: 'input[name="password"]', score: 95 }, { strategy: 'testId', value: 'password', score: 90 }], timeoutMs: 5000, timestamp: 1100, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000004', schemaVersion: 2, stepNumber: 4, platform: 'web', action: 'click', locators: [{ strategy: 'css', value: 'button[type="submit"]', score: 95 }, { strategy: 'role', value: 'button[name="Login"]', score: 90 }], timeoutMs: 5000, timestamp: 1150, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000005', schemaVersion: 2, stepNumber: 5, platform: 'web', action: 'assertUrl', expectedValue: 'https://opensource-demo.orangehrmlive.com/web/index.php/dashboard/index', timeoutMs: 5000, timestamp: 1200, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'web', action: 'assertVisible', locators: [{ strategy: 'css', value: '.oxd-topbar-header-breadcrumb', score: 95 }], timeoutMs: 5000, timestamp: 1250, optional: false },
 ];
 
 const APIDEMOS_TEMPLATE_STEPS: ActionIR[] = [
@@ -250,7 +251,6 @@ export const VisualCanvas: React.FC = () => {
                 <input
                   id="web-action-locator"
                   name="webActionLocator"
-                  placeholder="locator (e.g. #login-button)"
                   value={webLocator}
                   onChange={(e) => setWebLocator(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-32 focus:outline-none focus:border-cyan-500"
@@ -261,7 +261,6 @@ export const VisualCanvas: React.FC = () => {
                 <input
                   id="web-action-value"
                   name="webActionValue"
-                  placeholder={webAction === 'navigate' ? 'URL' : 'value / expected'}
                   value={webValue}
                   onChange={(e) => setWebValue(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-32 focus:outline-none focus:border-cyan-500"
@@ -303,7 +302,6 @@ export const VisualCanvas: React.FC = () => {
                 <input
                   id="android-action-locator"
                   name="androidActionLocator"
-                  placeholder="locator (e.g. ~Views or id)"
                   value={androidLocator}
                   onChange={(e) => setAndroidLocator(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-32 focus:outline-none focus:border-cyan-500"
@@ -314,7 +312,6 @@ export const VisualCanvas: React.FC = () => {
                 <input
                   id="android-action-value"
                   name="androidActionValue"
-                  placeholder="value / expected"
                   value={androidValue}
                   onChange={(e) => setAndroidValue(e.target.value)}
                   className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-32 focus:outline-none focus:border-cyan-500"
@@ -350,102 +347,73 @@ export const VisualCanvas: React.FC = () => {
       </p>
       {isAndroid && <DeviceFarmPanel />}
       <div className="flex min-h-0 flex-1 flex-col">
-        <div className="recorder-status-card flex min-h-[35%] items-center justify-center border-b border-slate-800/80 bg-slate-950/80 p-6">
-          <div className="w-full max-w-3xl rounded-lg border border-slate-800 bg-slate-900/80 p-6">
-            <div className="flex items-start gap-4">
-              <AlertTriangle className="h-6 w-6 shrink-0 text-amber-400" aria-hidden="true" />
-              <div className="space-y-3">
-                <h2 className="text-lg font-semibold text-slate-100">{!activeSession ? 'Workspace setup required' : isApi ? 'API builder required' : isAndroid ? 'Android recorder preflight' : 'Web recorder preflight'}</h2>
-                <p className="text-sm leading-6 text-slate-300">
-                  {!activeSession
-                    ? 'Create a local project and a session in the explorer. The shell will not create a target, device, or sample actions for you.'
-                    : isApi
-                      ? 'API sessions are configured in the API builder so requests, assertions, and extraction variables stay in the canonical IR.'
-                      : isAndroid
-                        ? 'The native Tauri/Rust host owns ADB discovery, device locks, hierarchy capture, and gesture recording.'
-                        : 'The native Tauri/Rust host owns the headed browser, CDP transport, and ActionIR event capture.'}
-                </p>
-                {activeSession?.platform === 'web' && (
-                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
-                    <span className="text-xs text-slate-400">Quick E2E Targets:</span>
-                    <button
-                      type="button"
-                      id="load-saucedemo-flow"
-                      onClick={() => {
-                        setInputUrl('https://www.saucedemo.com/');
-                        void loadTemplateSteps(SAUCEDEMO_TEMPLATE_STEPS, 'https://www.saucedemo.com/');
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-sky-950 hover:bg-sky-900 text-sky-200 border border-sky-700/70"
-                      title="Load SauceDemo purchase journey"
-                    >
-                      <Globe className="w-3.5 h-3.5 text-sky-400" />
-                      <span>SauceDemo Flow (15 steps)</span>
-                    </button>
-                    <button
-                      type="button"
-                      id="load-orangehrm-flow"
-                      onClick={() => {
-                        setInputUrl('https://opensource-demo.orangehrmlive.com/');
-                        void loadTemplateSteps(ORANGEHRM_TEMPLATE_STEPS, 'https://opensource-demo.orangehrmlive.com/');
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70"
-                      title="Load OrangeHRM login & dashboard flow"
-                    >
-                      <Globe className="w-3.5 h-3.5 text-amber-400" />
-                      <span>OrangeHRM Flow (6 steps)</span>
-                    </button>
-                  </div>
-                )}
-                {activeSession?.platform === 'android' && (
-                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
-                    <span className="text-xs text-slate-400">Quick E2E Targets:</span>
-                    <button
-                      type="button"
-                      id="load-apidemos-flow"
-                      onClick={() => {
-                        setAppPackage('io.appium.android.apis');
-                        void loadTemplateSteps(APIDEMOS_TEMPLATE_STEPS, { appPackage: 'io.appium.android.apis', appActivity: '.ApiDemos' });
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/70"
-                      title="Load ApiDemos mobile test flow"
-                    >
-                      <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
-                      <span>ApiDemos Flow (10 steps)</span>
-                    </button>
-                    <button
-                      type="button"
-                      id="load-notiplus-flow"
-                      onClick={() => {
-                        setAppPackage('com.notifplus');
-                        void loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-700/70"
-                      title="Load NotiPlus notification test flow"
-                    >
-                      <Smartphone className="w-3.5 h-3.5 text-teal-400" />
-                      <span>NotiPlus Flow (6 steps)</span>
-                    </button>
-                    <button
-                      type="button"
-                      id="run-notiplus-loop-3x"
-                      onClick={async () => {
-                        setAppPackage('com.notifplus');
-                        await loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
-                        void runLooping(3);
-                      }}
-                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70"
-                      title="Run 3x Looping replay on NotiPlus"
-                    >
-                      <Repeat className="w-3.5 h-3.5 text-amber-400" />
-                      <span>Run 3x Loop (NotiPlus)</span>
-                    </button>
-                  </div>
-                )}
-                <p className="text-xs text-amber-300/90">Browser migration evidence is status-only. Missing runtimes, devices, packages, and targets remain blocked.</p>
+        {activeSession?.platform === 'web' ? (
+          <WebDriverCanvas />
+        ) : (
+          <div className="recorder-status-card flex min-h-[35%] items-center justify-center border-b border-slate-800/80 bg-slate-950/80 p-6">
+            <div className="w-full max-w-3xl rounded-lg border border-slate-800 bg-slate-900/80 p-6">
+              <div className="flex items-start gap-4">
+                <AlertTriangle className="h-6 w-6 shrink-0 text-amber-400" aria-hidden="true" />
+                <div className="space-y-3">
+                  <h2 className="text-lg font-semibold text-slate-100">{!activeSession ? 'Workspace setup required' : isApi ? 'API builder required' : 'Android recorder preflight'}</h2>
+                  <p className="text-sm leading-6 text-slate-300">
+                    {!activeSession
+                      ? 'Create a local project and a session in the explorer. The shell will not create a target, device, or sample actions for you.'
+                      : isApi
+                        ? 'API sessions are configured in the API builder so requests, assertions, and extraction variables stay in the canonical IR.'
+                        : 'The native Tauri/Rust host owns ADB discovery, device locks, hierarchy capture, and gesture recording.'}
+                  </p>
+                  {activeSession?.platform === 'android' && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
+                      <span className="text-xs text-slate-400">Quick E2E Targets:</span>
+                      <button
+                        type="button"
+                        id="load-apidemos-flow"
+                        onClick={() => {
+                          setAppPackage('io.appium.android.apis');
+                          void loadTemplateSteps(APIDEMOS_TEMPLATE_STEPS, { appPackage: 'io.appium.android.apis', appActivity: '.ApiDemos' });
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/70"
+                        title="Load ApiDemos mobile test flow"
+                      >
+                        <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>ApiDemos Flow (10 steps)</span>
+                      </button>
+                      <button
+                        type="button"
+                        id="load-notiplus-flow"
+                        onClick={() => {
+                          setAppPackage('com.notifplus');
+                          void loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-700/70"
+                        title="Load NotiPlus notification test flow"
+                      >
+                        <Smartphone className="w-3.5 h-3.5 text-teal-400" />
+                        <span>NotiPlus Flow (6 steps)</span>
+                      </button>
+                      <button
+                        type="button"
+                        id="run-notiplus-loop-3x"
+                        onClick={async () => {
+                          setAppPackage('com.notifplus');
+                          await loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
+                          void runLooping(3);
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70"
+                        title="Run 3x Looping replay on NotiPlus"
+                      >
+                        <Repeat className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Run 3x Loop (NotiPlus)</span>
+                      </button>
+                    </div>
+                  )}
+                  <p className="text-xs text-amber-300/90">Browser migration evidence is status-only. Missing runtimes, devices, packages, and targets remain blocked.</p>
+                </div>
               </div>
             </div>
           </div>
-        </div>
+        )}
         <div className="flex min-h-0 flex-1 flex-col bg-slate-950">
           <ActionTimeline />
         </div>
