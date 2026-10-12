@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { SessionIR } from '@automate-plus/ir-schema';
 import { DesktopBridgeService, NativeIpcError } from '../desktopBridge.js';
 
 interface NativeRequestFixture {
@@ -25,6 +26,16 @@ function requestFrom(body: unknown): NativeRequestFixture {
   if (typeof method !== 'string') throw new Error('Missing request method fixture.');
   return { method, payload };
 }
+
+beforeEach(() => {
+  const values = new Map<string, string>();
+  vi.stubGlobal('localStorage', {
+    getItem: (key: string) => values.get(key) ?? null,
+    setItem: (key: string, value: string) => values.set(key, value),
+    removeItem: (key: string) => values.delete(key),
+    clear: () => values.clear(),
+  });
+});
 
 afterEach(() => {
   vi.unstubAllGlobals();
@@ -169,5 +180,184 @@ describe('[ComponentTest] desktop native bridge', () => {
       healthIssueCount: 1,
     });
     expect(invoke).toHaveBeenCalledTimes(5);
+  });
+
+  it('runs interactive test for SauceDemo Web session and passes all steps with logs', async () => {
+    const service = new DesktopBridgeService();
+    const saucedemoSession: SessionIR = {
+      id: 'session-saucedemo-test',
+      schemaVersion: 2,
+      projectId: 'project-test',
+      name: 'SauceDemo E2E Test',
+      platform: 'web',
+      targetConfig: { startUrl: 'https://www.saucedemo.com/' },
+      environmentVariables: {},
+      steps: [
+        {
+          id: 'step-1',
+          schemaVersion: 2,
+          stepNumber: 1,
+          platform: 'web',
+          action: 'navigate',
+          value: 'https://www.saucedemo.com/',
+          timeoutMs: 5000,
+          timestamp: 1000,
+          optional: false,
+        },
+        {
+          id: 'step-2',
+          schemaVersion: 2,
+          stepNumber: 2,
+          platform: 'web',
+          action: 'fill',
+          value: 'standard_user',
+          locators: [{ strategy: 'testId', value: 'username', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1050,
+          optional: false,
+        },
+        {
+          id: 'step-3',
+          schemaVersion: 2,
+          stepNumber: 3,
+          platform: 'web',
+          action: 'fill',
+          value: 'secret_sauce',
+          locators: [{ strategy: 'testId', value: 'password', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1100,
+          optional: false,
+        },
+        {
+          id: 'step-4',
+          schemaVersion: 2,
+          stepNumber: 4,
+          platform: 'web',
+          action: 'click',
+          locators: [{ strategy: 'testId', value: 'login-button', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1150,
+          optional: false,
+        },
+        {
+          id: 'step-5',
+          schemaVersion: 2,
+          stepNumber: 5,
+          platform: 'web',
+          action: 'assertUrl',
+          expectedValue: 'https://www.saucedemo.com/inventory.html',
+          timeoutMs: 5000,
+          timestamp: 1200,
+          optional: false,
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const logs: string[] = [];
+    const summary = await service.runInteractiveTest(saucedemoSession, (log) => {
+      logs.push(log.message);
+    });
+
+    expect(summary.status).toBe('passed');
+    expect(summary.passedSteps).toBe(5);
+    expect(summary.failedSteps).toBe(0);
+    expect(summary.totalSteps).toBe(5);
+    expect(logs.some((msg) => msg.includes('Starting Interactive In-App Test Run'))).toBe(true);
+    expect(logs.some((msg) => msg.includes('[PASS] Step 1: navigate'))).toBe(true);
+    expect(logs.some((msg) => msg.includes('[PASS] Step 5: assertUrl'))).toBe(true);
+  });
+
+  it('runs interactive test for OrangeHRM Web session and passes with locators', async () => {
+    const service = new DesktopBridgeService();
+    const orangehrmSession: SessionIR = {
+      id: 'session-orangehrm-test',
+      schemaVersion: 2,
+      projectId: 'project-test',
+      name: 'OrangeHRM Login Flow',
+      platform: 'web',
+      targetConfig: { startUrl: 'https://opensource-demo.orangehrmlive.com/' },
+      environmentVariables: {},
+      steps: [
+        {
+          id: 'o-step-1',
+          schemaVersion: 2,
+          stepNumber: 1,
+          platform: 'web',
+          action: 'navigate',
+          value: 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login',
+          timeoutMs: 5000,
+          timestamp: 1000,
+          optional: false,
+        },
+        {
+          id: 'o-step-2',
+          schemaVersion: 2,
+          stepNumber: 2,
+          platform: 'web',
+          action: 'fill',
+          value: 'Admin',
+          locators: [
+            { strategy: 'css', value: 'input[name="username"]', score: 95 },
+            { strategy: 'testId', value: 'username', score: 90 },
+          ],
+          timeoutMs: 5000,
+          timestamp: 1050,
+          optional: false,
+        },
+        {
+          id: 'o-step-3',
+          schemaVersion: 2,
+          stepNumber: 3,
+          platform: 'web',
+          action: 'fill',
+          value: 'admin123',
+          locators: [
+            { strategy: 'css', value: 'input[name="password"]', score: 95 },
+            { strategy: 'testId', value: 'password', score: 90 },
+          ],
+          timeoutMs: 5000,
+          timestamp: 1100,
+          optional: false,
+        },
+        {
+          id: 'o-step-4',
+          schemaVersion: 2,
+          stepNumber: 4,
+          platform: 'web',
+          action: 'click',
+          locators: [
+            { strategy: 'css', value: 'button[type="submit"]', score: 95 },
+            { strategy: 'role', value: 'button[name="Login"]', score: 90 },
+          ],
+          timeoutMs: 5000,
+          timestamp: 1150,
+          optional: false,
+        },
+        {
+          id: 'o-step-5',
+          schemaVersion: 2,
+          stepNumber: 5,
+          platform: 'web',
+          action: 'assertUrl',
+          expectedValue: 'https://opensource-demo.orangehrmlive.com/web/index.php/dashboard/index',
+          timeoutMs: 5000,
+          timestamp: 1200,
+          optional: false,
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const logs: string[] = [];
+    const summary = await service.runInteractiveTest(orangehrmSession, (log) => {
+      logs.push(log.message);
+    });
+
+    expect(summary.status).toBe('passed');
+    expect(summary.passedSteps).toBe(5);
+    expect(summary.failedSteps).toBe(0);
   });
 });

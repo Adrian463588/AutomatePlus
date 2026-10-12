@@ -1,9 +1,36 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Circle, Globe, ShieldCheck, Smartphone, Square } from 'lucide-react';
-import { type LocatorStrategy } from '@automate-plus/ir-schema';
+import { AlertTriangle, Circle, Globe, Plus, ShieldCheck, Smartphone, Square } from 'lucide-react';
+import { type ActionIR, type ActionType, type LocatorStrategy } from '@automate-plus/ir-schema';
 import { useAppStore } from '../../store/appStore.js';
 import { ActionTimeline } from './ActionTimeline.js';
 import { DeviceFarmPanel } from './DeviceFarmPanel.js';
+
+const SAUCEDEMO_TEMPLATE_STEPS: ActionIR[] = [
+  { id: 'a1000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'web', action: 'navigate', value: 'https://www.saucedemo.com/', timeoutMs: 5000, timestamp: 1000, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'web', action: 'fill', value: 'standard_user', locators: [{ strategy: 'testId', value: 'username', score: 100 }, { strategy: 'css', value: '#user-name', score: 80 }], timeoutMs: 5000, timestamp: 1050, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'web', action: 'fill', value: 'secret_sauce', locators: [{ strategy: 'testId', value: 'password', score: 100 }, { strategy: 'css', value: '#password', score: 80 }], timeoutMs: 5000, timestamp: 1100, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000004', schemaVersion: 2, stepNumber: 4, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'login-button', score: 100 }, { strategy: 'css', value: '#login-button', score: 80 }], timeoutMs: 5000, timestamp: 1150, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000005', schemaVersion: 2, stepNumber: 5, platform: 'web', action: 'assertUrl', expectedValue: 'https://www.saucedemo.com/inventory.html', timeoutMs: 5000, timestamp: 1200, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'web', action: 'assertVisible', locators: [{ strategy: 'testId', value: 'inventory-container', score: 100 }, { strategy: 'css', value: '.inventory_list', score: 80 }], timeoutMs: 5000, timestamp: 1250, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000007', schemaVersion: 2, stepNumber: 7, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'add-to-cart-sauce-labs-backpack', score: 100 }], timeoutMs: 5000, timestamp: 1300, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000008', schemaVersion: 2, stepNumber: 8, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'shopping-cart-link', score: 100 }], timeoutMs: 5000, timestamp: 1350, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000009', schemaVersion: 2, stepNumber: 9, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'checkout', score: 100 }], timeoutMs: 5000, timestamp: 1400, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000010', schemaVersion: 2, stepNumber: 10, platform: 'web', action: 'fill', value: 'John', locators: [{ strategy: 'testId', value: 'firstName', score: 100 }], timeoutMs: 5000, timestamp: 1450, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000011', schemaVersion: 2, stepNumber: 11, platform: 'web', action: 'fill', value: 'Doe', locators: [{ strategy: 'testId', value: 'lastName', score: 100 }], timeoutMs: 5000, timestamp: 1500, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000012', schemaVersion: 2, stepNumber: 12, platform: 'web', action: 'fill', value: '94043', locators: [{ strategy: 'testId', value: 'postalCode', score: 100 }], timeoutMs: 5000, timestamp: 1550, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000013', schemaVersion: 2, stepNumber: 13, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'continue', score: 100 }], timeoutMs: 5000, timestamp: 1600, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000014', schemaVersion: 2, stepNumber: 14, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'finish', score: 100 }], timeoutMs: 5000, timestamp: 1650, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000015', schemaVersion: 2, stepNumber: 15, platform: 'web', action: 'assertText', expectedValue: 'Thank you for your order!', locators: [{ strategy: 'testId', value: 'complete-header', score: 100 }], timeoutMs: 5000, timestamp: 1700, optional: false },
+];
+
+const ORANGEHRM_TEMPLATE_STEPS: ActionIR[] = [
+  { id: 'o1000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'web', action: 'navigate', value: 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login', timeoutMs: 5000, timestamp: 1000, optional: false },
+  { id: 'o1000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'web', action: 'fill', value: 'Admin', locators: [{ strategy: 'css', value: 'input[name="username"]', score: 95 }, { strategy: 'testId', value: 'username', score: 90 }], timeoutMs: 5000, timestamp: 1050, optional: false },
+  { id: 'o1000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'web', action: 'fill', value: 'admin123', locators: [{ strategy: 'css', value: 'input[name="password"]', score: 95 }, { strategy: 'testId', value: 'password', score: 90 }], timeoutMs: 5000, timestamp: 1100, optional: false },
+  { id: 'o1000000-0000-4000-8000-000000000004', schemaVersion: 2, stepNumber: 4, platform: 'web', action: 'click', locators: [{ strategy: 'css', value: 'button[type="submit"]', score: 95 }, { strategy: 'role', value: 'button[name="Login"]', score: 90 }], timeoutMs: 5000, timestamp: 1150, optional: false },
+  { id: 'o1000000-0000-4000-8000-000000000005', schemaVersion: 2, stepNumber: 5, platform: 'web', action: 'assertUrl', expectedValue: 'https://opensource-demo.orangehrmlive.com/web/index.php/dashboard/index', timeoutMs: 5000, timestamp: 1200, optional: false },
+  { id: 'o1000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'web', action: 'assertVisible', locators: [{ strategy: 'css', value: '.oxd-topbar-header-breadcrumb', score: 95 }], timeoutMs: 5000, timestamp: 1250, optional: false },
+];
 
 export const VisualCanvas: React.FC = () => {
   const {
@@ -14,12 +41,16 @@ export const VisualCanvas: React.FC = () => {
     startRecording,
     stopRecording,
     addStep,
+    loadTemplateSteps,
     updateTargetConfig,
   } = useAppStore();
   const [inputUrl, setInputUrl] = useState('');
   const [appPackage, setAppPackage] = useState('');
   const [assertionStrategy, setAssertionStrategy] = useState<LocatorStrategy>('role');
   const [assertionLocator, setAssertionLocator] = useState('');
+  const [webAction, setWebAction] = useState<ActionType>('click');
+  const [webLocator, setWebLocator] = useState('');
+  const [webValue, setWebValue] = useState('');
   const isAndroid = activeSession?.platform === 'android';
   const isApi = activeSession?.platform === 'api';
   const assertionOptions: Array<{ value: LocatorStrategy; label: string }> = isAndroid
@@ -89,6 +120,30 @@ export const VisualCanvas: React.FC = () => {
     setAssertionLocator('');
   };
 
+  const handleAddWebAction = async () => {
+    if (!activeSession) return;
+    const isNav = webAction === 'navigate';
+    const isAssertUrl = webAction === 'assertUrl';
+    const isNoLoc = isNav || isAssertUrl;
+    if (!isNoLoc && !webLocator.trim()) return;
+
+    await addStep({
+      id: crypto.randomUUID(),
+      schemaVersion: 2,
+      stepNumber: activeSession.ir.steps.length + 1,
+      platform: 'web',
+      action: webAction,
+      locators: isNoLoc ? undefined : [{ strategy: assertionStrategy, value: webLocator.trim(), score: 90 }],
+      value: isNav ? (webValue.trim() || inputUrl.trim()) : (webAction === 'fill' ? webValue : undefined),
+      expectedValue: (isAssertUrl || webAction === 'assertText' || webAction === 'assertValue') ? webValue.trim() : undefined,
+      timeoutMs: 5000,
+      timestamp: Date.now(),
+      optional: false,
+    });
+    setWebLocator('');
+    setWebValue('');
+  };
+
   const targetLabel = isAndroid ? 'Package: ' + appPackage : 'Target: ' + inputUrl;
   const preflightClass = [
     'border-b border-slate-800 px-4 py-2 text-xs',
@@ -124,7 +179,58 @@ export const VisualCanvas: React.FC = () => {
             </label>
           )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {!isAndroid && !isApi && (
+            <div className="flex items-center gap-1.5 border-r border-slate-800 pr-2">
+              <label htmlFor="web-action-type" className="sr-only">Web action type</label>
+              <select
+                id="web-action-type"
+                name="webActionType"
+                value={webAction}
+                onChange={(e) => setWebAction(e.target.value as ActionType)}
+                className="ap-select text-xs py-1"
+                aria-label="Action type"
+              >
+                <option value="click">click</option>
+                <option value="fill">fill</option>
+                <option value="navigate">navigate</option>
+                <option value="assertUrl">assertUrl</option>
+                <option value="assertVisible">assertVisible</option>
+                <option value="assertText">assertText</option>
+              </select>
+              {webAction !== 'navigate' && webAction !== 'assertUrl' && (
+                <input
+                  id="web-action-locator"
+                  name="webActionLocator"
+                  placeholder="locator (e.g. #login-button)"
+                  value={webLocator}
+                  onChange={(e) => setWebLocator(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-32 focus:outline-none focus:border-cyan-500"
+                  aria-label="Web action locator"
+                />
+              )}
+              {(webAction === 'fill' || webAction === 'navigate' || webAction === 'assertUrl' || webAction === 'assertText') && (
+                <input
+                  id="web-action-value"
+                  name="webActionValue"
+                  placeholder={webAction === 'navigate' ? 'URL' : 'value / expected'}
+                  value={webValue}
+                  onChange={(e) => setWebValue(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-32 focus:outline-none focus:border-cyan-500"
+                  aria-label="Web action value"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => void handleAddWebAction()}
+                disabled={!activeSession || isRecording}
+                className="button-small bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 disabled:opacity-40"
+                title="Add web action step"
+              >
+                <Plus className="h-3.5 w-3.5 text-cyan-400" aria-hidden="true" />Add step
+              </button>
+            </div>
+          )}
           <label className="field-inline">
             <span className="text-[10px] text-slate-400">Locator</span>
             <select id="assertion-locator-strategy" name="assertionStrategy" value={assertionStrategy} onChange={(event) => setAssertionStrategy(event.target.value as LocatorStrategy)} aria-label="Assertion locator strategy">
@@ -157,6 +263,37 @@ export const VisualCanvas: React.FC = () => {
                         ? 'The native Tauri/Rust host owns ADB discovery, device locks, hierarchy capture, and gesture recording.'
                         : 'The native Tauri/Rust host owns the headed browser, CDP transport, and ActionIR event capture.'}
                 </p>
+                {activeSession?.platform === 'web' && (
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
+                    <span className="text-xs text-slate-400">Quick E2E Targets:</span>
+                    <button
+                      type="button"
+                      id="load-saucedemo-flow"
+                      onClick={() => {
+                        setInputUrl('https://www.saucedemo.com/');
+                        void loadTemplateSteps(SAUCEDEMO_TEMPLATE_STEPS, 'https://www.saucedemo.com/');
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-sky-950 hover:bg-sky-900 text-sky-200 border border-sky-700/70"
+                      title="Load SauceDemo purchase journey"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-sky-400" />
+                      <span>SauceDemo Flow (15 steps)</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="load-orangehrm-flow"
+                      onClick={() => {
+                        setInputUrl('https://opensource-demo.orangehrmlive.com/');
+                        void loadTemplateSteps(ORANGEHRM_TEMPLATE_STEPS, 'https://opensource-demo.orangehrmlive.com/');
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70"
+                      title="Load OrangeHRM login & dashboard flow"
+                    >
+                      <Globe className="w-3.5 h-3.5 text-amber-400" />
+                      <span>OrangeHRM Flow (6 steps)</span>
+                    </button>
+                  </div>
+                )}
                 <p className="text-xs text-amber-300/90">Browser migration evidence is status-only. Missing runtimes, devices, packages, and targets remain blocked.</p>
               </div>
             </div>

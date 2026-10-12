@@ -26,7 +26,7 @@ import type {
 import { createRequest, createRuntimeId, encodeNativeIpcMessage } from '@automate-plus/contracts';
 import type { IpcResponse } from '@automate-plus/contracts';
 import type { SessionIR } from '@automate-plus/ir-schema';
-import { ApiFunctionalRunner } from '@automate-plus/runner-core/browser';
+import { ApiFunctionalRunner, InteractivePlayer, WebInteractiveStepExecutor } from '@automate-plus/runner-core/browser';
 import type { LoopingSummary, K6StressMetrics } from '@automate-plus/stress-engine/browser';
 import {
   BROWSER_RUNTIME_BLOCKED_REASON,
@@ -624,27 +624,41 @@ export class DesktopBridgeService {
   }
 
   public async runInteractiveTest(session: SessionIR, onLog: RunLogCallback): Promise<RunSummary> {
-    if (session.platform !== 'api') {
-      const summary = createBlockedRunSummary(session.id, 'Interactive Web/Android execution requires the native or recorder host.', session.steps.length);
-      onLog({ timestamp: Date.now(), type: 'error', message: summary.error ?? 'Interactive execution is blocked.' });
+    if (session.platform === 'api') {
+      const summary = await this.apiRunner.run(session, { executionMode: 'functional' }, onLog);
+      await this.saveRunSummary(session.id, summary);
       return summary;
     }
-    const summary = await this.apiRunner.run(session, { executionMode: 'functional' }, onLog);
-    await this.runRepo.saveRun({
-      id: summary.runId,
-      sessionId: session.id,
-      framework: 'interactive',
-      language: 'ts',
-      executionMode: 'interactive',
-      status: summary.status as any,
-      iterationsTarget: 1,
-      iterationsCompleted: 1,
-      durationMs: summary.durationMs,
-      startedAt: Date.now() - summary.durationMs,
-      finishedAt: Date.now(),
-      errorSummary: summary.error,
-    });
+    if (session.platform === 'web') {
+      const player = new InteractivePlayer(new WebInteractiveStepExecutor(session.targetConfig.startUrl));
+      const summary = await player.run(session, { executionMode: 'interactive' }, onLog);
+      await this.saveRunSummary(session.id, summary);
+      return summary;
+    }
+    const summary = createBlockedRunSummary(session.id, 'Interactive Android execution requires the native host.', session.steps.length);
+    onLog({ timestamp: Date.now(), type: 'error', message: summary.error ?? 'Interactive execution is blocked.' });
     return summary;
+  }
+
+  private async saveRunSummary(sessionId: string, summary: RunSummary): Promise<void> {
+    try {
+      await this.runRepo.saveRun({
+        id: summary.runId,
+        sessionId,
+        framework: 'interactive',
+        language: 'ts',
+        executionMode: 'interactive',
+        status: summary.status as any,
+        iterationsTarget: 1,
+        iterationsCompleted: 1,
+        durationMs: summary.durationMs,
+        startedAt: Date.now() - summary.durationMs,
+        finishedAt: Date.now(),
+        errorSummary: summary.error,
+      });
+    } catch {
+      // Storage failure does not disrupt execution summary
+    }
   }
 
   public async runNativeTest(session: SessionIR, framework: string, language: string, onLog: RunLogCallback): Promise<RunSummary> {

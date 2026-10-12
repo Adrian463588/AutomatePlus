@@ -102,6 +102,7 @@ interface AppState {
   selectGeneratedFile: (relativePath: string) => void;
   regenerateCode: () => Promise<void>;
   addStep: (step: ActionIR) => Promise<void>;
+  loadTemplateSteps: (steps: ActionIR[], startUrl?: string) => Promise<void>;
   saveApiRequest: (request: ActionIR, assertions: ApiAssertionDraft[]) => Promise<void>;
   updateStep: (stepIndex: number, step: ActionIR) => Promise<void>;
   deleteStep: (stepIndex: number) => Promise<void>;
@@ -489,6 +490,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updatedSession: SessionRecord = { ...activeSession, ir: { ...activeSession.ir, steps: nextSteps([...activeSession.ir.steps, step]), updatedAt: Date.now() }, updatedAt: Date.now() };
     await bridge.sessionRepo.save(updatedSession);
     set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session), feedback: { kind: 'success', message: 'Action added to the session IR.' } });
+    await get().regenerateCode();
+  },
+
+  loadTemplateSteps: async (steps, startUrl) => {
+    const activeSession = get().activeSession;
+    if (!activeSession) { set({ feedback: { kind: 'blocked', message: 'Create and select a session before loading actions.' } }); return; }
+    const targetConfig = startUrl ? { ...activeSession.ir.targetConfig, startUrl } : activeSession.ir.targetConfig;
+    const updatedSession: SessionRecord = {
+      ...activeSession,
+      ir: { ...activeSession.ir, targetConfig, steps: nextSteps(steps), updatedAt: Date.now() },
+      updatedAt: Date.now(),
+    };
+    await bridge.sessionRepo.save(updatedSession);
+    set({ activeSession: updatedSession, sessions: get().sessions.map((session) => session.id === updatedSession.id ? updatedSession : session), feedback: { kind: 'success', message: `Loaded ${steps.length} actions into session IR.` } });
     await get().regenerateCode();
   },
 
