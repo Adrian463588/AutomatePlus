@@ -96,6 +96,35 @@ export const MCP_TOOLS: McpToolDefinition[] = [
     },
   },
   {
+    name: 'run_load_test',
+    description: 'Execute a k6 performance load test against an API endpoint with target RPS, duration, and virtual users (VUs), generating runnable k6 scripts and performance metrics.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        targetUrl: { type: 'string', description: 'Target API endpoint URL to load test (e.g. https://reqres.in/api/users)' },
+        targetRps: { type: 'number', description: 'Target requests per second (RPS)' },
+        durationSeconds: { type: 'number', description: 'Load duration in seconds' },
+        maxVUs: { type: 'number', description: 'Maximum virtual users allocated' },
+      },
+      required: ['targetUrl'],
+    },
+  },
+  {
+    name: 'test_web_page',
+    description: 'Perform web automation testing against a target URL (like Playwright MCP), executing browser interactions, validating DOM state, and generating clean runnable test scripts (Playwright, Cypress, Selenium).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Target website URL (e.g. https://www.saucedemo.com/)' },
+        flowPreset: { type: 'string', enum: ['saucedemo', 'orangehrm', 'custom'], description: 'Flow preset or custom' },
+        exportFramework: { type: 'string', enum: ['playwright', 'cypress', 'selenium', 'puppeteer'], description: 'Export framework (default: playwright)' },
+        exportLanguage: { type: 'string', enum: ['typescript', 'javascript', 'python', 'java'], description: 'Export language (default: typescript)' },
+        steps: { type: 'array', description: 'Optional custom ActionIR steps' },
+      },
+      required: ['url'],
+    },
+  },
+  {
     name: 'automateplus_inspect_web_elements',
     description: 'Inspect interactive DOM elements of a web target URL or HTML snippet, extracting tags, attributes, text content, and ranked locator candidates (CSS, XPath, Data-Test).',
     inputSchema: {
@@ -150,6 +179,20 @@ export const MCP_TOOLS: McpToolDefinition[] = [
         strategy: { type: 'string', enum: ['single', 'all-devices', 'split-iterations'], description: 'Execution strategy' },
         failurePolicy: { type: 'string', enum: ['continue-other-devices', 'stop-on-first-failure'], description: 'Failure handling policy' },
       },
+    },
+  },
+  {
+    name: 'automateplus_run_k6',
+    description: 'Execute a k6 constant-arrival-rate load test against an API target, returning execution metrics and generated k6 test script.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        targetUrl: { type: 'string', description: 'Target API URL' },
+        targetRps: { type: 'number', description: 'Target requests per second' },
+        durationSeconds: { type: 'number', description: 'Duration in seconds' },
+        maxVUs: { type: 'number', description: 'Max virtual users' },
+      },
+      required: ['targetUrl'],
     },
   },
   {
@@ -870,6 +913,29 @@ export class AutomatePlusMcpBridge {
             case 'generate_runnable_test_script':
               toolResult = await this.generateRunnableTestScript(args as any);
               break;
+            case 'run_load_test': {
+              const subResult = await this.runK6LoadTest(args as any);
+              toolResult = {
+                status: 'SUCCESS',
+                targetUrl: args.targetUrl,
+                summary: subResult.summary,
+                logs: subResult.logs,
+                generatedFiles: subResult.generatedFiles,
+              };
+              break;
+            }
+            case 'test_web_page': {
+              const subResult = await this.runWeb({ targetUrl: args.url, ...args });
+              toolResult = {
+                status: subResult.status === 'passed' ? 'SUCCESS' : 'FAILED',
+                platform: 'web',
+                url: args.url,
+                summary: subResult.summary,
+                logs: subResult.logs,
+                generatedFiles: subResult.generatedFiles,
+              };
+              break;
+            }
             case 'automateplus_inspect_web_elements':
               toolResult = this.inspectWebElements(args);
               break;
@@ -881,6 +947,9 @@ export class AutomatePlusMcpBridge {
               break;
             case 'automateplus_run_phone_farm':
               toolResult = await this.runPhoneFarm(args);
+              break;
+            case 'automateplus_run_k6':
+              toolResult = await this.runK6LoadTest(args as any);
               break;
             case 'automateplus_generate_test_script':
               toolResult = await this.generateTestScript(args);

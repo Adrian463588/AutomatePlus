@@ -1,7 +1,7 @@
 # AutomatePlus (Sprint 2)
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-213%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-224%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Latest Release](https://img.shields.io/badge/Release-v1.7.0-blue.svg)](https://github.com/Adrian463588/AutomatePlus/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
@@ -94,10 +94,11 @@ AutomatePlus binaries and offline execution bundles are published directly via G
 
 | Release | Platform | Distribution | Download Link |
 |---|---|---|---|
-| **v1.6.0 (Latest)** | Windows x64 | Standalone Desktop Bundle | [Download AutomatePlus v1.6.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.6.0/AutomatePlus-v1.6.0-win-x64.zip) |
-| **v1.6.0 (Latest)** | Windows x64 | Standalone Executable | [Download AutomatePlus.exe](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.6.0/AutomatePlus.exe) |
-| **v1.6.0 (Latest)** | Windows x64 | 1-Click Launcher Script | [Download Run-AutomatePlus.bat](https://github.com/Adrian463588/AutomatePlus/raw/main/Run-AutomatePlus.bat) |
-| **v1.5.0** | Windows x64 | Previous Stable Release | [Download AutomatePlus v1.5.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.5.0/AutomatePlus-v1.5.0-win-x64.zip) |
+| **v1.7.0 (Latest)** | Windows x64 | Standalone Desktop Bundle | [Download AutomatePlus v1.7.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.7.0/AutomatePlus-v1.7.0-win-x64.zip) |
+| **v1.7.0 (Latest)** | Windows x64 | Standalone Executable | [Download AutomatePlus.exe](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.7.0/AutomatePlus.exe) |
+| **v1.7.0 (Latest)** | Windows x64 | 1-Click Launcher Script | [Download Run-AutomatePlus.bat](https://github.com/Adrian463588/AutomatePlus/raw/main/Run-AutomatePlus.bat) |
+| **v1.6.0** | Windows x64 | Previous Stable Release | [Download AutomatePlus v1.6.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.6.0/AutomatePlus-v1.6.0-win-x64.zip) |
+| **v1.5.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.5.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.5.0/AutomatePlus-v1.5.0-win-x64.zip) |
 | **v1.4.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.4.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.4.0/AutomatePlus-v1.4.0-win-x64.zip) |
 | **v1.3.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.3.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.3.0/AutomatePlus-v1.3.0-win-x64.zip) |
 | **v1.2.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.2.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.2.0/AutomatePlus-v1.2.0-win-x64.zip) |
@@ -125,6 +126,37 @@ For instant local execution on Windows without manual build steps:
 | **v1.2.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Web Automation Interactive In-App Click-and-Run execution engine (`WebInteractiveStepExecutor`) for web targets (SauceDemo, OrangeHRM)<br>• 1-Click preset action flows for SauceDemo (15 steps) and OrangeHRM (6 steps) with real-time locator healing and visual feedback<br>• Polyglot test generator projection to Playwright (TypeScript/JavaScript/Python/Java) and Cypress (TypeScript/JavaScript) directly from interactive sessions<br>• Monorepo test suites expanded to 169 tests with full DevSecOps & Playwright MCP live verification | [Download v1.2.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.2.0/AutomatePlus-v1.2.0-win-x64.zip) |
 | **v1.1.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Visual action disabling and parameterization in Action Timeline (FR-02)<br>• Enhanced screen reader accessibility and explicit ARIA labels across MonacoView and FarmRunModal<br>• DevSecOps-hardened release distribution and direct standalone binary download links<br>• Fully verified offline Tauri/Rust compilation and automated DevSecOps test gates | [Download v1.1.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.1.0/AutomatePlus-v1.1.0-win-x64.zip) |
 | **v1.0.0** | 2026-10-09 | Tauri 2 + Rust / TypeScript | • Multiplatform Web automation (13 targets across Playwright, Cypress, Selenium, Puppeteer, Robot Framework)<br>• Android Device Farm (9 targets, Appium, Maestro, Espresso, Robolectric, multi-device replication & distribution)<br>• API Functional & Load Suite (5 targets, HTTP TS/JS/Python/Java, k6 constant RPS)<br>• Precision Workbench Dark UI with 48px interactive touch targets<br>• DevSecOps isolation protecting research references and internal documents<br>• 1-Click local Windows execution via `Run-AutomatePlus.bat` | [Download v1.0.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.0.0/AutomatePlus-v1.0.0-win-x64.zip) |
+
+---
+
+## 🤖 Model Context Protocol (MCP) Server & AI Agent Bridge
+
+AutomatePlus acts as a local **Model Context Protocol (MCP)** server (`scripts/mcp-server.mjs`) enabling AI Coding Agents (such as Claude Code, Cursor, Antigravity) to directly execute automation tasks, inspect DOM & Android hierarchies, run k6 load tests, and synthesize standalone runnable scripts via stdio JSON-RPC 2.0.
+
+### Claude Desktop / Cursor / AI Agent Configuration
+
+Add AutomatePlus to your `claude_desktop_config.json` or MCP settings:
+
+```json
+{
+  "mcpServers": {
+    "automateplus": {
+      "command": "node",
+      "args": ["scripts/mcp-server.mjs"]
+    }
+  }
+}
+```
+
+### Standardized MCP Tools (RFC 2.0)
+
+| Tool Name | Parameters | Purpose | Output |
+|---|---|---|---|
+| `run_automation_task` | `platform` ('web', 'appium', 'phone_farming', 'k6'), `task_id`, `params` | Universal automation runner across Web, Mobile, Farm, and Load testing | Structured execution logs, metrics, status (`SUCCESS`/`FAILED`), and generated scripts |
+| `inspect_element_context` | `platform` ('web', 'android'), `url`, `selector` | Local DevTools / Playwright MCP style inspector | Ranked locator candidates (`id`, `data-test`, `css`, `xpath`) and accessibility tree |
+| `generate_runnable_test_script` | `session_id`, `framework` ('playwright', 'appium', 'k6', 'cypress'), `target_scenario` | Generates standalone production-ready test scripts | Clean runnable script project without TODO stubs or fake imports |
+| `run_load_test` | `targetUrl`, `targetRps`, `durationSeconds`, `maxVUs` | Dedicated k6 constant-arrival-rate load testing executor | Real-time arrival-rate metrics, error rates, p95 latencies, and standalone k6 script |
+| `test_web_page` | `url`, `flowPreset`, `exportFramework`, `exportLanguage` | Interactive web testing and assertion validation | Step execution verdicts and standalone multi-framework test scripts |
 
 ---
 

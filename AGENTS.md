@@ -35,7 +35,9 @@
   1. `run_automation_task`: `{ platform: 'web' | 'appium' | 'phone_farming' | 'k6', task_id: string, params?: object }` -> Executes internal runners and returns structured execution logs and `SUCCESS` / `FAILED` status.
   2. `inspect_element_context`: `{ platform: 'web' | 'android', url?: string, selector?: string }` -> Inspects DOM accessibility tree / Android UI hierarchy with ranked locator candidates.
   3. `generate_runnable_test_script`: `{ session_id: string, framework: 'playwright' | 'appium' | 'k6' | 'cypress', target_scenario: string }` -> Generates clean standalone test scripts without placeholders or fake stubs.
-- Legacy tool aliases (`automateplus_*`) remain registered for backward compatibility.
+  4. `run_load_test`: `{ targetUrl: string, targetRps?: number, durationSeconds?: number, maxVUs?: number }` -> Executes k6 constant-arrival-rate load test and returns throughput metrics and clean k6 test script.
+  5. `test_web_page`: `{ url: string, flowPreset?: string, exportFramework?: string, exportLanguage?: string }` -> Executes click-and-run web journey (like Playwright MCP) and generates standalone test script.
+- Legacy tool aliases (`automateplus_run_web`, `automateplus_run_android`, `automateplus_run_phone_farm`, `automateplus_run_k6`, `automateplus_inspect_web_elements`, `automateplus_generate_test_script`) remain registered for backward compatibility.
 - Offline and local: the MCP server binds to stdio or local IPC without requiring external network connections.
 
 ## Security and UX

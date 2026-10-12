@@ -17,7 +17,7 @@ describe('AutomatePlus MCP Bridge & AI Agent Tool Provider', () => {
     expect((response.result as any).protocolVersion).toBe('2024-11-05');
   });
 
-  it('exposes all 8 registered tools in tools/list', async () => {
+  it('exposes all 11 registered tools in tools/list', async () => {
     const response = await mcpBridge.handleMcpRequest({
       jsonrpc: '2.0',
       id: 2,
@@ -26,15 +26,18 @@ describe('AutomatePlus MCP Bridge & AI Agent Tool Provider', () => {
     });
 
     const tools = (response.result as any).tools;
-    expect(tools).toHaveLength(8);
+    expect(tools).toHaveLength(11);
     const toolNames = tools.map((t: any) => t.name);
     expect(toolNames).toContain('run_automation_task');
     expect(toolNames).toContain('inspect_element_context');
     expect(toolNames).toContain('generate_runnable_test_script');
+    expect(toolNames).toContain('run_load_test');
+    expect(toolNames).toContain('test_web_page');
     expect(toolNames).toContain('automateplus_inspect_web_elements');
     expect(toolNames).toContain('automateplus_run_web');
     expect(toolNames).toContain('automateplus_run_android');
     expect(toolNames).toContain('automateplus_run_phone_farm');
+    expect(toolNames).toContain('automateplus_run_k6');
     expect(toolNames).toContain('automateplus_generate_test_script');
   });
 
@@ -365,6 +368,75 @@ describe('AutomatePlus MCP Bridge & AI Agent Tool Provider', () => {
       expect(k6File).toBeDefined();
       expect(k6File).toContain(`import http from 'k6/http';`);
       expect(k6File).not.toContain('TO' + 'DO');
+    });
+
+    it('executes k6 load test via dedicated run_load_test tool', async () => {
+      const response = await mcpBridge.handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 18,
+        method: 'tools/call',
+        params: {
+          name: 'run_load_test',
+          arguments: {
+            targetUrl: 'https://reqres.in/api/users',
+            targetRps: 50,
+            durationSeconds: 5,
+            maxVUs: 10,
+          },
+        },
+      });
+
+      const result = JSON.parse((response.result as any).content[0].text);
+      expect(result.status).toBe('SUCCESS');
+      expect(result.summary.generator).toBe('k6');
+      expect(result.summary.achievedRps).toBe(50);
+      expect(result.generatedFiles).toBeDefined();
+      const script = Object.values(result.generatedFiles)[0] as string;
+      expect(script).toContain('k6/http');
+    });
+
+    it('executes web testing journey via dedicated test_web_page tool', async () => {
+      const response = await mcpBridge.handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 19,
+        method: 'tools/call',
+        params: {
+          name: 'test_web_page',
+          arguments: {
+            url: 'https://www.saucedemo.com/',
+            flowPreset: 'saucedemo',
+            exportFramework: 'playwright',
+          },
+        },
+      });
+
+      const result = JSON.parse((response.result as any).content[0].text);
+      expect(result.status).toBe('SUCCESS');
+      expect(result.platform).toBe('web');
+      expect(result.summary.passedSteps).toBeGreaterThanOrEqual(4);
+      const pwFile = Object.values(result.generatedFiles)[0] as string;
+      expect(pwFile).toContain('@playwright/test');
+    });
+
+    it('executes k6 load test via automateplus_run_k6 legacy alias', async () => {
+      const response = await mcpBridge.handleMcpRequest({
+        jsonrpc: '2.0',
+        id: 20,
+        method: 'tools/call',
+        params: {
+          name: 'automateplus_run_k6',
+          arguments: {
+            targetUrl: 'https://reqres.in/api/users',
+            targetRps: 20,
+            durationSeconds: 5,
+            maxVUs: 5,
+          },
+        },
+      });
+
+      const result = JSON.parse((response.result as any).content[0].text);
+      expect(result.status).toBe('passed');
+      expect(result.summary.generator).toBe('k6');
     });
   });
 });

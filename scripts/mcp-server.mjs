@@ -60,6 +60,35 @@ const MCP_TOOLS = [
     },
   },
   {
+    name: 'run_load_test',
+    description: 'Execute a k6 performance load test against an API endpoint with target RPS, duration, and virtual users (VUs), generating runnable k6 scripts and performance metrics.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        targetUrl: { type: 'string', description: 'Target API endpoint URL to load test (e.g. https://reqres.in/api/users)' },
+        targetRps: { type: 'number', description: 'Target requests per second (RPS)' },
+        durationSeconds: { type: 'number', description: 'Load duration in seconds' },
+        maxVUs: { type: 'number', description: 'Maximum virtual users allocated' },
+      },
+      required: ['targetUrl'],
+    },
+  },
+  {
+    name: 'test_web_page',
+    description: 'Perform web automation testing against a target URL (like Playwright MCP), executing browser interactions, validating DOM state, and generating clean runnable test scripts (Playwright, Cypress, Selenium).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        url: { type: 'string', description: 'Target website URL (e.g. https://www.saucedemo.com/)' },
+        flowPreset: { type: 'string', enum: ['saucedemo', 'orangehrm', 'custom'], description: 'Flow preset or custom' },
+        exportFramework: { type: 'string', enum: ['playwright', 'cypress', 'selenium', 'puppeteer'], description: 'Export framework (default: playwright)' },
+        exportLanguage: { type: 'string', enum: ['typescript', 'javascript', 'python', 'java'], description: 'Export language (default: typescript)' },
+        steps: { type: 'array', description: 'Optional custom ActionIR steps' },
+      },
+      required: ['url'],
+    },
+  },
+  {
     name: 'automateplus_inspect_web_elements',
     description: 'Inspect interactive DOM elements of a target web URL or HTML snippet, extracting tags, attributes, text, and ranked locator candidates (CSS, XPath, Data-Test).',
     inputSchema: {
@@ -114,6 +143,20 @@ const MCP_TOOLS = [
         strategy: { type: 'string', enum: ['single', 'all-devices', 'split-iterations'], description: 'Execution strategy' },
         failurePolicy: { type: 'string', enum: ['continue-other-devices', 'stop-on-first-failure'], description: 'Failure handling policy' },
       },
+    },
+  },
+  {
+    name: 'automateplus_run_k6',
+    description: 'Execute a k6 constant-arrival-rate load test against an API target, returning execution metrics and generated k6 test script.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        targetUrl: { type: 'string', description: 'Target API URL' },
+        targetRps: { type: 'number', description: 'Target requests per second' },
+        durationSeconds: { type: 'number', description: 'Duration in seconds' },
+        maxVUs: { type: 'number', description: 'Max virtual users' },
+      },
+      required: ['targetUrl'],
     },
   },
   {
@@ -855,6 +898,31 @@ async function dispatch(request) {
             break;
           }
 
+          case 'run_load_test': {
+            const subResult = await runK6LoadTest(args);
+            toolResult = {
+              status: 'SUCCESS',
+              targetUrl: args.targetUrl,
+              summary: subResult.summary,
+              logs: subResult.logs,
+              generatedFiles: subResult.generatedFiles,
+            };
+            break;
+          }
+
+          case 'test_web_page': {
+            const subResult = await runWeb({ targetUrl: args.url, ...args });
+            toolResult = {
+              status: subResult.status === 'passed' ? 'SUCCESS' : 'FAILED',
+              platform: 'web',
+              url: args.url,
+              summary: subResult.summary,
+              logs: subResult.logs,
+              generatedFiles: subResult.generatedFiles,
+            };
+            break;
+          }
+
           case 'automateplus_inspect_web_elements':
             toolResult = inspectWebElements(args);
             break;
@@ -866,6 +934,9 @@ async function dispatch(request) {
             break;
           case 'automateplus_run_phone_farm':
             toolResult = await runPhoneFarm(args);
+            break;
+          case 'automateplus_run_k6':
+            toolResult = await runK6LoadTest(args);
             break;
           case 'automateplus_generate_test_script':
             toolResult = await generateTestScript(args);

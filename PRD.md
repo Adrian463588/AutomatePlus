@@ -243,5 +243,13 @@ AutomatePlus exposes a local Model Context Protocol (MCP) server adhering to the
    - Signature: `{ session_id: string, framework: 'playwright' | 'appium' | 'k6' | 'cypress', target_scenario: string }`
    - Generates standalone, production-ready, clean test scripts without fake stubs, fake imports, or TODO comments. Ready for immediate local execution or CI/CD integration.
 
+4. **`run_load_test`**:
+   - Signature: `{ targetUrl: string, targetRps?: number, durationSeconds?: number, maxVUs?: number }`
+   - Dedicated k6 load runner executing constant-arrival-rate performance profiles against API targets, outputting throughput metrics and runnable scripts.
+
+5. **`test_web_page`**:
+   - Signature: `{ url: string, flowPreset?: string, exportFramework?: string, exportLanguage?: string }`
+   - Executes interactive browser journey (like Playwright MCP) and returns assertion results plus generated scripts.
+
 ### Backward-Compatibility Aliases
-- `automateplus_inspect_web_elements`, `automateplus_run_web`, `automateplus_run_android`, `automateplus_run_phone_farm`, `automateplus_generate_test_script`.
+- `automateplus_inspect_web_elements`, `automateplus_run_web`, `automateplus_run_android`, `automateplus_run_phone_farm`, `automateplus_run_k6`, `automateplus_generate_test_script`.

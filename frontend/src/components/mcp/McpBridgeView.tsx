@@ -17,6 +17,9 @@ export const McpBridgeView: React.FC = () => {
   const [genPlatform, setGenPlatform] = useState<'web' | 'android' | 'api'>('web');
   const [genFramework, setGenFramework] = useState('playwright');
   const [genLanguage, setGenLanguage] = useState('typescript');
+  const [targetRps, setTargetRps] = useState(50);
+  const [durationSeconds, setDurationSeconds] = useState(10);
+  const [maxVUs, setMaxVUs] = useState(20);
 
   const mcpConfigJson = JSON.stringify(
     {
@@ -49,7 +52,84 @@ export const McpBridgeView: React.FC = () => {
       const activeTool = MCP_TOOLS[activeToolIndex];
       let response: any;
 
-      if (activeTool.name === 'automateplus_inspect_web_elements') {
+      if (activeTool.name === 'run_load_test' || activeTool.name === 'automateplus_run_k6') {
+        response = await mcpBridge.handleMcpRequest({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: {
+            name: activeTool.name,
+            arguments: {
+              targetUrl,
+              targetRps,
+              durationSeconds,
+              maxVUs,
+            },
+          },
+        });
+      } else if (activeTool.name === 'test_web_page') {
+        response = await mcpBridge.handleMcpRequest({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: {
+            name: activeTool.name,
+            arguments: {
+              url: targetUrl,
+              flowPreset: webPreset,
+              exportFramework: webFramework,
+              exportLanguage: 'typescript',
+            },
+          },
+        });
+      } else if (activeTool.name === 'run_automation_task') {
+        const platform = genPlatform === 'api' ? 'k6' : genPlatform === 'android' ? 'appium' : 'web';
+        response = await mcpBridge.handleMcpRequest({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: {
+            name: activeTool.name,
+            arguments: {
+              platform,
+              task_id: `task-${Date.now()}`,
+              params: platform === 'k6'
+                ? { targetUrl, targetRps, durationSeconds, maxVUs }
+                : platform === 'appium'
+                  ? { appPackage, appActivity: '.MainActivity' }
+                  : { targetUrl, flowPreset: webPreset, exportFramework: webFramework },
+            },
+          },
+        });
+      } else if (activeTool.name === 'inspect_element_context') {
+        response = await mcpBridge.handleMcpRequest({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: {
+            name: activeTool.name,
+            arguments: {
+              platform: genPlatform === 'android' ? 'android' : 'web',
+              url: targetUrl,
+              appPackage,
+            },
+          },
+        });
+      } else if (activeTool.name === 'generate_runnable_test_script') {
+        response = await mcpBridge.handleMcpRequest({
+          jsonrpc: '2.0',
+          id: Date.now(),
+          method: 'tools/call',
+          params: {
+            name: activeTool.name,
+            arguments: {
+              session_id: `session-${Date.now()}`,
+              framework: genFramework,
+              target_scenario: 'saucedemo-checkout',
+            },
+          },
+        });
+      } else if (activeTool.name === 'automateplus_inspect_web_elements') {
         response = await mcpBridge.handleMcpRequest({
           jsonrpc: '2.0',
           id: Date.now(),
@@ -146,7 +226,7 @@ export const McpBridgeView: React.FC = () => {
             <h1 className="text-lg font-bold tracking-wide flex items-center gap-2">
               Model Context Protocol (MCP) Bridge
               <span className="text-xs px-2 py-0.5 rounded bg-emerald-950 border border-emerald-800 text-emerald-400 font-mono">
-                Active v1.6.0
+                Active v1.7.0
               </span>
             </h1>
             <p className="text-xs text-slate-400">
@@ -180,7 +260,7 @@ export const McpBridgeView: React.FC = () => {
               <div><span className="text-slate-500">Protocol:</span> JSON-RPC 2.0 (stdio)</div>
               <div><span className="text-slate-500">Version:</span> 2024-11-05</div>
               <div><span className="text-slate-500">Server:</span> automate-plus-mcp</div>
-              <div><span className="text-slate-500">Tools:</span> 5 Registered Tools</div>
+              <div><span className="text-slate-500">Tools:</span> {MCP_TOOLS.length} Registered Tools</div>
               <div><span className="text-slate-500">Generators:</span> 27 Matrix Combinations</div>
             </div>
             <div className="mt-2 pt-2 border-t border-slate-800 text-xs text-slate-400">
@@ -245,31 +325,72 @@ export const McpBridgeView: React.FC = () => {
 
             {/* Inputs based on selected tool */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-800">
-              {activeToolIndex === 0 && (
-                <div className="sm:col-span-2 flex flex-col gap-1">
-                  <label htmlFor="inspect-target-url" className="text-xs text-slate-300">Target Web URL</label>
-                  <input
-                    id="inspect-target-url"
-                    type="text"
-                    value={targetUrl}
-                    onChange={(e) => setTargetUrl(e.target.value)}
-                    className="p-2 bg-slate-950 border border-slate-700 rounded text-xs font-mono text-slate-100"
-                    aria-label="Target Web URL"
-                  />
-                </div>
+              {(MCP_TOOLS[activeToolIndex].name === 'run_load_test' || MCP_TOOLS[activeToolIndex].name === 'automateplus_run_k6') && (
+                <>
+                  <div className="sm:col-span-2 flex flex-col gap-1">
+                    <label htmlFor="k6-target-url" className="text-xs text-slate-300">API Endpoint URL</label>
+                    <input
+                      id="k6-target-url"
+                      type="text"
+                      value={targetUrl}
+                      onChange={(e) => setTargetUrl(e.target.value)}
+                      className="p-2 bg-slate-950 border border-slate-700 rounded text-xs font-mono text-slate-100"
+                      aria-label="API Endpoint URL"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="k6-target-rps" className="text-xs text-slate-300">Target RPS (Requests/sec)</label>
+                    <input
+                      id="k6-target-rps"
+                      type="number"
+                      min={1}
+                      max={1000}
+                      value={targetRps}
+                      onChange={(e) => setTargetRps(Number(e.target.value) || 50)}
+                      className="p-2 bg-slate-950 border border-slate-700 rounded text-xs font-mono text-slate-100"
+                      aria-label="Target RPS"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="k6-duration-seconds" className="text-xs text-slate-300">Duration (Seconds)</label>
+                    <input
+                      id="k6-duration-seconds"
+                      type="number"
+                      min={1}
+                      max={60}
+                      value={durationSeconds}
+                      onChange={(e) => setDurationSeconds(Number(e.target.value) || 10)}
+                      className="p-2 bg-slate-950 border border-slate-700 rounded text-xs font-mono text-slate-100"
+                      aria-label="Duration in Seconds"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="k6-max-vus" className="text-xs text-slate-300">Max Virtual Users (VUs)</label>
+                    <input
+                      id="k6-max-vus"
+                      type="number"
+                      min={1}
+                      max={100}
+                      value={maxVUs}
+                      onChange={(e) => setMaxVUs(Number(e.target.value) || 20)}
+                      className="p-2 bg-slate-950 border border-slate-700 rounded text-xs font-mono text-slate-100"
+                      aria-label="Max Virtual Users"
+                    />
+                  </div>
+                </>
               )}
 
-              {activeToolIndex === 1 && (
+              {(MCP_TOOLS[activeToolIndex].name === 'test_web_page' || MCP_TOOLS[activeToolIndex].name === 'automateplus_run_web') && (
                 <>
                   <div className="flex flex-col gap-1">
-                    <label htmlFor="web-target-url" className="text-xs text-slate-300">Target URL</label>
+                    <label htmlFor="web-target-url" className="text-xs text-slate-300">Target Web URL</label>
                     <input
                       id="web-target-url"
                       type="text"
                       value={targetUrl}
                       onChange={(e) => setTargetUrl(e.target.value)}
                       className="p-2 bg-slate-950 border border-slate-700 rounded text-xs font-mono text-slate-100"
-                      aria-label="Target URL"
+                      aria-label="Target Web URL"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -289,7 +410,7 @@ export const McpBridgeView: React.FC = () => {
                       <option value="orangehrm">OrangeHRM Portal</option>
                     </select>
                   </div>
-                  <div className="flex flex-col gap-1">
+                  <div className="flex flex-col gap-1 sm:col-span-2">
                     <label htmlFor="web-export-framework" className="text-xs text-slate-300">Export Script Framework</label>
                     <select
                       id="web-export-framework"
@@ -308,7 +429,23 @@ export const McpBridgeView: React.FC = () => {
                 </>
               )}
 
-              {activeToolIndex === 2 && (
+              {(MCP_TOOLS[activeToolIndex].name === 'inspect_element_context' || MCP_TOOLS[activeToolIndex].name === 'automateplus_inspect_web_elements') && (
+                <>
+                  <div className="sm:col-span-2 flex flex-col gap-1">
+                    <label htmlFor="inspect-target-url" className="text-xs text-slate-300">Target URL / App Context</label>
+                    <input
+                      id="inspect-target-url"
+                      type="text"
+                      value={targetUrl}
+                      onChange={(e) => setTargetUrl(e.target.value)}
+                      className="p-2 bg-slate-950 border border-slate-700 rounded text-xs font-mono text-slate-100"
+                      aria-label="Target Web URL"
+                    />
+                  </div>
+                </>
+              )}
+
+              {MCP_TOOLS[activeToolIndex].name === 'automateplus_run_android' && (
                 <>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="android-app-package" className="text-xs text-slate-300">App Package</label>
@@ -337,7 +474,7 @@ export const McpBridgeView: React.FC = () => {
                 </>
               )}
 
-              {activeToolIndex === 3 && (
+              {MCP_TOOLS[activeToolIndex].name === 'automateplus_run_phone_farm' && (
                 <>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="farm-app-package" className="text-xs text-slate-300">Target App Package</label>
@@ -366,7 +503,7 @@ export const McpBridgeView: React.FC = () => {
                 </>
               )}
 
-              {activeToolIndex === 4 && (
+              {(MCP_TOOLS[activeToolIndex].name === 'generate_runnable_test_script' || MCP_TOOLS[activeToolIndex].name === 'automateplus_generate_test_script') && (
                 <>
                   <div className="flex flex-col gap-1">
                     <label htmlFor="gen-platform" className="text-xs text-slate-300">Platform</label>
@@ -378,14 +515,14 @@ export const McpBridgeView: React.FC = () => {
                         setGenPlatform(p);
                         if (p === 'web') setGenFramework('playwright');
                         else if (p === 'android') setGenFramework('appium');
-                        else setGenFramework('http');
+                        else setGenFramework('k6');
                       }}
                       className="p-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100"
                       aria-label="Platform"
                     >
                       <option value="web">Web</option>
                       <option value="android">Android Mobile</option>
-                      <option value="api">API</option>
+                      <option value="api">API / Load Test</option>
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">
@@ -416,11 +553,47 @@ export const McpBridgeView: React.FC = () => {
                       )}
                       {genPlatform === 'api' && (
                         <>
-                          <option value="http">HTTP Client</option>
                           <option value="k6">k6 Load Generator</option>
+                          <option value="http">HTTP Client</option>
                         </>
                       )}
                     </select>
+                  </div>
+                </>
+              )}
+
+              {MCP_TOOLS[activeToolIndex].name === 'run_automation_task' && (
+                <>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="task-target-platform" className="text-xs text-slate-300">Target Runner Platform</label>
+                    <select
+                      id="task-target-platform"
+                      value={genPlatform}
+                      onChange={(e) => {
+                        const p = e.target.value as 'web' | 'android' | 'api';
+                        setGenPlatform(p);
+                      }}
+                      className="p-2 bg-slate-950 border border-slate-700 rounded text-xs text-slate-100"
+                      aria-label="Target Runner Platform"
+                    >
+                      <option value="web">Web Automation</option>
+                      <option value="android">Android Appium</option>
+                      <option value="api">k6 Load Testing</option>
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label htmlFor="task-target-spec" className="text-xs text-slate-300">Target Spec / URL</label>
+                    <input
+                      id="task-target-spec"
+                      type="text"
+                      value={genPlatform === 'android' ? appPackage : targetUrl}
+                      onChange={(e) => {
+                        if (genPlatform === 'android') setAppPackage(e.target.value);
+                        else setTargetUrl(e.target.value);
+                      }}
+                      className="p-2 bg-slate-950 border border-slate-700 rounded text-xs font-mono text-slate-100"
+                      aria-label="Target Spec or URL"
+                    />
                   </div>
                 </>
               )}

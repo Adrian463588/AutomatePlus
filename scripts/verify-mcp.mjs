@@ -166,6 +166,47 @@ const requests = [
       },
     },
   },
+  {
+    jsonrpc: '2.0',
+    id: 14,
+    method: 'tools/call',
+    params: {
+      name: 'run_load_test',
+      arguments: {
+        targetUrl: 'https://reqres.in/api/users',
+        targetRps: 50,
+        durationSeconds: 5,
+        maxVUs: 10,
+      },
+    },
+  },
+  {
+    jsonrpc: '2.0',
+    id: 15,
+    method: 'tools/call',
+    params: {
+      name: 'test_web_page',
+      arguments: {
+        url: 'https://www.saucedemo.com/',
+        flowPreset: 'saucedemo',
+        exportFramework: 'playwright',
+      },
+    },
+  },
+  {
+    jsonrpc: '2.0',
+    id: 16,
+    method: 'tools/call',
+    params: {
+      name: 'automateplus_run_k6',
+      arguments: {
+        targetUrl: 'https://reqres.in/api/users',
+        targetRps: 25,
+        durationSeconds: 5,
+        maxVUs: 5,
+      },
+    },
+  },
 ];
 
 const child = spawn(process.execPath, ['scripts/mcp-server.mjs'], {
@@ -217,8 +258,8 @@ if (!initResp || initResp.result?.serverInfo?.name !== 'automate-plus-mcp' || in
 }
 
 const listResp = responses.find((r) => r.id === 2);
-if (!listResp || !Array.isArray(listResp.result?.tools) || listResp.result.tools.length !== 8) {
-  throw new Error(`Expected 8 tools, got: ${JSON.stringify(listResp)}`);
+if (!listResp || !Array.isArray(listResp.result?.tools) || listResp.result.tools.length !== 11) {
+  throw new Error(`Expected 11 tools, got: ${JSON.stringify(listResp)}`);
 }
 
 const inspectResp = responses.find((r) => r.id === 3);
@@ -276,4 +317,19 @@ if (!stdGenK6Resp || !stdGenK6Resp.result?.content?.[0]?.text?.includes('k6/http
   throw new Error(`Invalid standard k6 generation response: ${JSON.stringify(stdGenK6Resp)}`);
 }
 
-console.log('AutomatePlus MCP Server smoke test passed: all 13 JSON-RPC 2.0 requests verified successfully.');
+const dedicatedK6Resp = responses.find((r) => r.id === 14);
+if (!dedicatedK6Resp || !dedicatedK6Resp.result?.content?.[0]?.text?.includes('SUCCESS') || !dedicatedK6Resp.result?.content?.[0]?.text?.includes('k6/http')) {
+  throw new Error(`Invalid dedicated k6 load test response: ${JSON.stringify(dedicatedK6Resp)}`);
+}
+
+const testWebPageResp = responses.find((r) => r.id === 15);
+if (!testWebPageResp || !testWebPageResp.result?.content?.[0]?.text?.includes('SUCCESS') || !testWebPageResp.result?.content?.[0]?.text?.includes('@playwright/test')) {
+  throw new Error(`Invalid test_web_page response: ${JSON.stringify(testWebPageResp)}`);
+}
+
+const aliasK6Resp = responses.find((r) => r.id === 16);
+if (!aliasK6Resp || !aliasK6Resp.result?.content?.[0]?.text?.includes('passed') || !aliasK6Resp.result?.content?.[0]?.text?.includes('k6')) {
+  throw new Error(`Invalid alias k6 response: ${JSON.stringify(aliasK6Resp)}`);
+}
+
+console.log('AutomatePlus MCP Server smoke test passed: all 16 JSON-RPC 2.0 requests verified successfully.');
