@@ -28,6 +28,16 @@
 - Generators emit one project per framework/language and require external runtime context. Never emit fixed serials, fixed ports, fake imports, TODO stubs, or silent fallbacks.
 - Missing packs, devices, target apps, project prerequisites, or unsupported actions are `Blocked`, never a simulated pass.
 
+## Model Context Protocol (MCP) Server & Agent Bridge
+
+- Expose AutomatePlus capabilities to external AI agents via local stdio MCP (`scripts/mcp-server.mjs`) and frontend service (`frontend/src/services/mcpBridge.ts`).
+- Standardized MCP Tools (RFC 2.0):
+  1. `run_automation_task`: `{ platform: 'web' | 'appium' | 'phone_farming' | 'k6', task_id: string, params?: object }` -> Executes internal runners and returns structured execution logs and `SUCCESS` / `FAILED` status.
+  2. `inspect_element_context`: `{ platform: 'web' | 'android', url?: string, selector?: string }` -> Inspects DOM accessibility tree / Android UI hierarchy with ranked locator candidates.
+  3. `generate_runnable_test_script`: `{ session_id: string, framework: 'playwright' | 'appium' | 'k6' | 'cypress', target_scenario: string }` -> Generates clean standalone test scripts without placeholders or fake stubs.
+- Legacy tool aliases (`automateplus_*`) remain registered for backward compatibility.
+- Offline and local: the MCP server binds to stdio or local IPC without requiring external network connections.
+
 ## Security and UX
 
 - Resolve only checksum/license-verified local packs. Use an executable allowlist, argument arrays, canonical path checks, loopback Appium binding, timeouts, redaction, and process-tree cleanup.

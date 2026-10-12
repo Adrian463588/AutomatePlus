@@ -214,9 +214,34 @@ Rex reviews requirements, Aria reviews contracts/persistence/IPC, Mason implemen
 | Runtime Manager and explicit offline distribution | FR-12, runtime IPC 1.0, catalog contract | Rust runtime manager, SQLite migration, Runtime Manager UI, launcher | runtime-manager/catalog/offline verifiers; release manifest gate | Implemented; artifact/Cargo prerequisites blocked |
 | Native workspace/runtime picker | `native.dialog.pick`, IPC 1.0 | Async Rust `rfd`, desktop bridge, Sidebar, Runtime Manager | picker component contract and native Windows manual evidence | Async source implemented; native evidence pending |
 | Responsive truthful UI | NFR-05/09 | React farm workspace | build/authenticity/viewport evidence | Implemented in shell |
+| Model Context Protocol (MCP) Server Bridge | OpenSpec RFC 2.0, JSON-RPC 2.0 | `scripts/mcp-server.mjs`, `frontend/src/services/mcpBridge.ts` | `verify:mcp`, vitest unit suite | Verified; stdio & in-memory bridge active |
 
 ## 11. Acceptance boundary
 
 TypeScript component gates can be Verified when their commands pass. Native Tauri acceptance requires the offline Cargo cache, Tauri CLI, WebView2, verified runtime packs, and published build. Android farm acceptance additionally requires two authorized physical devices, a real package/activity, Appium/UiAutomator2/scrcpy health, unique replay evidence, cancellation/disconnect cleanup, primary/follower observations, and generated-project compile/lint/smoke/replay evidence.
 
 Until those prerequisites are present, the product status is Blocked for native/physical acceptance, never Ready or simulated pass.
+
+## 12. Model Context Protocol (MCP) Server & Agentic Bridge
+
+AutomatePlus exposes a local Model Context Protocol (MCP) server adhering to the Model Context Protocol 2024-11-05 standard. External AI agents and tools communicate over standard stdio JSON-RPC 2.0 (`scripts/mcp-server.mjs`) or via the in-app frontend service (`frontend/src/services/mcpBridge.ts`) without external cloud network dependencies.
+
+### Standardized MCP Tools (RFC 2.0)
+
+1. **`run_automation_task`**:
+   - Signature: `{ platform: 'web' | 'appium' | 'phone_farming' | 'k6', task_id: string, params?: object }`
+   - Executes internal AutomatePlus runner pipelines for Web (Playwright/Chrome), Mobile (Appium/UiAutomator2), Phone Farming (multi-device loop runner), or API Load Testing (k6 constant-arrival-rate executor).
+   - Returns structured logs, execution summary metrics, and status (`SUCCESS` or `FAILED`).
+
+2. **`inspect_element_context`**:
+   - Signature: `{ platform: 'web' | 'android', url?: string, selector?: string }`
+   - Acts as a local DevTools / Playwright MCP element inspector.
+   - For Web: returns DOM elements, accessibility tags, text content, and ranked selector candidates (`id`, `data-test`, `css`, `xpath`).
+   - For Android: returns UIAutomator hierarchy components, resource IDs, accessibility labels, and recommended locators.
+
+3. **`generate_runnable_test_script`**:
+   - Signature: `{ session_id: string, framework: 'playwright' | 'appium' | 'k6' | 'cypress', target_scenario: string }`
+   - Generates standalone, production-ready, clean test scripts without fake stubs, fake imports, or TODO comments. Ready for immediate local execution or CI/CD integration.
+
+### Backward-Compatibility Aliases
+- `automateplus_inspect_web_elements`, `automateplus_run_web`, `automateplus_run_android`, `automateplus_run_phone_farm`, `automateplus_generate_test_script`.

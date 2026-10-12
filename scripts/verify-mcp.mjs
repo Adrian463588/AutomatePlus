@@ -83,6 +83,89 @@ const requests = [
       },
     },
   },
+  {
+    jsonrpc: '2.0',
+    id: 8,
+    method: 'tools/call',
+    params: {
+      name: 'run_automation_task',
+      arguments: {
+        platform: 'web',
+        task_id: 'task-web-01',
+        params: {
+          targetUrl: 'https://www.saucedemo.com/',
+          flowPreset: 'saucedemo',
+          exportFramework: 'playwright',
+        },
+      },
+    },
+  },
+  {
+    jsonrpc: '2.0',
+    id: 9,
+    method: 'tools/call',
+    params: {
+      name: 'run_automation_task',
+      arguments: {
+        platform: 'k6',
+        task_id: 'task-k6-01',
+        params: {
+          targetUrl: 'https://api.example.com',
+          duration: '10s',
+          targetRps: 50,
+        },
+      },
+    },
+  },
+  {
+    jsonrpc: '2.0',
+    id: 10,
+    method: 'tools/call',
+    params: {
+      name: 'inspect_element_context',
+      arguments: {
+        platform: 'web',
+        url: 'https://www.saucedemo.com/',
+      },
+    },
+  },
+  {
+    jsonrpc: '2.0',
+    id: 11,
+    method: 'tools/call',
+    params: {
+      name: 'inspect_element_context',
+      arguments: {
+        platform: 'android',
+      },
+    },
+  },
+  {
+    jsonrpc: '2.0',
+    id: 12,
+    method: 'tools/call',
+    params: {
+      name: 'generate_runnable_test_script',
+      arguments: {
+        session_id: 'session-pw-01',
+        framework: 'playwright',
+        target_scenario: 'saucedemo-checkout',
+      },
+    },
+  },
+  {
+    jsonrpc: '2.0',
+    id: 13,
+    method: 'tools/call',
+    params: {
+      name: 'generate_runnable_test_script',
+      arguments: {
+        session_id: 'session-k6-01',
+        framework: 'k6',
+        target_scenario: 'api-load-test',
+      },
+    },
+  },
 ];
 
 const child = spawn(process.execPath, ['scripts/mcp-server.mjs'], {
@@ -129,13 +212,13 @@ if (responses.length < requests.length) {
 }
 
 const initResp = responses.find((r) => r.id === 1);
-if (!initResp || initResp.result?.serverInfo?.name !== 'automate-plus-mcp') {
+if (!initResp || initResp.result?.serverInfo?.name !== 'automate-plus-mcp' || initResp.result?.serverInfo?.version !== '1.7.0') {
   throw new Error(`Invalid initialize response: ${JSON.stringify(initResp)}`);
 }
 
 const listResp = responses.find((r) => r.id === 2);
-if (!listResp || !Array.isArray(listResp.result?.tools) || listResp.result.tools.length !== 5) {
-  throw new Error(`Expected 5 tools, got: ${JSON.stringify(listResp)}`);
+if (!listResp || !Array.isArray(listResp.result?.tools) || listResp.result.tools.length !== 8) {
+  throw new Error(`Expected 8 tools, got: ${JSON.stringify(listResp)}`);
 }
 
 const inspectResp = responses.find((r) => r.id === 3);
@@ -163,4 +246,34 @@ if (!genResp || !genResp.result?.content?.[0]?.text?.includes('cypress')) {
   throw new Error(`Invalid script generation response: ${JSON.stringify(genResp)}`);
 }
 
-console.log('AutomatePlus MCP Server smoke test passed: all 7 JSON-RPC 2.0 requests verified successfully.');
+const stdWebRunResp = responses.find((r) => r.id === 8);
+if (!stdWebRunResp || !stdWebRunResp.result?.content?.[0]?.text?.includes('SUCCESS')) {
+  throw new Error(`Invalid standard web run response: ${JSON.stringify(stdWebRunResp)}`);
+}
+
+const stdK6RunResp = responses.find((r) => r.id === 9);
+if (!stdK6RunResp || !stdK6RunResp.result?.content?.[0]?.text?.includes('SUCCESS')) {
+  throw new Error(`Invalid standard k6 run response: ${JSON.stringify(stdK6RunResp)}`);
+}
+
+const stdInspectWebResp = responses.find((r) => r.id === 10);
+if (!stdInspectWebResp || !stdInspectWebResp.result?.content?.[0]?.text?.includes('user-name')) {
+  throw new Error(`Invalid standard inspect web response: ${JSON.stringify(stdInspectWebResp)}`);
+}
+
+const stdInspectAndroidResp = responses.find((r) => r.id === 11);
+if (!stdInspectAndroidResp || !stdInspectAndroidResp.result?.content?.[0]?.text?.includes('btn_start')) {
+  throw new Error(`Invalid standard inspect android response: ${JSON.stringify(stdInspectAndroidResp)}`);
+}
+
+const stdGenPwResp = responses.find((r) => r.id === 12);
+if (!stdGenPwResp || !stdGenPwResp.result?.content?.[0]?.text?.includes('@playwright/test')) {
+  throw new Error(`Invalid standard playwright generation response: ${JSON.stringify(stdGenPwResp)}`);
+}
+
+const stdGenK6Resp = responses.find((r) => r.id === 13);
+if (!stdGenK6Resp || !stdGenK6Resp.result?.content?.[0]?.text?.includes('k6/http')) {
+  throw new Error(`Invalid standard k6 generation response: ${JSON.stringify(stdGenK6Resp)}`);
+}
+
+console.log('AutomatePlus MCP Server smoke test passed: all 13 JSON-RPC 2.0 requests verified successfully.');
