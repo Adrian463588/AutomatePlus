@@ -102,7 +102,7 @@ interface AppState {
   selectGeneratedFile: (relativePath: string) => void;
   regenerateCode: () => Promise<void>;
   addStep: (step: ActionIR) => Promise<void>;
-  loadTemplateSteps: (steps: ActionIR[], startUrl?: string) => Promise<void>;
+  loadTemplateSteps: (steps: ActionIR[], targetOptions?: string | { startUrl?: string; appPackage?: string; appActivity?: string }) => Promise<void>;
   saveApiRequest: (request: ActionIR, assertions: ApiAssertionDraft[]) => Promise<void>;
   updateStep: (stepIndex: number, step: ActionIR) => Promise<void>;
   deleteStep: (stepIndex: number) => Promise<void>;
@@ -493,10 +493,17 @@ export const useAppStore = create<AppState>((set, get) => ({
     await get().regenerateCode();
   },
 
-  loadTemplateSteps: async (steps, startUrl) => {
+  loadTemplateSteps: async (steps, targetOptions) => {
     const activeSession = get().activeSession;
     if (!activeSession) { set({ feedback: { kind: 'blocked', message: 'Create and select a session before loading actions.' } }); return; }
-    const targetConfig = startUrl ? { ...activeSession.ir.targetConfig, startUrl } : activeSession.ir.targetConfig;
+    let targetConfig = { ...activeSession.ir.targetConfig };
+    if (typeof targetOptions === 'string') {
+      targetConfig.startUrl = targetOptions;
+    } else if (targetOptions && typeof targetOptions === 'object') {
+      if (targetOptions.startUrl) targetConfig.startUrl = targetOptions.startUrl;
+      if (targetOptions.appPackage) targetConfig.appPackage = targetOptions.appPackage;
+      if (targetOptions.appActivity) targetConfig.appActivity = targetOptions.appActivity;
+    }
     const updatedSession: SessionRecord = {
       ...activeSession,
       ir: { ...activeSession.ir, targetConfig, steps: nextSteps(steps), updatedAt: Date.now() },

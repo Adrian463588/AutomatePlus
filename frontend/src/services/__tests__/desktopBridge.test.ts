@@ -360,4 +360,122 @@ describe('[ComponentTest] desktop native bridge', () => {
     expect(summary.passedSteps).toBe(5);
     expect(summary.failedSteps).toBe(0);
   });
+
+  it('runs interactive test for Android ApiDemos session and generates Appium script', async () => {
+    const service = new DesktopBridgeService();
+    const apidemosSession: SessionIR = {
+      id: 'a0000000-0000-4000-8000-000000000001',
+      schemaVersion: 2,
+      projectId: 'b0000000-0000-4000-8000-000000000001',
+      name: 'ApiDemos Mobile E2E Test',
+      platform: 'android',
+      targetConfig: {
+        appPackage: 'io.appium.android.apis',
+        appActivity: '.ApiDemos',
+      },
+      environmentVariables: {},
+      steps: [
+        {
+          id: 'c0000000-0000-4000-8000-000000000001',
+          schemaVersion: 2,
+          stepNumber: 1,
+          platform: 'android',
+          action: 'tap',
+          locators: [
+            { strategy: 'accessibilityId', value: 'Views', score: 100 },
+            { strategy: 'text', value: 'Views', score: 90 },
+          ],
+          timeoutMs: 5000,
+          timestamp: 1000,
+          optional: false,
+        },
+        {
+          id: 'c0000000-0000-4000-8000-000000000002',
+          schemaVersion: 2,
+          stepNumber: 2,
+          platform: 'android',
+          action: 'assertVisible',
+          locators: [{ strategy: 'accessibilityId', value: 'Views', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1050,
+          optional: false,
+        },
+        {
+          id: 'c0000000-0000-4000-8000-000000000003',
+          schemaVersion: 2,
+          stepNumber: 3,
+          platform: 'android',
+          action: 'fill',
+          value: 'AutomatePlus Test',
+          locators: [{ strategy: 'resourceId', value: 'io.appium.android.apis:id/edit', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1100,
+          optional: false,
+        },
+        {
+          id: 'c0000000-0000-4000-8000-000000000004',
+          schemaVersion: 2,
+          stepNumber: 4,
+          platform: 'android',
+          action: 'assertText',
+          expectedValue: 'AutomatePlus Test',
+          locators: [{ strategy: 'resourceId', value: 'io.appium.android.apis:id/edit', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1150,
+          optional: false,
+        },
+        {
+          id: 'c0000000-0000-4000-8000-000000000005',
+          schemaVersion: 2,
+          stepNumber: 5,
+          platform: 'android',
+          action: 'back',
+          timeoutMs: 5000,
+          timestamp: 1200,
+          optional: false,
+        },
+        {
+          id: 'c0000000-0000-4000-8000-000000000006',
+          schemaVersion: 2,
+          stepNumber: 6,
+          platform: 'android',
+          action: 'home',
+          timeoutMs: 5000,
+          timestamp: 1250,
+          optional: false,
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const logs: string[] = [];
+    const summary = await service.runInteractiveTest(apidemosSession, (log) => {
+      logs.push(log.message);
+    });
+
+    expect(summary.status).toBe('passed');
+    expect(summary.passedSteps).toBe(6);
+    expect(summary.failedSteps).toBe(0);
+    expect(logs.some((log) => log.includes('[PASS] Step 1: tap'))).toBe(true);
+    expect(logs.some((log) => log.includes('[PASS] Step 3: fill'))).toBe(true);
+    expect(logs.some((log) => log.includes('[PASS] Step 4: assertText'))).toBe(true);
+
+    // Appium TypeScript Project Generation
+    const tsProject = await service.generateCode(apidemosSession, 'appium', 'typescript');
+    expect(tsProject.files.length).toBeGreaterThan(0);
+    const tsEntry = tsProject.files.find((f) => f.relativePath === tsProject.entrypoint)?.content ?? '';
+    expect(tsEntry).toContain('UiAutomator2');
+    expect(tsEntry).toContain('io.appium.android.apis');
+    expect(tsEntry).toContain('.ApiDemos');
+    expect(tsEntry).toContain('withAppiumLocatorHealing');
+    expect(tsEntry).toContain('driver.deleteSession()');
+
+    // Appium JavaScript Project Generation
+    const jsProject = await service.generateCode(apidemosSession, 'appium', 'javascript');
+    expect(jsProject.files.length).toBeGreaterThan(0);
+    const jsEntry = jsProject.files.find((f) => f.relativePath === jsProject.entrypoint)?.content ?? '';
+    expect(jsEntry).toContain('UiAutomator2');
+    expect(jsEntry).toContain('withAppiumLocatorHealing');
+  });
 });

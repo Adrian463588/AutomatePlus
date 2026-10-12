@@ -22,11 +22,11 @@ import type {
   RunLogCallback,
   RunSummary,
   SerializedAutomationError,
+  IpcResponse,
 } from '@automate-plus/contracts';
 import { createRequest, createRuntimeId, encodeNativeIpcMessage } from '@automate-plus/contracts';
-import type { IpcResponse } from '@automate-plus/contracts';
 import type { SessionIR } from '@automate-plus/ir-schema';
-import { ApiFunctionalRunner, InteractivePlayer, WebInteractiveStepExecutor } from '@automate-plus/runner-core/browser';
+import { AndroidInteractiveStepExecutor, ApiFunctionalRunner, InteractivePlayer, WebInteractiveStepExecutor } from '@automate-plus/runner-core/browser';
 import type { LoopingSummary, K6StressMetrics } from '@automate-plus/stress-engine/browser';
 import {
   BROWSER_RUNTIME_BLOCKED_REASON,
@@ -635,7 +635,13 @@ export class DesktopBridgeService {
       await this.saveRunSummary(session.id, summary);
       return summary;
     }
-    const summary = createBlockedRunSummary(session.id, 'Interactive Android execution requires the native host.', session.steps.length);
+    if (session.platform === 'android') {
+      const player = new InteractivePlayer(new AndroidInteractiveStepExecutor(session.targetConfig.appPackage, session.targetConfig.appActivity));
+      const summary = await player.run(session, { executionMode: 'interactive' }, onLog);
+      await this.saveRunSummary(session.id, summary);
+      return summary;
+    }
+    const summary = createBlockedRunSummary(session.id, `Interactive execution is not supported for platform "${session.platform}".`, session.steps.length);
     onLog({ timestamp: Date.now(), type: 'error', message: summary.error ?? 'Interactive execution is blocked.' });
     return summary;
   }

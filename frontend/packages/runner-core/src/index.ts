@@ -1,5 +1,6 @@
 export * from './interactive-player.js';
 export * from './web-step-executor.js';
+export * from './android-step-executor.js';
 export * from './process-runner.js';
 export * from './api-runner.js';
 export * from './device-lease-manager.js';

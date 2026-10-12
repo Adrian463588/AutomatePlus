@@ -32,6 +32,28 @@ const ORANGEHRM_TEMPLATE_STEPS: ActionIR[] = [
   { id: 'o1000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'web', action: 'assertVisible', locators: [{ strategy: 'css', value: '.oxd-topbar-header-breadcrumb', score: 95 }], timeoutMs: 5000, timestamp: 1250, optional: false },
 ];
 
+const APIDEMOS_TEMPLATE_STEPS: ActionIR[] = [
+  { id: 'ad000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'android', action: 'tap', locators: [{ strategy: 'accessibilityId', value: 'Views', score: 100 }, { strategy: 'text', value: 'Views', score: 90 }], timeoutMs: 5000, timestamp: 1000, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'android', action: 'assertVisible', locators: [{ strategy: 'accessibilityId', value: 'Views', score: 100 }], timeoutMs: 5000, timestamp: 1050, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'android', action: 'tap', locators: [{ strategy: 'accessibilityId', value: 'Controls', score: 100 }, { strategy: 'text', value: 'Controls', score: 90 }], timeoutMs: 5000, timestamp: 1100, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000004', schemaVersion: 2, stepNumber: 4, platform: 'android', action: 'tap', locators: [{ strategy: 'accessibilityId', value: '1. Light Theme', score: 100 }, { strategy: 'text', value: '1. Light Theme', score: 90 }], timeoutMs: 5000, timestamp: 1150, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000005', schemaVersion: 2, stepNumber: 5, platform: 'android', action: 'fill', value: 'AutomatePlus Test', locators: [{ strategy: 'resourceId', value: 'io.appium.android.apis:id/edit', score: 100 }, { strategy: 'xpath', value: '//android.widget.EditText', score: 80 }], timeoutMs: 5000, timestamp: 1200, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'android', action: 'assertText', expectedValue: 'AutomatePlus Test', locators: [{ strategy: 'resourceId', value: 'io.appium.android.apis:id/edit', score: 100 }], timeoutMs: 5000, timestamp: 1250, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000007', schemaVersion: 2, stepNumber: 7, platform: 'android', action: 'tap', locators: [{ strategy: 'accessibilityId', value: 'Checkbox 1', score: 100 }, { strategy: 'resourceId', value: 'io.appium.android.apis:id/check1', score: 90 }], timeoutMs: 5000, timestamp: 1300, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000008', schemaVersion: 2, stepNumber: 8, platform: 'android', action: 'sleep', timeoutMs: 500, timestamp: 1350, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000009', schemaVersion: 2, stepNumber: 9, platform: 'android', action: 'back', timeoutMs: 5000, timestamp: 1400, optional: false },
+  { id: 'ad000000-0000-4000-8000-000000000010', schemaVersion: 2, stepNumber: 10, platform: 'android', action: 'home', timeoutMs: 5000, timestamp: 1450, optional: false },
+];
+
+const NOTIPLUS_TEMPLATE_STEPS: ActionIR[] = [
+  { id: 'np000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'android', action: 'tap', locators: [{ strategy: 'resourceId', value: 'com.notifplus:id/action_search', score: 100 }, { strategy: 'accessibilityId', value: 'Search', score: 90 }], timeoutMs: 5000, timestamp: 1000, optional: false },
+  { id: 'np000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'android', action: 'fill', value: 'NotiPlus', locators: [{ strategy: 'resourceId', value: 'com.notifplus:id/search_src_text', score: 100 }, { strategy: 'xpath', value: '//android.widget.EditText', score: 80 }], timeoutMs: 5000, timestamp: 1050, optional: false },
+  { id: 'np000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'android', action: 'assertVisible', locators: [{ strategy: 'resourceId', value: 'com.notifplus:id/search_src_text', score: 100 }], timeoutMs: 5000, timestamp: 1100, optional: false },
+  { id: 'np000000-0000-4000-8000-000000000004', schemaVersion: 2, stepNumber: 4, platform: 'android', action: 'enter', timeoutMs: 5000, timestamp: 1150, optional: false },
+  { id: 'np000000-0000-4000-8000-000000000005', schemaVersion: 2, stepNumber: 5, platform: 'android', action: 'back', timeoutMs: 5000, timestamp: 1200, optional: false },
+  { id: 'np000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'android', action: 'home', timeoutMs: 5000, timestamp: 1250, optional: false },
+];
+
 export const VisualCanvas: React.FC = () => {
   const {
     activeSession,
@@ -51,6 +73,9 @@ export const VisualCanvas: React.FC = () => {
   const [webAction, setWebAction] = useState<ActionType>('click');
   const [webLocator, setWebLocator] = useState('');
   const [webValue, setWebValue] = useState('');
+  const [androidAction, setAndroidAction] = useState<ActionType>('tap');
+  const [androidLocator, setAndroidLocator] = useState('');
+  const [androidValue, setAndroidValue] = useState('');
   const isAndroid = activeSession?.platform === 'android';
   const isApi = activeSession?.platform === 'api';
   const assertionOptions: Array<{ value: LocatorStrategy; label: string }> = isAndroid
@@ -144,6 +169,28 @@ export const VisualCanvas: React.FC = () => {
     setWebValue('');
   };
 
+  const handleAddAndroidAction = async () => {
+    if (!activeSession) return;
+    const isNoLoc = androidAction === 'back' || androidAction === 'home' || androidAction === 'enter' || androidAction === 'sleep';
+    if (!isNoLoc && !androidLocator.trim()) return;
+
+    await addStep({
+      id: crypto.randomUUID(),
+      schemaVersion: 2,
+      stepNumber: activeSession.ir.steps.length + 1,
+      platform: 'android',
+      action: androidAction,
+      locators: isNoLoc ? undefined : [{ strategy: assertionStrategy, value: androidLocator.trim(), score: 90 }],
+      value: androidAction === 'fill' ? androidValue : undefined,
+      expectedValue: (androidAction === 'assertText' || androidAction === 'assertValue') ? androidValue.trim() : undefined,
+      timeoutMs: 5000,
+      timestamp: Date.now(),
+      optional: false,
+    });
+    setAndroidLocator('');
+    setAndroidValue('');
+  };
+
   const targetLabel = isAndroid ? 'Package: ' + appPackage : 'Target: ' + inputUrl;
   const preflightClass = [
     'border-b border-slate-800 px-4 py-2 text-xs',
@@ -231,6 +278,60 @@ export const VisualCanvas: React.FC = () => {
               </button>
             </div>
           )}
+          {isAndroid && (
+            <div className="flex items-center gap-1.5 border-r border-slate-800 pr-2">
+              <label htmlFor="android-action-type" className="sr-only">Android action type</label>
+              <select
+                id="android-action-type"
+                name="androidActionType"
+                value={androidAction}
+                onChange={(e) => setAndroidAction(e.target.value as ActionType)}
+                className="ap-select text-xs py-1"
+                aria-label="Action type"
+              >
+                <option value="tap">tap</option>
+                <option value="fill">fill</option>
+                <option value="assertVisible">assertVisible</option>
+                <option value="assertText">assertText</option>
+                <option value="back">back</option>
+                <option value="home">home</option>
+                <option value="enter">enter</option>
+                <option value="sleep">sleep</option>
+              </select>
+              {androidAction !== 'back' && androidAction !== 'home' && androidAction !== 'enter' && androidAction !== 'sleep' && (
+                <input
+                  id="android-action-locator"
+                  name="androidActionLocator"
+                  placeholder="locator (e.g. ~Views or id)"
+                  value={androidLocator}
+                  onChange={(e) => setAndroidLocator(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-32 focus:outline-none focus:border-cyan-500"
+                  aria-label="Android action locator"
+                />
+              )}
+              {(androidAction === 'fill' || androidAction === 'assertText') && (
+                <input
+                  id="android-action-value"
+                  name="androidActionValue"
+                  placeholder="value / expected"
+                  value={androidValue}
+                  onChange={(e) => setAndroidValue(e.target.value)}
+                  className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-32 focus:outline-none focus:border-cyan-500"
+                  aria-label="Android action value"
+                />
+              )}
+              <button
+                type="button"
+                id="add-android-step-button"
+                onClick={() => void handleAddAndroidAction()}
+                disabled={!activeSession || isRecording}
+                className="button-small bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 disabled:opacity-40"
+                title="Add android action step"
+              >
+                <Plus className="h-3.5 w-3.5 text-cyan-400" aria-hidden="true" />Add step
+              </button>
+            </div>
+          )}
           <label className="field-inline">
             <span className="text-[10px] text-slate-400">Locator</span>
             <select id="assertion-locator-strategy" name="assertionStrategy" value={assertionStrategy} onChange={(event) => setAssertionStrategy(event.target.value as LocatorStrategy)} aria-label="Assertion locator strategy">
@@ -291,6 +392,37 @@ export const VisualCanvas: React.FC = () => {
                     >
                       <Globe className="w-3.5 h-3.5 text-amber-400" />
                       <span>OrangeHRM Flow (6 steps)</span>
+                    </button>
+                  </div>
+                )}
+                {activeSession?.platform === 'android' && (
+                  <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
+                    <span className="text-xs text-slate-400">Quick E2E Targets:</span>
+                    <button
+                      type="button"
+                      id="load-apidemos-flow"
+                      onClick={() => {
+                        setAppPackage('io.appium.android.apis');
+                        void loadTemplateSteps(APIDEMOS_TEMPLATE_STEPS, { appPackage: 'io.appium.android.apis', appActivity: '.ApiDemos' });
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/70"
+                      title="Load ApiDemos mobile test flow"
+                    >
+                      <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                      <span>ApiDemos Flow (10 steps)</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="load-notiplus-flow"
+                      onClick={() => {
+                        setAppPackage('com.notifplus');
+                        void loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-700/70"
+                      title="Load NotiPlus notification test flow"
+                    >
+                      <Smartphone className="w-3.5 h-3.5 text-teal-400" />
+                      <span>NotiPlus Flow (6 steps)</span>
                     </button>
                   </div>
                 )}
