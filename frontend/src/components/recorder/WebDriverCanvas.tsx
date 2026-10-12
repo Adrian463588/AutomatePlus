@@ -496,6 +496,18 @@ export const WebDriverCanvas: React.FC = () => {
     });
   };
 
+  const canGoBack = isSauceDemo
+    ? (saucePage === 'inventory' || saucePage === 'cart' || saucePage === 'checkout-step-one' || saucePage === 'checkout-step-two' || saucePage === 'checkout-complete')
+    : isOrangeHrm
+      ? (orangePage === 'dashboard')
+      : false;
+
+  const canGoForward = isSauceDemo
+    ? (saucePage === 'login' || saucePage === 'inventory' || saucePage === 'cart' || saucePage === 'checkout-step-one')
+    : isOrangeHrm
+      ? (orangePage === 'login')
+      : false;
+
   return (
     <div className="flex flex-col flex-1 min-h-0 bg-slate-950 border-b border-slate-800 text-xs">
       {/* WebDriver Chrome Bar */}
@@ -503,26 +515,32 @@ export const WebDriverCanvas: React.FC = () => {
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
+            disabled={!canGoBack}
             onClick={() => {
               if (saucePage === 'inventory') setSaucePage('login');
               else if (saucePage === 'cart') setSaucePage('inventory');
               else if (saucePage === 'checkout-step-one') setSaucePage('cart');
+              else if (saucePage === 'checkout-step-two') setSaucePage('checkout-step-one');
+              else if (saucePage === 'checkout-complete') setSaucePage('inventory');
               else if (orangePage === 'dashboard') setOrangePage('login');
             }}
-            title="WebDriver Back"
-            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40"
+            title={canGoBack ? 'WebDriver Back' : 'No previous history in simulated session'}
+            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
           </button>
           <button
             type="button"
+            disabled={!canGoForward}
             onClick={() => {
               if (saucePage === 'login') setSaucePage('inventory');
               else if (saucePage === 'inventory') setSaucePage('cart');
+              else if (saucePage === 'cart') setSaucePage('checkout-step-one');
+              else if (saucePage === 'checkout-step-one') setSaucePage('checkout-step-two');
               else if (orangePage === 'login') setOrangePage('dashboard');
             }}
-            title="WebDriver Forward"
-            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40"
+            title={canGoForward ? 'WebDriver Forward' : 'No forward history in simulated session'}
+            className="p-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <ArrowRight className="w-3.5 h-3.5" />
           </button>
@@ -636,9 +654,10 @@ export const WebDriverCanvas: React.FC = () => {
               <button
                 type="button"
                 id="shopping-cart-link"
+                disabled={saucePage === 'login'}
                 onClick={() => void handleGoToCart()}
-                title="View Shopping Cart"
-                className="relative p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200"
+                title={saucePage === 'login' ? 'Please log in first to view shopping cart' : 'View Shopping Cart'}
+                className="relative p-2 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <ShoppingCart className="w-4 h-4 text-cyan-400" />
                 {cartItems.length > 0 && (

@@ -5,12 +5,27 @@ import { Play, PlaySquare, Repeat, Zap, Globe, Server, Layers, Square, Activity,
 interface HeaderProps { onOpenStressModal: () => void; }
 
 export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
-  const { activeProject, activeSession, isRunning, runTest, runLooping, cancelExecution, activeDevice, activeTab, setActiveTab, feedback } = useAppStore();
+  const { activeProject, activeSession, sessions, selectSession, isRunning, runTest, runLooping, cancelExecution, activeDevice, activeTab, setActiveTab, feedback } = useAppStore();
   const [loopCount, setLoopCount] = useState('');
   const [showLoopInput, setShowLoopInput] = useState(false);
   const hasSession = Boolean(activeSession);
   const canLoop = Number.isInteger(Number(loopCount)) && Number(loopCount) > 0;
   const runReason = hasSession ? 'Run the current user-created session' : 'Create and select a session first';
+
+  const handleStressClick = () => {
+    if (activeSession?.platform === 'api') {
+      onOpenStressModal();
+    } else {
+      const apiSession = sessions.find((s) => s.platform === 'api');
+      if (apiSession) {
+        void selectSession(apiSession.id);
+        setActiveTab('api_builder');
+        onOpenStressModal();
+      } else {
+        setActiveTab('api_builder');
+      }
+    }
+  };
 
   return (
     <header className="app-header select-none">
@@ -168,9 +183,15 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
 
         <button
           type="button"
-          disabled={isRunning || activeSession?.platform !== 'api'}
-          onClick={onOpenStressModal}
-          title={activeSession?.platform === 'api' ? 'Provide stress values' : 'Select an API session first'}
+          disabled={isRunning}
+          onClick={handleStressClick}
+          title={
+            isRunning
+              ? 'Execution in progress'
+              : activeSession?.platform === 'api'
+                ? 'Provide stress values'
+                : 'Open API stress testing'
+          }
           className="button-execute bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 disabled:opacity-50"
         >
           <Zap className="w-3.5 h-3.5 text-amber-400" />

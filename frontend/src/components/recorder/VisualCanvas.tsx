@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Circle, Globe, Plus, Repeat, ShieldCheck, Smartphone, Square } from 'lucide-react';
+import { AlertTriangle, Circle, Globe, Plus, Repeat, Server, ShieldCheck, Smartphone, Square } from 'lucide-react';
 import { type ActionIR, type ActionType, type LocatorStrategy } from '@automate-plus/ir-schema';
 import { useAppStore } from '../../store/appStore.js';
 import { ActionTimeline } from './ActionTimeline.js';
@@ -67,6 +67,7 @@ export const VisualCanvas: React.FC = () => {
     loadTemplateSteps,
     updateTargetConfig,
     runLooping,
+    setActiveTab,
   } = useAppStore();
   const [inputUrl, setInputUrl] = useState('');
   const [appPackage, setAppPackage] = useState('');
@@ -80,6 +81,12 @@ export const VisualCanvas: React.FC = () => {
   const [androidValue, setAndroidValue] = useState('');
   const isAndroid = activeSession?.platform === 'android';
   const isApi = activeSession?.platform === 'api';
+
+  const isWebNoLoc = webAction === 'navigate' || webAction === 'assertUrl';
+  const canAddWebStep = Boolean(activeSession && !isRecording && (isWebNoLoc || webLocator.trim().length > 0));
+
+  const isAndroidNoLoc = androidAction === 'back' || androidAction === 'home' || androidAction === 'enter' || androidAction === 'sleep';
+  const canAddAndroidStep = Boolean(activeSession && !isRecording && (isAndroidNoLoc || androidLocator.trim().length > 0));
   const assertionOptions: Array<{ value: LocatorStrategy; label: string }> = isAndroid
     ? [
       { value: 'accessibilityId', label: 'Accessibility ID' },
@@ -269,10 +276,11 @@ export const VisualCanvas: React.FC = () => {
               )}
               <button
                 type="button"
+                id="add-web-step-button"
                 onClick={() => void handleAddWebAction()}
-                disabled={!activeSession || isRecording}
+                disabled={!canAddWebStep}
                 className="button-small bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 disabled:opacity-40"
-                title="Add web action step"
+                title={!activeSession ? 'Create or select a session first' : isRecording ? 'Recording is in progress' : !canAddWebStep ? 'Enter a locator (e.g. #login-button) first' : 'Add web action step'}
               >
                 <Plus className="h-3.5 w-3.5 text-cyan-400" aria-hidden="true" />Add step
               </button>
@@ -322,9 +330,9 @@ export const VisualCanvas: React.FC = () => {
                 type="button"
                 id="add-android-step-button"
                 onClick={() => void handleAddAndroidAction()}
-                disabled={!activeSession || isRecording}
+                disabled={!canAddAndroidStep}
                 className="button-small bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 disabled:opacity-40"
-                title="Add android action step"
+                title={!activeSession ? 'Create or select a session first' : isRecording ? 'Recording is in progress' : !canAddAndroidStep ? 'Enter an element locator first' : 'Add android action step'}
               >
                 <Plus className="h-3.5 w-3.5 text-cyan-400" aria-hidden="true" />Add step
               </button>
@@ -363,6 +371,56 @@ export const VisualCanvas: React.FC = () => {
                         ? 'API sessions are configured in the API builder so requests, assertions, and extraction variables stay in the canonical IR.'
                         : 'The native Tauri/Rust host owns ADB discovery, device locks, hierarchy capture, and gesture recording.'}
                   </p>
+                  {!activeSession && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        id="quickstart-web-session-btn"
+                        onClick={async () => {
+                          const store = useAppStore.getState();
+                          if (!store.activeProject && store.projects.length === 0) {
+                            await store.createProject('Default Workspace', 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus');
+                          }
+                          await store.createSession('SauceDemo Web Flow', 'web');
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-sky-950 hover:bg-sky-900 text-sky-200 border border-sky-700/70"
+                        title="Quickstart: Create Web Test Session"
+                      >
+                        <Globe className="w-3.5 h-3.5 text-sky-400" />
+                        <span>Quickstart: Web Session</span>
+                      </button>
+                      <button
+                        type="button"
+                        id="quickstart-android-session-btn"
+                        onClick={async () => {
+                          const store = useAppStore.getState();
+                          if (!store.activeProject && store.projects.length === 0) {
+                            await store.createProject('Default Workspace', 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus');
+                          }
+                          await store.createSession('Android Flow', 'android');
+                        }}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/70"
+                        title="Quickstart: Create Android Test Session"
+                      >
+                        <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
+                        <span>Quickstart: Android Session</span>
+                      </button>
+                    </div>
+                  )}
+                  {isApi && (
+                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
+                      <button
+                        type="button"
+                        id="open-api-builder-from-canvas-btn"
+                        onClick={() => setActiveTab('api_builder')}
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70"
+                        title="Open API Builder workspace"
+                      >
+                        <Server className="w-3.5 h-3.5 text-amber-400" />
+                        <span>Open API Builder</span>
+                      </button>
+                    </div>
+                  )}
                   {activeSession?.platform === 'android' && (
                     <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-800">
                       <span className="text-xs text-slate-400">Quick E2E Targets:</span>

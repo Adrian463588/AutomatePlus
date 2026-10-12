@@ -148,11 +148,26 @@ export const Sidebar: React.FC = () => {
             <span id="sessions-heading">Test Sessions ({sessions.length})</span>
             <button type="button" disabled={!activeProject} onClick={() => setDialog('session')} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-40" aria-label="Create session" title={activeProject ? 'Create session' : 'Create a project first'}><Plus className="w-3.5 h-3.5" /></button>
           </div>
-          {sessions.length === 0 ? <p className="rounded-md border border-dashed border-slate-800 p-3 text-slate-500 leading-5">No session exists. Create one, then provide its real target.</p> :
+          {sessions.length === 0 ? (
+            <div className="rounded-md border border-dashed border-slate-800 p-3 text-slate-500 leading-5 space-y-2">
+              <p>No session exists. Create one, then provide its real target.</p>
+              <button
+                type="button"
+                id="sidebar-create-session-empty-btn"
+                disabled={!activeProject}
+                onClick={() => setDialog('session')}
+                title={activeProject ? 'Create a new test session' : 'Create or select a project first'}
+                className="w-full flex items-center justify-center gap-1.5 py-1.5 px-2 text-xs font-medium text-cyan-200 hover:text-white bg-cyan-950 hover:bg-cyan-900 rounded border border-cyan-800/60 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <Plus className="w-3.5 h-3.5 text-cyan-400" /> Create session
+              </button>
+            </div>
+          ) : (
             <div className="space-y-1">{sessions.map((session) => <button key={session.id} type="button" onClick={() => void selectSession(session.id)} aria-pressed={activeSession?.id === session.id} className={`w-full flex items-center justify-between p-2.5 rounded-md text-left border ${activeSession?.id === session.id ? 'bg-cyan-600/20 text-cyan-200 border-cyan-500/40' : 'text-slate-300 hover:bg-slate-800/60 border-transparent'}`}>
               <span className="flex items-center gap-2 truncate">{session.platform === 'web' && <Globe className="w-3.5 h-3.5 text-sky-400 shrink-0" />}{session.platform === 'android' && <Smartphone className="w-3.5 h-3.5 text-emerald-400 shrink-0" />}{session.platform === 'api' && <Server className="w-3.5 h-3.5 text-amber-400 shrink-0" />}<span className="truncate font-medium">{session.name}</span></span>
               <span className="text-[10px] font-mono text-slate-500">{session.ir.steps.length} steps</span>
-            </button>)}</div>}
+            </button>)}</div>
+          )}
         </section>
 
         <section aria-labelledby="devices-heading">

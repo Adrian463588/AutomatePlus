@@ -46,6 +46,19 @@
   button {
     min-height: 3rem;
     min-width: 3rem;
+    transition: background-color var(--ap-motion-normal) ease, border-color var(--ap-motion-normal) ease, color var(--ap-motion-normal) ease, transform var(--ap-motion-fast) ease;
+  }
+
+  button:active:not(:disabled) {
+    transform: scale(0.98) translateY(0.5px);
+  }
+
+  h1, h2, h3, .heading-tracking {
+    letter-spacing: -0.025em;
+  }
+
+  .caption-tracking, .ap-badge, .header-tab, .button-execute, .button-primary, .button-small, .button-muted {
+    letter-spacing: 0.015em;
   }
 
   code, pre, .font-mono {
@@ -259,7 +272,7 @@ select:disabled,
   .app-header { grid-template-areas: "brand" "tabs" "session" "actions" "feedback"; grid-template-columns: minmax(0, 1fr); }
   .app-header { padding-left: .75rem; padding-right: .75rem; }
   .header-actions { gap: .35rem; }
-  .header-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); width: 100%; min-width: 0; overflow: hidden; }
+  .header-tabs { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); width: 100%; min-width: 0; overflow: hidden; }
   .header-tabs button { min-width: 0; width: 100%; justify-content: center; padding-left: .25rem; padding-right: .25rem; }
   .header-tabs button span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .button-execute { padding-left: .55rem; padding-right: .55rem; }
