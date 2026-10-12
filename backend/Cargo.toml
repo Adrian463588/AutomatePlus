@@ -1,6 +1,6 @@
 [package]
 name = "automate-plus-native"
-version = "1.0.0"
+version = "1.1.0"
 description = "Offline native host for AutomatePlus"
 authors = ["AutomatePlus Core Team"]
 license = "MIT"

@@ -3,7 +3,7 @@
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Tests](https://img.shields.io/badge/Tests-167%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Latest Release](https://img.shields.io/badge/Release-v1.0.0-blue.svg)](https://github.com/Adrian463588/AutomatePlus/releases/latest)
+[![Latest Release](https://img.shields.io/badge/Release-v1.1.0-blue.svg)](https://github.com/Adrian463588/AutomatePlus/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
@@ -94,8 +94,11 @@ AutomatePlus binaries and offline execution bundles are published directly via G
 
 | Release | Platform | Distribution | Download Link |
 |---|---|---|---|
-| **v1.0.0 (Latest)** | Windows x64 | Standalone Desktop & 1-Click Launchers | [Latest Release (v1.0.0)](https://github.com/Adrian463588/AutomatePlus/releases/latest) |
-| **All Versions** | Windows x64 | Version Archive & Changelog | [Release Archive](https://github.com/Adrian463588/AutomatePlus/releases) |
+| **v1.1.0 (Latest)** | Windows x64 | Standalone Desktop Bundle | [Download AutomatePlus v1.1.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.1.0/AutomatePlus-v1.1.0-win-x64.zip) |
+| **v1.1.0 (Latest)** | Windows x64 | Standalone Executable | [Download AutomatePlus.exe](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.1.0/AutomatePlus.exe) |
+| **v1.1.0 (Latest)** | Windows x64 | 1-Click Launcher Script | [Download Run-AutomatePlus.bat](https://github.com/Adrian463588/AutomatePlus/raw/main/Run-AutomatePlus.bat) |
+| **v1.0.0** | Windows x64 | Previous Stable Release | [Download AutomatePlus v1.0.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.0.0/AutomatePlus-v1.0.0-win-x64.zip) |
+| **All Versions** | Windows x64 | Complete Release Archive & Assets | [GitHub Releases Archive](https://github.com/Adrian463588/AutomatePlus/releases) |
 
 ### 1-Click Desktop Launch
 
@@ -107,9 +110,10 @@ For instant local execution on Windows without manual build steps:
 
 ### Version History & Changelog
 
-| Version | Release Date | Architecture | Key Features & Enhancements |
-|---|---|---|---|
-| **v1.0.0** | 2026-10-09 | Tauri 2 + Rust / TypeScript | • Multiplatform Web automation (13 targets across Playwright, Cypress, Selenium, Puppeteer, Robot Framework)<br>• Android Device Farm (9 targets, Appium, Maestro, Espresso, Robolectric, multi-device replication & distribution)<br>• API Functional & Load Suite (5 targets, HTTP TS/JS/Python/Java, k6 constant RPS)<br>• Precision Workbench Dark UI with 48px interactive touch targets<br>• DevSecOps isolation protecting research references and internal documents<br>• 1-Click local Windows execution via `Run-AutomatePlus.bat` |
+| Version | Release Date | Architecture | Key Features & Enhancements | Download |
+|---|---|---|---|---|
+| **v1.1.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Visual action disabling and parameterization in Action Timeline (FR-02)<br>• Enhanced screen reader accessibility and explicit ARIA labels across MonacoView and FarmRunModal<br>• DevSecOps-hardened release distribution and direct standalone binary download links<br>• Fully verified offline Tauri/Rust compilation and automated DevSecOps test gates | [Download v1.1.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.1.0/AutomatePlus-v1.1.0-win-x64.zip) |
+| **v1.0.0** | 2026-10-09 | Tauri 2 + Rust / TypeScript | • Multiplatform Web automation (13 targets across Playwright, Cypress, Selenium, Puppeteer, Robot Framework)<br>• Android Device Farm (9 targets, Appium, Maestro, Espresso, Robolectric, multi-device replication & distribution)<br>• API Functional & Load Suite (5 targets, HTTP TS/JS/Python/Java, k6 constant RPS)<br>• Precision Workbench Dark UI with 48px interactive touch targets<br>• DevSecOps isolation protecting research references and internal documents<br>• 1-Click local Windows execution via `Run-AutomatePlus.bat` | [Download v1.0.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.0.0/AutomatePlus-v1.0.0-win-x64.zip) |
 
 ---
 

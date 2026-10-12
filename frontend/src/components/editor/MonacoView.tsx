@@ -58,6 +58,7 @@ export const MonacoView: React.FC = () => {
             <select
               id="generator-framework"
               name="framework"
+              aria-label="Framework"
               disabled={!activeSession}
               value={selectedFramework}
               onChange={(event) => {
@@ -75,6 +76,7 @@ export const MonacoView: React.FC = () => {
             <select
               id="generator-language"
               name="language"
+              aria-label="Language"
               disabled={!activeSession || !selectedFramework}
               value={selectedLanguage}
               onChange={(event) => void setFrameworkAndLanguage(selectedFramework, event.target.value)}

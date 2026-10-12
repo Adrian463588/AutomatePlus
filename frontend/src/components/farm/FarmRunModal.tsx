@@ -201,8 +201,9 @@ export const FarmRunModal: React.FC<FarmRunModalProps> = ({ isOpen, onClose }) =
 
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <label className="text-slate-400 block mb-1 text-[11px]">Delay Between Iterations (ms)</label>
+                <label htmlFor="farm-delay-ms" className="text-slate-400 block mb-1 text-[11px]">Delay Between Iterations (ms)</label>
                 <input
+                  id="farm-delay-ms"
                   type="number"
                   min="0"
                   step="50"
@@ -212,8 +213,9 @@ export const FarmRunModal: React.FC<FarmRunModalProps> = ({ isOpen, onClose }) =
                 />
               </div>
               <div>
-                <label className="text-slate-400 block mb-1 text-[11px]">Max Parallel Workers</label>
+                <label htmlFor="farm-max-parallel" className="text-slate-400 block mb-1 text-[11px]">Max Parallel Workers</label>
                 <input
+                  id="farm-max-parallel"
                   type="number"
                   min="1"
                   max="16"

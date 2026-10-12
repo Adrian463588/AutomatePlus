@@ -14,6 +14,8 @@ import {
   Layers,
   Sparkles,
   Lock,
+  Eye,
+  EyeOff,
 } from 'lucide-react';
 import { ActionType } from '@automate-plus/ir-schema';
 
@@ -110,6 +112,11 @@ export const ActionTimeline: React.FC = () => {
                   <div>
                     <div className="font-bold text-white capitalize text-xs flex items-center gap-1.5">
                       {step.action}
+                      {step.optional && (
+                        <span className="text-[9px] bg-slate-800 text-slate-400 border border-slate-700 px-1 rounded font-mono">
+                          Optional
+                        </span>
+                      )}
                       {isSecret && (
                         <span className="text-[9px] bg-amber-950 text-amber-300 border border-amber-800 px-1 rounded flex items-center gap-0.5">
                           <Lock className="w-2.5 h-2.5" /> Secret
@@ -136,9 +143,15 @@ export const ActionTimeline: React.FC = () => {
                       type="text"
                       disabled={isSecret}
                       value={valString}
-                      onChange={(e) =>
-                        updateStep(index, { ...step, value: e.target.value })
-                      }
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        const secretMatch = /^\$\{secret\.([A-Za-z][A-Za-z0-9_.:-]{0,127})\}$/u.exec(val);
+                        if (secretMatch) {
+                          updateStep(index, { ...step, value: { kind: 'secret', key: secretMatch[1]! } });
+                        } else {
+                          updateStep(index, { ...step, value: val });
+                        }
+                      }}
                       className="bg-slate-950 border border-slate-800 rounded px-2 py-1 text-xs text-slate-200 font-mono w-full focus:outline-none focus:border-cyan-500 disabled:opacity-60"
                       aria-label={`Value for ${step.action}`}
                     />
@@ -158,6 +171,15 @@ export const ActionTimeline: React.FC = () => {
 
                 {/* Actions & Reordering */}
                 <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => void updateStep(index, { ...step, optional: !step.optional })}
+                    className={`p-1 rounded ${step.optional ? 'text-amber-400 hover:bg-amber-950/40' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                    title={step.optional ? 'Step is optional (click to require)' : 'Step is required (click to make optional)'}
+                    aria-label={`Toggle step ${step.stepNumber} optional`}
+                  >
+                    {step.optional ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                  </button>
                   <button
                     type="button"
                     disabled={index === 0}
