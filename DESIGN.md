@@ -208,6 +208,38 @@ The renderer uses a deliberate Windows desktop workbench direction. This is a pr
 - Every interactive control is at least 48px in its hit area, has an accessible name, and either has a real handler or a disabled explanation.
 - Browser mode remains a truthful migration shell. It never substitutes browser prompts, fabricated runtime counts, fake devices, or fake progress for native evidence.
 
+## 13B. Modern Web UI/UX & Tactile Interaction Invariants (2026 Standard)
+
+To eliminate AI slop, maintain mathematical precision, and guarantee zero-dead-button ergonomics across desktop and web automation workflows, the renderer adheres to the following implementation contracts:
+
+1. **Zero-Slop Invariants**:
+   - Zero linear/radial/mesh gradients on surfaces or cards.
+   - Zero `backdrop-blur` glassmorphism; borders are crisp `1px solid var(--border)` or `var(--border-strong)`.
+   - Zero uncalibrated violet/indigo accents; primary accents are neutral dark (`zinc-900`/`zinc-100`) or functional state colors (`emerald-500` success, `amber-500` warning, `rose-500` danger, `sky-500` informational).
+   - Zero arbitrary inline CSS (`style={{ ... }}`) or uncalibrated Tailwind hex scales.
+2. **Encapsulated Layout & Zero-Margin Invariant**:
+   - Child components never leak external margins (`mt-*`, `mb-*`).
+   - Spacing is strictly governed by parent containers via Flexbox/Grid `gap-*` using the 4pt/8pt base grid (`gap-1.5` [6px], `gap-2` [8px], `gap-2.5` [10px], `gap-3` [12px], `gap-4` [16px], `gap-6` [24px]).
+   - Card padding is optical: horizontal padding is 1.5x–2x vertical padding.
+3. **Concentric Radius Formula**:
+   - Nested elements follow the mathematical concentric formula: $R_{\text{inner}} = \max(0, R_{\text{outer}} - \text{Padding})$. Outer card containers use 8px/10px radii; inner nested badges and controls use 4px/6px.
+4. **Minor Third (1.200) Modular Typography**:
+   - Display/H1: 32px / 2.0rem, LH 1.15, tracking -0.025em.
+   - Section/H2: 24px / 1.5rem, LH 1.20, tracking -0.020em.
+   - Title/H3: 20px / 1.25rem, LH 1.25, tracking -0.015em.
+   - Subhead/H4: 16px / 1.0rem, LH 1.35, tracking -0.010em.
+   - Body UI: 14px / 0.875rem, LH 1.50, tracking 0.000em.
+   - Label/Action: 13px / 0.8125rem, LH 1.35, tracking +0.005em.
+   - Caption/Mono: 12px / 0.75rem, LH 1.40, tracking +0.020em.
+5. **Tactile Micro-Interactions Budget**:
+   - Motion budget: 80ms–150ms (`var(--ap-motion-fast)` is 120ms).
+   - Micro-depression feedback: `.tactile-active` applies `active:scale-[0.98] active:translate-y-[0.5px]`.
+   - Strict `prefers-reduced-motion` compliance resets transforms to `none`.
+6. **Zero Dead Buttons & Accessible Affordance**:
+   - Every `<button>` must have an explicit `onClick` or `type="submit"`.
+   - Every disabled button must convey state rationale via accessible tooltip/attribute (`title`, `aria-label`, or `aria-describedby`).
+   - Forms enforce top-aligned labels (`Field` / `Select`) and structured error descriptions.
+
 ## 14. Verification and evidence status
 
 | Gate | Command | Current rule |

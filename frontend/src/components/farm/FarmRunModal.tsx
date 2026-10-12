@@ -122,8 +122,9 @@ export const FarmRunModal: React.FC<FarmRunModalProps> = ({ isOpen, onClose }) =
           <button
             type="button"
             onClick={onClose}
-            className="min-h-12 min-w-12 rounded text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            className="min-h-12 min-w-12 rounded text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 tactile-active"
             aria-label="Close farm replay dialog"
+            title="Close farm replay dialog"
           >
             <X className="w-4 h-4" />
           </button>
@@ -291,7 +292,8 @@ export const FarmRunModal: React.FC<FarmRunModalProps> = ({ isOpen, onClose }) =
           <button
             type="button"
             onClick={onClose}
-            className="min-h-12 rounded px-3 text-xs text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400"
+            title="Close farm replay dialog"
+            className="min-h-12 rounded px-3 text-xs text-slate-400 transition-colors hover:bg-slate-800 hover:text-white focus:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400 tactile-active"
           >
             Close
           </button>
@@ -299,7 +301,7 @@ export const FarmRunModal: React.FC<FarmRunModalProps> = ({ isOpen, onClose }) =
             type="button"
             onClick={handleLaunchFarm}
             disabled={!canLaunch}
-            className="flex min-h-12 items-center gap-2 rounded-md bg-emerald-600 px-5 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400"
+            className="flex min-h-12 items-center gap-2 rounded-md bg-emerald-600 px-5 text-xs font-bold text-white transition-colors hover:bg-emerald-500 disabled:cursor-not-allowed disabled:opacity-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 tactile-active"
             title={launchReason}
           >
             <Play className="w-3.5 h-3.5 fill-current" />

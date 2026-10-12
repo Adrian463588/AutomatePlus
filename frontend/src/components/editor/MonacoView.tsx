@@ -102,11 +102,11 @@ export const MonacoView: React.FC = () => {
           </label>
         </div>
         <div className="flex items-center gap-1.5">
-          <button type="button" disabled={!hasCode} onClick={() => void handleCopy()} title={hasCode ? 'Copy generated preview' : 'Generate a preview before copying'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40">
+          <button type="button" disabled={!hasCode} onClick={() => void handleCopy()} title={hasCode ? 'Copy generated preview' : 'Generate a preview before copying'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40 tactile-active">
             {copied ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
             <span>{copied ? 'Copied' : 'Copy'}</span>
           </button>
-          <button type="button" disabled={!hasCode} onClick={handleDownload} title={hasCode ? `Download ${fileName}` : 'Generate a preview before downloading'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40" aria-label="Download selected generated file">
+          <button type="button" disabled={!hasCode} onClick={handleDownload} title={hasCode ? `Download ${fileName}` : 'Generate a preview before downloading'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40 tactile-active" aria-label="Download selected generated file">
             <Download className="w-3.5 h-3.5" />
           </button>
         </div>

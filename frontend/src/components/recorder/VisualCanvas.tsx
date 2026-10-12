@@ -211,11 +211,11 @@ export const VisualCanvas: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 bg-slate-900 px-4 py-2">
         <div className="flex min-w-0 flex-wrap items-center gap-2">
           {isRecording ? (
-            <button type="button" onClick={() => void stopRecording()} className="button-execute bg-rose-600 hover:bg-rose-500">
+            <button type="button" onClick={() => void stopRecording()} title="Stop active recording" className="button-execute bg-rose-600 hover:bg-rose-500 tactile-active">
               <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />Recording · Stop
             </button>
           ) : (
-            <button type="button" disabled={Boolean(recordingBlockedReason)} onClick={() => void startRecording(isAndroid ? 'android' : 'web', isAndroid ? undefined : inputUrl)} title={recordingBlockedReason || 'Start native recorder'} className="button-execute border border-rose-500/40 bg-rose-600/20 text-rose-300 hover:bg-rose-600 hover:text-white disabled:opacity-40">
+            <button type="button" disabled={Boolean(recordingBlockedReason)} onClick={() => void startRecording(isAndroid ? 'android' : 'web', isAndroid ? undefined : inputUrl)} title={recordingBlockedReason || 'Start native recorder'} className="button-execute border border-rose-500/40 bg-rose-600/20 text-rose-300 hover:bg-rose-600 hover:text-white disabled:opacity-40 tactile-active">
               <Circle className="h-3.5 w-3.5 fill-rose-500" aria-hidden="true" />Start recorder
             </button>
           )}
@@ -279,7 +279,7 @@ export const VisualCanvas: React.FC = () => {
                 id="add-web-step-button"
                 onClick={() => void handleAddWebAction()}
                 disabled={!canAddWebStep}
-                className="button-small bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 disabled:opacity-40"
+                className="button-small bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 disabled:opacity-40 tactile-active"
                 title={!activeSession ? 'Create or select a session first' : isRecording ? 'Recording is in progress' : !canAddWebStep ? 'Enter a locator (e.g. #login-button) first' : 'Add web action step'}
               >
                 <Plus className="h-3.5 w-3.5 text-cyan-400" aria-hidden="true" />Add step
@@ -331,7 +331,7 @@ export const VisualCanvas: React.FC = () => {
                 id="add-android-step-button"
                 onClick={() => void handleAddAndroidAction()}
                 disabled={!canAddAndroidStep}
-                className="button-small bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 disabled:opacity-40"
+                className="button-small bg-cyan-950 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 disabled:opacity-40 tactile-active"
                 title={!activeSession ? 'Create or select a session first' : isRecording ? 'Recording is in progress' : !canAddAndroidStep ? 'Enter an element locator first' : 'Add android action step'}
               >
                 <Plus className="h-3.5 w-3.5 text-cyan-400" aria-hidden="true" />Add step
@@ -345,7 +345,7 @@ export const VisualCanvas: React.FC = () => {
             </select>
             <input id="assertion-locator-value" name="assertionLocator" value={assertionLocator} onChange={(event) => setAssertionLocator(event.target.value)} aria-label="Assertion locator value" />
           </label>
-          <button type="button" onClick={() => void handleAddAssertion()} disabled={!activeSession || isApi || isRecording || !assertionLocator.trim()} title={isApi ? 'API sessions use the API builder for assertions' : 'Add a user-provided assertion locator'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40">
+          <button type="button" onClick={() => void handleAddAssertion()} disabled={!activeSession || isApi || isRecording || !assertionLocator.trim()} title={isApi ? 'API sessions use the API builder for assertions' : 'Add a user-provided assertion locator'} className="button-small bg-slate-800 hover:bg-slate-700 disabled:opacity-40 tactile-active">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" aria-hidden="true" />Add assertion
           </button>
         </div>
@@ -383,7 +383,7 @@ export const VisualCanvas: React.FC = () => {
                           }
                           await store.createSession('SauceDemo Web Flow', 'web');
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-sky-950 hover:bg-sky-900 text-sky-200 border border-sky-700/70"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-sky-950 hover:bg-sky-900 text-sky-200 border border-sky-700/70 tactile-active"
                         title="Quickstart: Create Web Test Session"
                       >
                         <Globe className="w-3.5 h-3.5 text-sky-400" />
@@ -399,7 +399,7 @@ export const VisualCanvas: React.FC = () => {
                           }
                           await store.createSession('Android Flow', 'android');
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/70"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/70 tactile-active"
                         title="Quickstart: Create Android Test Session"
                       >
                         <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
@@ -413,7 +413,7 @@ export const VisualCanvas: React.FC = () => {
                         type="button"
                         id="open-api-builder-from-canvas-btn"
                         onClick={() => setActiveTab('api_builder')}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70 tactile-active"
                         title="Open API Builder workspace"
                       >
                         <Server className="w-3.5 h-3.5 text-amber-400" />
@@ -431,7 +431,7 @@ export const VisualCanvas: React.FC = () => {
                           setAppPackage('io.appium.android.apis');
                           void loadTemplateSteps(APIDEMOS_TEMPLATE_STEPS, { appPackage: 'io.appium.android.apis', appActivity: '.ApiDemos' });
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/70"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-emerald-950 hover:bg-emerald-900 text-emerald-200 border border-emerald-700/70 tactile-active"
                         title="Load ApiDemos mobile test flow"
                       >
                         <Smartphone className="w-3.5 h-3.5 text-emerald-400" />
@@ -444,7 +444,7 @@ export const VisualCanvas: React.FC = () => {
                           setAppPackage('com.notifplus');
                           void loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-700/70"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-teal-950 hover:bg-teal-900 text-teal-200 border border-teal-700/70 tactile-active"
                         title="Load NotiPlus notification test flow"
                       >
                         <Smartphone className="w-3.5 h-3.5 text-teal-400" />
@@ -458,7 +458,7 @@ export const VisualCanvas: React.FC = () => {
                           await loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
                           void runLooping(3);
                         }}
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70"
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70 tactile-active"
                         title="Run 3x Looping replay on NotiPlus"
                       >
                         <Repeat className="w-3.5 h-3.5 text-amber-400" />

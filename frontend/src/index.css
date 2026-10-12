@@ -61,6 +61,58 @@
     letter-spacing: 0.015em;
   }
 
+  /* 2026 Minor Third (1.200) Modular Scale & Inverse Tracking Curve */
+  .heading-display {
+    font-size: 2rem;
+    line-height: 1.15;
+    letter-spacing: -0.025em;
+    font-weight: 600;
+  }
+  .heading-section {
+    font-size: 1.5rem;
+    line-height: 1.20;
+    letter-spacing: -0.020em;
+    font-weight: 600;
+  }
+  .heading-title {
+    font-size: 1.25rem;
+    line-height: 1.25;
+    letter-spacing: -0.015em;
+    font-weight: 600;
+  }
+  .heading-subhead {
+    font-size: 1rem;
+    line-height: 1.35;
+    letter-spacing: -0.010em;
+    font-weight: 500;
+  }
+  .text-body-ui {
+    font-size: 0.875rem;
+    line-height: 1.50;
+    letter-spacing: 0.000em;
+    font-weight: 400;
+  }
+  .label-ui {
+    font-size: 0.8125rem;
+    line-height: 1.35;
+    letter-spacing: 0.005em;
+    font-weight: 500;
+  }
+  .caption-ui {
+    font-size: 0.75rem;
+    line-height: 1.40;
+    letter-spacing: 0.020em;
+    font-weight: 500;
+  }
+
+  /* Tactile feedback utility */
+  .tactile-active {
+    transition: transform var(--ap-motion-fast) ease-out, background-color var(--ap-motion-fast) ease-out;
+  }
+  .tactile-active:active:not(:disabled) {
+    transform: scale(0.98) translateY(0.5px);
+  }
+
   code, pre, .font-mono {
     font-family: var(--font-mono);
   }
@@ -122,9 +174,9 @@
   border-radius: var(--ap-radius-sm);
   color: var(--ap-text);
   cursor: pointer;
-  transition: background-color var(--ap-motion-normal) ease,
-              border-color var(--ap-motion-normal) ease,
-              color var(--ap-motion-normal) ease,
+  transition: background-color var(--ap-motion-fast) ease,
+              border-color var(--ap-motion-fast) ease,
+              color var(--ap-motion-fast) ease,
               transform var(--ap-motion-fast) ease;
   user-select: none;
 }
@@ -132,7 +184,7 @@
 .button-small:active:not(:disabled),
 .button-primary:active:not(:disabled),
 .button-muted:active:not(:disabled) {
-  transform: scale(0.98);
+  transform: scale(0.98) translateY(0.5px);
 }
 .button-execute { padding: .45rem .75rem; font-size: .78rem; font-weight: 700; white-space: nowrap; }
 .button-small { padding: .35rem .55rem; font-size: .75rem; font-weight: 600; }

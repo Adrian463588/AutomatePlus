@@ -162,7 +162,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
               type="button"
               id="loop-cancel-button"
               onClick={() => { setShowLoopInput(false); setLoopCount(''); }}
-              className="button-small bg-slate-700"
+              title="Cancel loop run configuration"
+              className="button-small bg-slate-700 tactile-active"
             >
               Cancel
             </button>
@@ -174,7 +175,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
             disabled={isRunning || !hasSession}
             onClick={() => setShowLoopInput(true)}
             title="Provide a loop count"
-            className="button-execute bg-slate-800 hover:bg-slate-700 disabled:opacity-50"
+            className="button-execute bg-slate-800 hover:bg-slate-700 disabled:opacity-50 tactile-active"
           >
             <Repeat className="w-3.5 h-3.5 text-amber-400" />
             <span>Loop</span>
@@ -192,7 +193,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
                 ? 'Provide stress values'
                 : 'Open API stress testing'
           }
-          className="button-execute bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 disabled:opacity-50"
+          className="button-execute bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 disabled:opacity-50 tactile-active"
         >
           <Zap className="w-3.5 h-3.5 text-amber-400" />
           <span>Stress</span>
@@ -202,8 +203,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
           <button
             type="button"
             onClick={() => void cancelExecution()}
-            className="button-execute bg-rose-700 hover:bg-rose-600"
+            className="button-execute bg-rose-700 hover:bg-rose-600 tactile-active"
             aria-label="Cancel running operation"
+            title="Cancel running operation"
           >
             <Square className="w-3.5 h-3.5 fill-current" />
             <span>Cancel</span>

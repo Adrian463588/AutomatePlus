@@ -56,7 +56,7 @@ export const TerminalPanel: React.FC = () => {
           <button
             type="button"
             onClick={clearLogs}
-            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800"
+            className="p-1 text-slate-400 hover:text-white rounded hover:bg-slate-800 tactile-active flex items-center justify-center"
             title="Clear Terminal Output"
             aria-label="Clear terminal output"
           >

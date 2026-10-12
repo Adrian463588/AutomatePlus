@@ -79,10 +79,10 @@ export const ActionTimeline: React.FC = () => {
       </div>
 
       {/* Steps List */}
-      <div className="flex-1 overflow-y-auto p-3 space-y-2">
+      <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {steps.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-slate-500 space-y-2">
-            <Sparkles className="w-8 h-8 text-slate-600 animate-bounce" />
+          <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2">
+            <Sparkles className="w-8 h-8 text-slate-600 animate-bounce motion-reduce:animate-none" />
             <p className="text-xs">No actions recorded yet.</p>
             <p className="text-[11px] text-slate-600 text-center max-w-sm">
               Start the native recorder after target preflight is ready, or add an explicit request and assertion in the API builder.
@@ -174,7 +174,7 @@ export const ActionTimeline: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void updateStep(index, { ...step, optional: !step.optional })}
-                    className={`p-1 rounded ${step.optional ? 'text-amber-400 hover:bg-amber-950/40' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                    className={`min-h-8 min-w-8 flex items-center justify-center p-1.5 rounded tactile-active ${step.optional ? 'text-amber-400 hover:bg-amber-950/40' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                     title={step.optional ? 'Step is optional (click to require)' : 'Step is required (click to make optional)'}
                     aria-label={`Toggle step ${step.stepNumber} optional`}
                   >
@@ -184,8 +184,8 @@ export const ActionTimeline: React.FC = () => {
                     type="button"
                     disabled={index === 0}
                     onClick={() => void reorderSteps(index, index - 1)}
-                    className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30"
-                    title="Move Step Up"
+                    className="min-h-8 min-w-8 flex items-center justify-center p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30 tactile-active"
+                    title={index === 0 ? 'Cannot move top step up' : 'Move Step Up'}
                     aria-label={`Move step ${step.stepNumber} up`}
                   >
                     <ChevronUp className="w-3.5 h-3.5" />
@@ -194,8 +194,8 @@ export const ActionTimeline: React.FC = () => {
                     type="button"
                     disabled={index === steps.length - 1}
                     onClick={() => void reorderSteps(index, index + 1)}
-                    className="p-1 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30"
-                    title="Move Step Down"
+                    className="min-h-8 min-w-8 flex items-center justify-center p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30 tactile-active"
+                    title={index === steps.length - 1 ? 'Cannot move bottom step down' : 'Move Step Down'}
                     aria-label={`Move step ${step.stepNumber} down`}
                   >
                     <ChevronDown className="w-3.5 h-3.5" />
@@ -203,7 +203,7 @@ export const ActionTimeline: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void deleteStep(index)}
-                    className="p-1 hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 rounded transition-colors ml-1"
+                    className="min-h-8 min-w-8 flex items-center justify-center p-1.5 hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 rounded transition-colors tactile-active"
                     title="Delete Step"
                     aria-label={`Delete step ${step.stepNumber}`}
                   >

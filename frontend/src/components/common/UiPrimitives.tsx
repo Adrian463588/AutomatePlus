@@ -33,7 +33,7 @@ export const Button: React.FC<ButtonProps> = ({ variant = 'muted', busy = false,
       disabled={isDisabled}
       aria-busy={busy || undefined}
       title={isDisabled && disabledReason ? disabledReason : title}
-      className={`${buttonClasses[variant]} min-h-12 ${className}`.trim()}
+      className={`${buttonClasses[variant]} min-h-12 tactile-active ${className}`.trim()}
     >
       {busy && <span className="ap-spinner" aria-hidden="true" />}
       {children}

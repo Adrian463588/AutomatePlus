@@ -158,8 +158,9 @@ export const McpBridgeView: React.FC = () => {
         <button
           type="button"
           onClick={handleCopyConfig}
-          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-xs font-mono text-slate-200 transition"
+          className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 rounded text-xs font-mono text-slate-200 transition tactile-active"
           aria-label="Copy MCP Agent Configuration JSON"
+          title={copiedConfig ? 'Agent config copied to clipboard' : 'Copy agent configuration to clipboard'}
         >
           {copiedConfig ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5 text-slate-400" />}
           <span>{copiedConfig ? 'Config Copied' : 'Copy Agent Config'}</span>
@@ -200,12 +201,13 @@ export const McpBridgeView: React.FC = () => {
                   key={tool.name}
                   type="button"
                   onClick={() => setActiveToolIndex(idx)}
-                  className={`text-left p-2 rounded text-xs transition flex flex-col gap-0.5 ${
+                  className={`text-left p-2 rounded text-xs transition flex flex-col gap-0.5 tactile-active ${
                     activeToolIndex === idx
                       ? 'bg-cyan-950 border border-cyan-800 text-cyan-300 font-semibold'
                       : 'hover:bg-slate-800 text-slate-400'
                   }`}
                   aria-label={`Select tool ${tool.name}`}
+                  title={tool.description}
                 >
                   <span className="font-mono">{tool.name}</span>
                 </button>
@@ -232,9 +234,9 @@ export const McpBridgeView: React.FC = () => {
                 id="mcp-run-tool-button"
                 disabled={isExecuting}
                 onClick={handleRunTool}
-                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-50 text-emerald-100 rounded text-xs font-semibold shadow-sm transition"
+                className="flex items-center gap-1.5 px-4 py-2 bg-emerald-800 hover:bg-emerald-700 disabled:opacity-50 text-emerald-100 rounded text-xs font-semibold shadow-sm transition tactile-active"
                 aria-label={`Execute MCP tool ${MCP_TOOLS[activeToolIndex].name}`}
-                title={isExecuting ? 'Executing tool in progress' : 'Execute MCP tool'}
+                title={isExecuting ? 'Executing tool in progress' : `Execute MCP tool ${MCP_TOOLS[activeToolIndex].name}`}
               >
                 <Play className="w-3.5 h-3.5 fill-current" />
                 <span>{isExecuting ? 'Running…' : 'Execute Tool'}</span>
