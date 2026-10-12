@@ -26,7 +26,7 @@ import type {
 } from '@automate-plus/contracts';
 import { createRequest, createRuntimeId, encodeNativeIpcMessage } from '@automate-plus/contracts';
 import type { SessionIR } from '@automate-plus/ir-schema';
-import { AndroidInteractiveStepExecutor, ApiFunctionalRunner, InteractivePlayer, WebInteractiveStepExecutor } from '@automate-plus/runner-core/browser';
+import { AndroidInteractiveStepExecutor, ApiFunctionalRunner, InteractivePlayer, MultiDeviceRunner, WebInteractiveStepExecutor } from '@automate-plus/runner-core/browser';
 import type { LoopingSummary, K6StressMetrics } from '@automate-plus/stress-engine/browser';
 import {
   BROWSER_RUNTIME_BLOCKED_REASON,
@@ -692,7 +692,28 @@ export class DesktopBridgeService {
     spec: FarmRunSpec,
     onLog: RunLogCallback,
     onProgress?: (summary: MultiDeviceRunSummary) => void,
+    devices?: readonly DeviceProfile[],
   ): Promise<MultiDeviceRunSummary> {
+    if (devices && devices.length > 0) {
+      try {
+        const targetPackage = session.targetConfig?.appPackage || 'com.notifplus';
+        const targetActivity = session.targetConfig?.appActivity || '.MainActivity';
+        const runner = new MultiDeviceRunner(
+          undefined,
+          undefined,
+          (_deviceId) => new AndroidInteractiveStepExecutor(targetPackage, targetActivity)
+        );
+        const summary = await runner.runFarm(session, spec, [...devices], onLog, onProgress);
+        onProgress?.(summary);
+        return summary;
+      } catch (error) {
+        const summary = createBlockedFarmSummary(session.id, spec, error instanceof Error ? error.message : String(error));
+        onLog({ timestamp: Date.now(), type: 'error', message: summary.errorSummary ?? 'Farm execution is blocked.' });
+        onProgress?.(summary);
+        return summary;
+      }
+    }
+
     try {
       const summary = await this.native.runFarmTest(session, spec);
       onProgress?.(summary);
@@ -718,6 +739,32 @@ export class DesktopBridgeService {
   ): Promise<LoopingSummary> {
     if (!Number.isInteger(iterations) || iterations < 1) throw new Error('Loop iterations must be a positive integer.');
     const runId = createRuntimeId();
+
+    if (session.platform === 'android' || session.platform === 'web') {
+      let successfulIterations = 0;
+      let failedIterations = 0;
+      let totalDuration = 0;
+      for (let current = 1; current <= iterations; current += 1) {
+        onLog({ timestamp: Date.now(), type: 'stdout', message: `[LOOP] Starting iteration ${current}/${iterations}...` });
+        const summary = await this.runInteractiveTest(session, onLog);
+        totalDuration += summary.durationMs;
+        if (summary.status === 'passed') successfulIterations += 1;
+        else failedIterations += 1;
+        onProgress?.(current, iterations, summary);
+        if (summary.status !== 'passed') break;
+      }
+      const completedIterations = successfulIterations + failedIterations;
+      return {
+        runId,
+        totalIterations: iterations,
+        completedIterations,
+        successfulIterations,
+        failedIterations,
+        averageIterationMs: completedIterations ? totalDuration / completedIterations : 0,
+        status: failedIterations === 0 ? 'passed' : 'failed',
+      };
+    }
+
     if (session.platform !== 'api') {
       const summary = createBlockedRunSummary(session.id, 'Browser looping is available only for API sessions.', session.steps.length);
       onLog({ timestamp: Date.now(), type: 'error', message: summary.error ?? 'Looping is blocked.' });

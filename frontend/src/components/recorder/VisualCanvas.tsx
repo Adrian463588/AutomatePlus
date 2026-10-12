@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { AlertTriangle, Circle, Globe, Plus, ShieldCheck, Smartphone, Square } from 'lucide-react';
+import { AlertTriangle, Circle, Globe, Plus, Repeat, ShieldCheck, Smartphone, Square } from 'lucide-react';
 import { type ActionIR, type ActionType, type LocatorStrategy } from '@automate-plus/ir-schema';
 import { useAppStore } from '../../store/appStore.js';
 import { ActionTimeline } from './ActionTimeline.js';
@@ -65,6 +65,7 @@ export const VisualCanvas: React.FC = () => {
     addStep,
     loadTemplateSteps,
     updateTargetConfig,
+    runLooping,
   } = useAppStore();
   const [inputUrl, setInputUrl] = useState('');
   const [appPackage, setAppPackage] = useState('');
@@ -423,6 +424,20 @@ export const VisualCanvas: React.FC = () => {
                     >
                       <Smartphone className="w-3.5 h-3.5 text-teal-400" />
                       <span>NotiPlus Flow (6 steps)</span>
+                    </button>
+                    <button
+                      type="button"
+                      id="run-notiplus-loop-3x"
+                      onClick={async () => {
+                        setAppPackage('com.notifplus');
+                        await loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
+                        void runLooping(3);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1.5 rounded text-xs font-semibold bg-amber-950 hover:bg-amber-900 text-amber-200 border border-amber-700/70"
+                      title="Run 3x Looping replay on NotiPlus"
+                    >
+                      <Repeat className="w-3.5 h-3.5 text-amber-400" />
+                      <span>Run 3x Loop (NotiPlus)</span>
                     </button>
                   </div>
                 )}

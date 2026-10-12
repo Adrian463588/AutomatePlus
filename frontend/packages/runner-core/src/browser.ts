@@ -1,6 +1,9 @@
 export * from './interactive-player.js';
 export * from './web-step-executor.js';
 export * from './android-step-executor.js';
+export * from './device-lease-manager.js';
+export * from './port-lease-manager.js';
+export * from './multi-device-runner.js';
 export * from './api-runner.js';
 import { AutomationError, createRuntimeId, RunLogCallback, RunSummary, RunnerStatus } from '@automate-plus/contracts';
 import type { ProcessRunOptions } from './process-runner.js';

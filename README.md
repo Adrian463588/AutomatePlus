@@ -1,9 +1,9 @@
 # AutomatePlus (Sprint 2)
 
 [![TypeScript Gates](https://img.shields.io/badge/TypeScript%20Gates-Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Tests](https://img.shields.io/badge/Tests-170%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
+[![Tests](https://img.shields.io/badge/Tests-172%20Passing-emerald.svg)](https://github.com/Adrian463588/AutomatePlus)
 [![Platform](https://img.shields.io/badge/Platform-Windows%20%7C%20Offline--First-blue.svg)](https://github.com/Adrian463588/AutomatePlus)
-[![Latest Release](https://img.shields.io/badge/Release-v1.3.0-blue.svg)](https://github.com/Adrian463588/AutomatePlus/releases/latest)
+[![Latest Release](https://img.shields.io/badge/Release-v1.4.0-blue.svg)](https://github.com/Adrian463588/AutomatePlus/releases/latest)
 [![License](https://img.shields.io/badge/License-MIT-purple.svg)](https://github.com/Adrian463588/AutomatePlus)
 
 > **AutomatePlus** is an offline-first Windows desktop platform for low-code multiplatform test automation. It bridges visual recording, unified intermediate representations (IR), and polyglot code generation across **Web**, **Android**, and **API** ecosystems.
@@ -94,10 +94,11 @@ AutomatePlus binaries and offline execution bundles are published directly via G
 
 | Release | Platform | Distribution | Download Link |
 |---|---|---|---|
-| **v1.3.0 (Latest)** | Windows x64 | Standalone Desktop Bundle | [Download AutomatePlus v1.3.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.3.0/AutomatePlus-v1.3.0-win-x64.zip) |
-| **v1.3.0 (Latest)** | Windows x64 | Standalone Executable | [Download AutomatePlus.exe](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.3.0/AutomatePlus.exe) |
-| **v1.3.0 (Latest)** | Windows x64 | 1-Click Launcher Script | [Download Run-AutomatePlus.bat](https://github.com/Adrian463588/AutomatePlus/raw/main/Run-AutomatePlus.bat) |
-| **v1.2.0** | Windows x64 | Previous Stable Release | [Download AutomatePlus v1.2.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.2.0/AutomatePlus-v1.2.0-win-x64.zip) |
+| **v1.4.0 (Latest)** | Windows x64 | Standalone Desktop Bundle | [Download AutomatePlus v1.4.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.4.0/AutomatePlus-v1.4.0-win-x64.zip) |
+| **v1.4.0 (Latest)** | Windows x64 | Standalone Executable | [Download AutomatePlus.exe](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.4.0/AutomatePlus.exe) |
+| **v1.4.0 (Latest)** | Windows x64 | 1-Click Launcher Script | [Download Run-AutomatePlus.bat](https://github.com/Adrian463588/AutomatePlus/raw/main/Run-AutomatePlus.bat) |
+| **v1.3.0** | Windows x64 | Previous Stable Release | [Download AutomatePlus v1.3.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.3.0/AutomatePlus-v1.3.0-win-x64.zip) |
+| **v1.2.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.2.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.2.0/AutomatePlus-v1.2.0-win-x64.zip) |
 | **v1.1.0** | Windows x64 | Historical Release | [Download AutomatePlus v1.1.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.1.0/AutomatePlus-v1.1.0-win-x64.zip) |
 | **v1.0.0** | Windows x64 | Initial Stable Release | [Download AutomatePlus v1.0.0 (.zip)](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.0.0/AutomatePlus-v1.0.0-win-x64.zip) |
 | **All Versions** | Windows x64 | Complete Release Archive & Assets | [GitHub Releases Archive](https://github.com/Adrian463588/AutomatePlus/releases) |
@@ -114,6 +115,7 @@ For instant local execution on Windows without manual build steps:
 
 | Version | Release Date | Architecture | Key Features & Enhancements | Download |
 |---|---|---|---|---|
+| **v1.4.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Multi-Device Android Phone Farm Replay & Looping Runner (`MultiDeviceRunner`, `AndroidInteractiveStepExecutor`) supporting sequential looping replay (3x iterations) and distributed farm execution<br>• 1-Click interactive looping execution (`Run 3x Loop`) for NotiPlus and connected Android targets<br>• Seamless fail-fast and iteration distribution across `single`, `all-devices`, and `split-iterations` strategies<br>• Monorepo test suites expanded to 172 tests with full Playwright MCP live verification and zero console errors | [Download v1.4.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.4.0/AutomatePlus-v1.4.0-win-x64.zip) |
 | **v1.3.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Android Automation Interactive In-App Click-and-Run execution engine (`AndroidInteractiveStepExecutor`) for Android targets and connected ADB devices<br>• 1-Click preset action flows for ApiDemos (10 steps) and NotiPlus (6 steps) with real-time locator healing and visual feedback<br>• Polyglot test generator projection to Appium (TypeScript/JavaScript/Java/Kotlin) directly from interactive Android session IR<br>• Monorepo test suites expanded to 170 tests with full DevSecOps & Playwright MCP live verification | [Download v1.3.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.3.0/AutomatePlus-v1.3.0-win-x64.zip) |
 | **v1.2.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Web Automation Interactive In-App Click-and-Run execution engine (`WebInteractiveStepExecutor`) for web targets (SauceDemo, OrangeHRM)<br>• 1-Click preset action flows for SauceDemo (15 steps) and OrangeHRM (6 steps) with real-time locator healing and visual feedback<br>• Polyglot test generator projection to Playwright (TypeScript/JavaScript/Python/Java) and Cypress (TypeScript/JavaScript) directly from interactive sessions<br>• Monorepo test suites expanded to 169 tests with full DevSecOps & Playwright MCP live verification | [Download v1.2.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.2.0/AutomatePlus-v1.2.0-win-x64.zip) |
 | **v1.1.0** | 2026-10-12 | Tauri 2 + Rust / TypeScript | • Visual action disabling and parameterization in Action Timeline (FR-02)<br>• Enhanced screen reader accessibility and explicit ARIA labels across MonacoView and FarmRunModal<br>• DevSecOps-hardened release distribution and direct standalone binary download links<br>• Fully verified offline Tauri/Rust compilation and automated DevSecOps test gates | [Download v1.1.0](https://github.com/Adrian463588/AutomatePlus/releases/download/v1.1.0/AutomatePlus-v1.1.0-win-x64.zip) |

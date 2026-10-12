@@ -633,8 +633,20 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (!activeSession || !Number.isInteger(iterations) || iterations < 1) { set({ feedback: { kind: 'blocked', message: 'A session and a positive loop count are required.' } }); return; }
     set({ isRunning: true, feedback: { kind: 'pending', message: 'Loop run requested…' } });
     const onLog = (event: RunLogEvent) => set((state) => appendRunLog(state.logs, event));
-    try { const summary = await bridge.runLooping(activeSession.ir, iterations, onLog); set({ isRunning: false, feedback: { kind: summary.failedIterations === 0 ? 'success' : 'error', message: `Loop finished: ${summary.successfulIterations}/${summary.totalIterations} iterations passed.` } }); }
-    catch (error) { set({ isRunning: false, feedback: { kind: 'error', message: `Loop failed: ${error instanceof Error ? error.message : String(error)}` } }); }
+    try {
+      const summary = await bridge.runLooping(activeSession.ir, iterations, onLog);
+      set({
+        isRunning: false,
+        feedback: {
+          kind: summary.failedIterations === 0 ? 'success' : 'error',
+          message: summary.failedIterations === 0
+            ? `Loop completed: ${summary.successfulIterations}/${summary.totalIterations} iterations passed.`
+            : `Loop finished: ${summary.successfulIterations}/${summary.totalIterations} passed, ${summary.failedIterations} failed.`,
+        },
+      });
+    } catch (error) {
+      set({ isRunning: false, feedback: { kind: 'error', message: `Loop failed: ${error instanceof Error ? error.message : String(error)}` } });
+    }
   },
 
   runK6Stress: async (targetRps, durationSec, maxVus) => {
@@ -663,9 +675,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     set({ isRunning: true, feedback: { kind: 'pending', message: `Launching multi-device farm replay (${spec.strategy})…` } });
     const onLog = (event: RunLogEvent) => set((state) => appendRunLog(state.logs, event));
     try {
-      const summary = await bridge.runFarmTest(activeSession.ir, spec, onLog, (progress) => {
-        set({ lastFarmSummary: progress });
-      });
+      const summary = await bridge.runFarmTest(
+        activeSession.ir,
+        spec,
+        onLog,
+        (progress) => {
+          set({ lastFarmSummary: progress });
+        },
+        get().deviceProfiles
+      );
       set({
         lastFarmSummary: summary,
         isRunning: false,

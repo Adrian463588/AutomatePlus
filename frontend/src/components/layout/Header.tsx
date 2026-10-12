@@ -87,6 +87,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
       <div className="header-actions flex items-center gap-2">
         <button
           type="button"
+          id="in-app-run-button"
           disabled={isRunning || !hasSession}
           onClick={() => void runTest('interactive')}
           title={runReason}
@@ -98,6 +99,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
 
         <button
           type="button"
+          id="native-run-button"
           disabled={isRunning || !hasSession}
           onClick={() => void runTest('native')}
           title={hasSession ? 'Requires a registered capability and native runtime' : runReason}
@@ -120,6 +122,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
             />
             <button
               type="button"
+              id="loop-go-button"
               disabled={!canLoop || isRunning}
               onClick={() => { setShowLoopInput(false); void runLooping(Number(loopCount)); }}
               title={canLoop && !isRunning ? 'Run the requested loop count' : 'Enter a positive loop count while no run is active'}
@@ -129,6 +132,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
             </button>
             <button
               type="button"
+              id="loop-cancel-button"
               onClick={() => { setShowLoopInput(false); setLoopCount(''); }}
               className="button-small bg-slate-700"
             >
@@ -138,6 +142,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
         ) : (
           <button
             type="button"
+            id="loop-button"
             disabled={isRunning || !hasSession}
             onClick={() => setShowLoopInput(true)}
             title="Provide a loop count"

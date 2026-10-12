@@ -478,4 +478,159 @@ describe('[ComponentTest] desktop native bridge', () => {
     expect(jsEntry).toContain('UiAutomator2');
     expect(jsEntry).toContain('withAppiumLocatorHealing');
   });
+
+  it('executes 3-iteration looping on Android session without blocking', async () => {
+    const service = new DesktopBridgeService();
+    const notiplusSession: SessionIR = {
+      id: 'd0000000-0000-4000-8000-000000000001',
+      schemaVersion: 2,
+      projectId: '00000000-0000-0000-0000-000000000001',
+      name: 'NotiPlus Android Looping Test',
+      platform: 'android',
+      targetConfig: { appPackage: 'com.notifplus', appActivity: '.MainActivity' },
+      environmentVariables: {},
+      steps: [
+        {
+          id: 'e0000000-0000-4000-8000-000000000001',
+          schemaVersion: 2,
+          stepNumber: 1,
+          platform: 'android',
+          action: 'tap',
+          locators: [{ strategy: 'resourceId', value: 'com.notifplus:id/action_search', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1000,
+          optional: false,
+        },
+        {
+          id: 'e0000000-0000-4000-8000-000000000002',
+          schemaVersion: 2,
+          stepNumber: 2,
+          platform: 'android',
+          action: 'fill',
+          value: 'NotiPlus',
+          locators: [{ strategy: 'resourceId', value: 'com.notifplus:id/search_src_text', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1050,
+          optional: false,
+        },
+        {
+          id: 'e0000000-0000-4000-8000-000000000003',
+          schemaVersion: 2,
+          stepNumber: 3,
+          platform: 'android',
+          action: 'assertVisible',
+          locators: [{ strategy: 'resourceId', value: 'com.notifplus:id/search_src_text', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1100,
+          optional: false,
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const logs: string[] = [];
+    const progressUpdates: number[] = [];
+
+    const loopingSummary = await service.runLooping(
+      notiplusSession,
+      3,
+      (log) => logs.push(log.message),
+      (curr, total) => progressUpdates.push(curr)
+    );
+
+    expect(loopingSummary.status).toBe('passed');
+    expect(loopingSummary.totalIterations).toBe(3);
+    expect(loopingSummary.completedIterations).toBe(3);
+    expect(loopingSummary.successfulIterations).toBe(3);
+    expect(loopingSummary.failedIterations).toBe(0);
+    expect(progressUpdates).toEqual([1, 2, 3]);
+    expect(logs.some((l) => l.includes('[LOOP] Starting iteration 1/3'))).toBe(true);
+    expect(logs.some((l) => l.includes('[LOOP] Starting iteration 3/3'))).toBe(true);
+  });
+
+  it('executes in-app multi-device farm replay with Android step executor', async () => {
+    const service = new DesktopBridgeService();
+    const farmSession: SessionIR = {
+      id: 'f0000000-0000-4000-8000-000000000001',
+      schemaVersion: 2,
+      projectId: '00000000-0000-0000-0000-000000000001',
+      name: 'Phone Farm Replay Test',
+      platform: 'android',
+      targetConfig: { appPackage: 'com.notifplus', appActivity: '.MainActivity' },
+      environmentVariables: {},
+      steps: [
+        {
+          id: 'f1000000-0000-4000-8000-000000000001',
+          schemaVersion: 2,
+          stepNumber: 1,
+          platform: 'android',
+          action: 'tap',
+          locators: [{ strategy: 'resourceId', value: 'com.notifplus:id/action_search', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1000,
+          optional: false,
+        },
+        {
+          id: 'f1000000-0000-4000-8000-000000000002',
+          schemaVersion: 2,
+          stepNumber: 2,
+          platform: 'android',
+          action: 'assertVisible',
+          locators: [{ strategy: 'resourceId', value: 'com.notifplus:id/search_src_text', score: 100 }],
+          timeoutMs: 5000,
+          timestamp: 1050,
+          optional: false,
+        },
+      ],
+      createdAt: 1000,
+      updatedAt: 1000,
+    };
+
+    const devices = [
+      {
+        schemaVersion: 1 as const,
+        deviceId: 'device-serial-galaxy',
+        adbSerial: 'RRCN3008VYE',
+        model: 'SM-G988B',
+        manufacturer: 'samsung',
+        product: 'z3sxxx',
+        androidVersion: '13',
+        sdkVersion: 33,
+        isEmulator: false,
+        resolution: { width: 1440, height: 3200 },
+        density: 511,
+        orientation: 'portrait' as const,
+        transport: 'usb' as const,
+        status: 'device' as const,
+        healthState: 'ready' as const,
+        lastSeenAt: Date.now(),
+      },
+    ];
+
+    const logs: string[] = [];
+    const farmSummary = await service.runFarmTest(
+      farmSession,
+      {
+        schemaVersion: 1,
+        sessionId: farmSession.id,
+        strategy: 'single',
+        deviceIds: ['device-serial-galaxy'],
+        iterationsPerDevice: 2,
+        maxParallelDevices: 1,
+        iterationDelayMs: 0,
+        failurePolicy: 'continue-other-devices',
+      },
+      (log) => logs.push(log.message),
+      undefined,
+      devices
+    );
+
+    expect(farmSummary.status).toBe('passed');
+    expect(farmSummary.totalPlannedIterations).toBe(2);
+    expect(farmSummary.totalPassedIterations).toBe(2);
+    expect(farmSummary.totalFailedIterations).toBe(0);
+    expect(farmSummary.deviceRuns.length).toBe(1);
+    expect(farmSummary.deviceRuns[0].completedIterations).toBe(2);
+  });
 });
