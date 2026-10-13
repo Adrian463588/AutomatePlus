@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
 import { Globe, Smartphone, Server, SmartphoneNfc, CheckCircle2, XCircle, Clock, Plus, RefreshCw, X, FolderOpen, Loader2, Download, PackageCheck } from 'lucide-react';
 import { NativeSetupGuide } from '../common/NativeSetupGuide.js';
+import { FolderPickerModal } from '../workspace/FolderPickerModal.js';
 
 type DialogKind = 'project' | 'session' | undefined;
 
@@ -14,6 +15,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
     devices, activeDevice, setActiveDevice, discoverDevices, deviceDiscoveryMessage, lastRunSummary,
     browseWorkspaceFolder, workspaceBrowse, runtimePreflight, checkRuntimePreflight, setActiveTab } = useAppStore();
   const [dialog, setDialog] = useState<DialogKind>();
+  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [workspacePath, setWorkspacePath] = useState('');
   const [sessionName, setSessionName] = useState('');
@@ -53,16 +55,14 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
 
   const openProjectDialog = () => {
     setProjectSubmitError(undefined);
+    if (!workspacePath) {
+      setWorkspacePath('D:\\SEMESTER12\\ProjectKode\\AutomatePlus');
+    }
     setDialog('project');
   };
 
-  const browseProjectWorkspace = async () => {
-    try {
-      const selectedPath = await browseWorkspaceFolder();
-      if (selectedPath) setWorkspacePath(selectedPath);
-    } finally {
-      window.setTimeout(() => browseButtonRef.current?.focus(), 0);
-    }
+  const browseProjectWorkspace = () => {
+    setIsFolderPickerOpen(true);
   };
 
   const submitProject = async () => {
@@ -244,7 +244,24 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
                 <span>Workspace path</span>
                 <div className="flex gap-2">
                   <input id="workspace-path" required disabled={projectSubmitBusy} title={workspacePath || 'Enter a local workspace path.'} aria-describedby="workspace-picker-status" value={workspacePath} onChange={(event) => setWorkspacePath(event.target.value)} className="field min-w-0 flex-1 truncate" />
-                  <button ref={browseButtonRef} type="button" onClick={() => void browseProjectWorkspace()} disabled={!workspaceBrowse.canBrowse || workspaceBrowse.status === 'busy' || projectSubmitBusy} aria-busy={workspaceBrowse.status === 'busy'} aria-describedby="workspace-picker-status" aria-label={workspaceBrowse.status === 'busy' ? 'Opening folder picker' : 'Browse workspace folder'} title={workspaceBrowse.canBrowse ? 'Choose a local workspace folder using the native host.' : workspaceBrowse.message} className="button-muted min-h-12 shrink-0 px-3 disabled:cursor-not-allowed disabled:opacity-50 tactile-active">{workspaceBrowse.status === 'busy' ? <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" /> : <FolderOpen className="w-4 h-4" />}</button>
+                  <button
+                    ref={browseButtonRef}
+                    type="button"
+                    id="browse-workspace-folder-btn"
+                    onClick={() => browseProjectWorkspace()}
+                    disabled={projectSubmitBusy || workspaceBrowse.status === 'busy'}
+                    aria-busy={workspaceBrowse.status === 'busy'}
+                    aria-describedby="workspace-picker-status"
+                    aria-label={workspaceBrowse.status === 'busy' ? 'Opening folder picker' : 'Browse workspace folder'}
+                    title="Choose workspace folder via UI modal or directory presets."
+                    className="button-muted min-h-12 shrink-0 px-3 disabled:cursor-not-allowed disabled:opacity-50 tactile-active"
+                  >
+                    {workspaceBrowse.status === 'busy' ? (
+                      <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" />
+                    ) : (
+                      <FolderOpen className="w-4 h-4 text-cyan-400" />
+                    )}
+                  </button>
                 </div>
               </label>
               {workspaceBrowse.message && <p id="workspace-picker-status" role="status" aria-live="polite" className="text-xs text-slate-400">{workspaceBrowse.message}</p>}
@@ -279,6 +296,23 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
           )}
         </div>
       </div>}
+
+      {isFolderPickerOpen && (
+        <FolderPickerModal
+          isOpen={isFolderPickerOpen}
+          onClose={() => {
+            setIsFolderPickerOpen(false);
+            browseButtonRef.current?.focus();
+          }}
+          onSelect={(selectedPath) => {
+            setWorkspacePath(selectedPath);
+            setIsFolderPickerOpen(false);
+            browseButtonRef.current?.focus();
+          }}
+          initialPath={workspacePath || 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus'}
+          onOpenReleasesModal={onOpenReleasesModal}
+        />
+      )}
     </aside>
   );
 };

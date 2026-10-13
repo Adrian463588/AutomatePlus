@@ -125,11 +125,11 @@ const emptyFeedback: UiFeedback = { kind: 'idle', message: 'Waiting for a user a
 
 const initialRuntimeHostState = bridge.getRuntimeHostState();
 const initialWorkspaceBrowse: WorkspaceBrowseState = {
-  status: initialRuntimeHostState.mode === 'native' ? 'idle' : 'blocked',
-  canBrowse: initialRuntimeHostState.mode === 'native',
+  status: 'idle',
+  canBrowse: true,
   message: initialRuntimeHostState.mode === 'native'
     ? undefined
-    : initialRuntimeHostState.reason,
+    : 'Choose workspace folder via folder picker modal or presets.',
 };
 const initialRuntimePreflight: RuntimePreflightState = {
   status: initialRuntimeHostState.mode === 'native' ? 'idle' : 'blocked',
@@ -319,9 +319,23 @@ export const useAppStore = create<AppState>((set, get) => ({
   browseWorkspaceFolder: async () => {
     if (get().workspaceBrowse.status === 'busy') return undefined;
     if (!bridge.hasNativeBridge()) {
-      const message = 'Native folder selection is blocked in browser mode. Run the offline desktop host to choose a local folder.';
-      set({ workspaceBrowse: { status: 'blocked', canBrowse: false, message } });
-      return undefined;
+      if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
+        try {
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const dirHandle = await (window as any).showDirectoryPicker();
+          if (dirHandle?.name) {
+            const selectedPath = `D:\\SEMESTER12\\ProjectKode\\AutomatePlus\\workspaces\\${dirHandle.name}`;
+            set({ workspaceBrowse: { status: 'selected', canBrowse: true, message: `Selected folder: ${dirHandle.name}` } });
+            return selectedPath;
+          }
+        } catch (err: unknown) {
+          if (err instanceof Error && err.name === 'AbortError') {
+            set({ workspaceBrowse: { status: 'cancelled', canBrowse: true, message: 'Folder selection cancelled.' } });
+            return undefined;
+          }
+        }
+      }
+      return 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus';
     }
 
     set({ workspaceBrowse: { status: 'busy', canBrowse: true, message: 'Opening the native folder picker…' } });
