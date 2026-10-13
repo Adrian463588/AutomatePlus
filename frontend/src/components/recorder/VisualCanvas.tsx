@@ -87,6 +87,18 @@ export const VisualCanvas: React.FC = () => {
 
   const isAndroidNoLoc = androidAction === 'back' || androidAction === 'home' || androidAction === 'enter' || androidAction === 'sleep';
   const canAddAndroidStep = Boolean(activeSession && !isRecording && (isAndroidNoLoc || androidLocator.trim().length > 0));
+
+  const ensureAndroidSession = async (defaultName = 'Android Test Flow') => {
+    const store = useAppStore.getState();
+    if (store.activeSession && store.activeSession.platform === 'android') {
+      return store.activeSession;
+    }
+    if (!store.activeProject && store.projects.length === 0) {
+      await store.createProject('Default Workspace', 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus');
+    }
+    await store.createSession(defaultName, 'android');
+    return useAppStore.getState().activeSession;
+  };
   const assertionOptions: Array<{ value: LocatorStrategy; label: string }> = isAndroid
     ? [
       { value: 'accessibilityId', label: 'Accessibility ID' },
@@ -427,7 +439,8 @@ export const VisualCanvas: React.FC = () => {
                       <button
                         type="button"
                         id="load-apidemos-flow"
-                        onClick={() => {
+                        onClick={async () => {
+                          await ensureAndroidSession('ApiDemos Android Flow');
                           setAppPackage('io.appium.android.apis');
                           void loadTemplateSteps(APIDEMOS_TEMPLATE_STEPS, { appPackage: 'io.appium.android.apis', appActivity: '.ApiDemos' });
                         }}
@@ -440,7 +453,8 @@ export const VisualCanvas: React.FC = () => {
                       <button
                         type="button"
                         id="load-notiplus-flow"
-                        onClick={() => {
+                        onClick={async () => {
+                          await ensureAndroidSession('NotiPlus Android Flow');
                           setAppPackage('com.notifplus');
                           void loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
                         }}
@@ -454,6 +468,7 @@ export const VisualCanvas: React.FC = () => {
                         type="button"
                         id="run-notiplus-loop-3x"
                         onClick={async () => {
+                          await ensureAndroidSession('NotiPlus Android Flow');
                           setAppPackage('com.notifplus');
                           await loadTemplateSteps(NOTIPLUS_TEMPLATE_STEPS, { appPackage: 'com.notifplus', appActivity: '.MainActivity' });
                           void runLooping(3);

@@ -5,7 +5,11 @@ import { NativeSetupGuide } from '../common/NativeSetupGuide.js';
 
 type DialogKind = 'project' | 'session' | undefined;
 
-export const Sidebar: React.FC = () => {
+export interface SidebarProps {
+  onOpenReleasesModal?: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
   const { projects, activeProject, sessions, activeSession, selectProject, selectSession, createProject, createSession,
     devices, activeDevice, setActiveDevice, discoverDevices, deviceDiscoveryMessage, lastRunSummary,
     browseWorkspaceFolder, workspaceBrowse, runtimePreflight, checkRuntimePreflight, setActiveTab } = useAppStore();
@@ -135,7 +139,18 @@ export const Sidebar: React.FC = () => {
               <button type="button" onClick={() => setActiveTab('runtime')} title="Open Runtime Manager to review or download missing packs." className="flex min-h-12 items-center gap-1.5 px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-slate-700 tactile-active">
                 <PackageCheck className="w-3.5 h-3.5" /> Open Runtime Manager
               </button>
-              <button type="button" onClick={() => setActiveTab('runtime')} title="Open Runtime Manager; license acceptance and native verification are required before downloading missing packs." className="flex min-h-12 items-center gap-1.5 px-2.5 py-1.5 text-cyan-200 hover:text-white hover:bg-cyan-900/50 rounded border border-cyan-700/70 tactile-active">
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveTab('runtime');
+                  useAppStore.getState().setFeedback({
+                    kind: 'pending',
+                    message: 'Switched to Runtime Manager. Review and accept licenses to download offline packs.',
+                  });
+                }}
+                title="Open Runtime Manager; license acceptance and native verification are required before downloading missing packs."
+                className="flex min-h-12 items-center gap-1.5 px-2.5 py-1.5 text-cyan-200 hover:text-white hover:bg-cyan-900/50 rounded border border-cyan-700/70 tactile-active"
+              >
                 <Download className="w-3.5 h-3.5" /> Download missing
               </button>
             </div>
@@ -181,9 +196,36 @@ export const Sidebar: React.FC = () => {
         </section>
       </div>
 
-      <div className="p-3 border-t border-slate-800 bg-slate-950/40 flex flex-col gap-1.5">
+      <div className="p-3 border-t border-slate-800 bg-slate-950/40 flex flex-col gap-2">
         <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between"><span>Latest run</span><Clock className="w-3 h-3 text-slate-500" /></div>
-        {lastRunSummary ? <div className="flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800"><span className="flex items-center gap-1.5 font-bold">{lastRunSummary.status === 'passed' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <XCircle className="w-4 h-4 text-rose-400" />}{lastRunSummary.status.toUpperCase()}</span><span className="text-[11px] font-mono text-slate-400">{lastRunSummary.passedSteps}/{lastRunSummary.totalSteps}</span></div> : <div className="text-slate-500 italic text-[11px] text-center py-1">No run evidence yet.</div>}
+        {lastRunSummary ? (
+          <button
+            type="button"
+            onClick={() => {
+              const terminal = document.querySelector('.terminal-panel');
+              terminal?.scrollIntoView({ behavior: 'smooth' });
+            }}
+            title="Focus execution logs in the terminal"
+            className="w-full flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800 hover:border-slate-700 tactile-active text-left"
+          >
+            <span className="flex items-center gap-1.5 font-bold">
+              {lastRunSummary.status === 'passed' ? <CheckCircle2 className="w-4 h-4 text-emerald-400" /> : <XCircle className="w-4 h-4 text-rose-400" />}
+              {lastRunSummary.status.toUpperCase()}
+            </span>
+            <span className="text-[11px] font-mono text-slate-400">{lastRunSummary.passedSteps}/{lastRunSummary.totalSteps}</span>
+          </button>
+        ) : (
+          <div className="text-slate-500 italic text-[11px] text-center py-1">No run evidence yet.</div>
+        )}
+        <button
+          type="button"
+          onClick={onOpenReleasesModal}
+          title="Download AutomatePlus App (v1.7.0) & Historical Releases"
+          className="flex min-h-9 items-center justify-center gap-1.5 py-1.5 px-2 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-cyan-200 hover:text-white text-[11px] font-medium tactile-active"
+        >
+          <Download className="w-3.5 h-3.5 text-cyan-400" />
+          <span>Download App (v1.7.0)</span>
+        </button>
       </div>
 
       {dialog && <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) closeDialog(); }}>

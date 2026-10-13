@@ -55,6 +55,18 @@ export const WebDriverCanvas: React.FC = () => {
     }
   }, [activeSession?.id, activeSession?.ir.targetConfig.startUrl]);
 
+  const ensureWebSession = async (defaultName = 'SauceDemo Web Flow') => {
+    const store = useAppStore.getState();
+    if (store.activeSession && store.activeSession.platform === 'web') {
+      return store.activeSession;
+    }
+    if (!store.activeProject && store.projects.length === 0) {
+      await store.createProject('Default Workspace', 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus');
+    }
+    await store.createSession(defaultName, 'web');
+    return useAppStore.getState().activeSession;
+  };
+
   const handleNavigateTo = async (url: string) => {
     const trimmed = url.trim();
     if (!trimmed) return;
@@ -68,9 +80,10 @@ export const WebDriverCanvas: React.FC = () => {
       else setSaucePage('login');
     }
 
-    if (activeSession) {
-      await updateTargetConfig({ ...activeSession.ir.targetConfig, startUrl: trimmed });
-      const nextStepNum = activeSession.ir.steps.length + 1;
+    const session = activeSession ?? (await ensureWebSession(trimmed.includes('orangehrm') ? 'OrangeHRM Web Flow' : 'SauceDemo Web Flow'));
+    if (session) {
+      await updateTargetConfig({ ...session.ir.targetConfig, startUrl: trimmed });
+      const nextStepNum = session.ir.steps.length + 1;
       await addStep({
         id: crypto.randomUUID(),
         schemaVersion: 2,
@@ -586,9 +599,10 @@ export const WebDriverCanvas: React.FC = () => {
           <button
             type="button"
             id="load-saucedemo-flow"
-            onClick={() => {
-              void handleNavigateTo('https://www.saucedemo.com/');
-              void loadTemplateSteps(SAUCEDEMO_TEMPLATE_STEPS, 'https://www.saucedemo.com/');
+            onClick={async () => {
+              await ensureWebSession('SauceDemo Web Flow');
+              await handleNavigateTo('https://www.saucedemo.com/');
+              await loadTemplateSteps(SAUCEDEMO_TEMPLATE_STEPS, 'https://www.saucedemo.com/');
               setSaucePage('login');
             }}
             title="Load SauceDemo flow (15 steps)"
@@ -599,9 +613,10 @@ export const WebDriverCanvas: React.FC = () => {
           <button
             type="button"
             id="load-orangehrm-flow"
-            onClick={() => {
-              void handleNavigateTo('https://opensource-demo.orangehrmlive.com/');
-              void loadTemplateSteps(ORANGEHRM_TEMPLATE_STEPS, 'https://opensource-demo.orangehrmlive.com/');
+            onClick={async () => {
+              await ensureWebSession('OrangeHRM Web Flow');
+              await handleNavigateTo('https://opensource-demo.orangehrmlive.com/');
+              await loadTemplateSteps(ORANGEHRM_TEMPLATE_STEPS, 'https://opensource-demo.orangehrmlive.com/');
               setOrangePage('login');
             }}
             title="Load OrangeHRM flow (6 steps)"

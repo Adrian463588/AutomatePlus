@@ -37,6 +37,31 @@ export const StressModal: React.FC<StressModalProps> = ({ isOpen, onClose }) => 
             <div className="font-bold text-white truncate">{activeSession?.name ?? 'No session selected'}</div>
           </div>
 
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className="text-[11px] text-slate-400 font-medium mr-1">Presets:</span>
+            <button
+              type="button"
+              onClick={() => { setTargetRps('10'); setDurationSec('5'); setMaxVus('5'); }}
+              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-[11px] text-slate-300 tactile-active"
+            >
+              Light (10 RPS / 5s)
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTargetRps('50'); setDurationSec('10'); setMaxVus('20'); }}
+              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-[11px] text-amber-300 tactile-active"
+            >
+              Standard (50 RPS / 10s)
+            </button>
+            <button
+              type="button"
+              onClick={() => { setTargetRps('100'); setDurationSec('15'); setMaxVus('40'); }}
+              className="px-2 py-1 bg-slate-900 hover:bg-slate-800 border border-slate-800 rounded text-[11px] text-rose-300 tactile-active"
+            >
+              Heavy (100 RPS / 15s)
+            </button>
+          </div>
+
           <div className="grid gap-3 sm:grid-cols-3">
             <label className="flex flex-col gap-1.5 text-slate-300 text-xs font-semibold">
               <span className="flex items-center gap-1.5"><Gauge className="w-3.5 h-3.5 text-amber-400" />Target RPS</span>

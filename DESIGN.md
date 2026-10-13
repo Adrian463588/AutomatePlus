@@ -236,9 +236,17 @@ To eliminate AI slop, maintain mathematical precision, and guarantee zero-dead-b
    - Micro-depression feedback: `.tactile-active` applies `active:scale-[0.98] active:translate-y-[0.5px]`.
    - Strict `prefers-reduced-motion` compliance resets transforms to `none`.
 6. **Zero Dead Buttons & Accessible Affordance**:
-   - Every `<button>` must have an explicit `onClick` or `type="submit"`.
+   - Every `<button>` must have an explicit `onClick` or `type="submit"`. No silent no-ops.
+   - Flow preset buttons (e.g. SauceDemo / OrangeHRM / ApiDemos) automatically ensure an active workspace project and session before dispatching steps.
    - Every disabled button must convey state rationale via accessible tooltip/attribute (`title`, `aria-label`, or `aria-describedby`).
    - Forms enforce top-aligned labels (`Field` / `Select`) and structured error descriptions.
+7. **Zero-Pain-Point Form Ergonomics & Undo Affordance**:
+   - Top-aligned static labels prevent vertical scan disorientation.
+   - Forms maintain local draft states and debounced on-blur validation.
+   - Quick preset shortcuts (e.g. k6 RPS stress presets: Light, Standard, Heavy) eliminate parameter ambiguity.
+8. **App Releases & Version Distribution**:
+   - ReleasesModal surfaces active version (v1.7.0) and historical releases (v1.6.0, v1.5.0, v1.4.0, v1.0.0).
+   - Download packages provide Windows Setup executable, portable zip, and checksum verification hashes for air-gapped workstations.
 
 ## 14. Verification and evidence status
 

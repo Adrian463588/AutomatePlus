@@ -13,6 +13,7 @@ const loadMonacoView = () => import('./components/editor/MonacoView.js').then((m
 const loadStressModal = () => import('./components/stress/StressModal.js').then((module) => ({ default: module.StressModal }));
 const loadRuntimeManager = () => import('./components/runtime/RuntimeManagerContainer.js').then((module) => ({ default: module.RuntimeManagerContainer }));
 const loadMcpBridgeView = () => import('./components/mcp/McpBridgeView.js').then((module) => ({ default: module.McpBridgeView }));
+const loadReleasesModal = () => import('./components/releases/ReleasesModal.js').then((module) => ({ default: module.ReleasesModal }));
 
 const LoadingWorkspace: React.FC<{ label: string }> = ({ label }) => (
   <div className="workspace-loading" role="status" aria-live="polite" aria-busy="true">
@@ -83,6 +84,7 @@ function LazySlot<Props extends object>({
 export const App: React.FC = () => {
   const { loadInitialData, activeTab } = useAppStore();
   const [isStressModalOpen, setIsStressModalOpen] = useState(false);
+  const [isReleasesModalOpen, setIsReleasesModalOpen] = useState(false);
 
   useEffect(() => {
     loadInitialData();
@@ -130,9 +132,12 @@ export const App: React.FC = () => {
 
   return (
     <div className="app-shell flex flex-col min-h-screen w-full bg-slate-950 text-slate-100 font-sans">
-      <Header onOpenStressModal={() => setIsStressModalOpen(true)} />
+      <Header
+        onOpenStressModal={() => setIsStressModalOpen(true)}
+        onOpenReleasesModal={() => setIsReleasesModalOpen(true)}
+      />
       <main className={`${workspaceLayoutClass} flex-1 min-h-0`} data-layout={showsGeneratedCode ? 'editor' : 'full-workspace'}>
-        <Sidebar />
+        <Sidebar onOpenReleasesModal={() => setIsReleasesModalOpen(true)} />
         {renderCenterView()}
         {showsGeneratedCode ? (
           <LazySlot load={loadMonacoView} label="generated code" componentProps={{}} />
@@ -144,6 +149,13 @@ export const App: React.FC = () => {
           load={loadStressModal}
           label="stress test dialog"
           componentProps={{ isOpen: true, onClose: () => setIsStressModalOpen(false) }}
+        />
+      ) : null}
+      {isReleasesModalOpen ? (
+        <LazySlot
+          load={loadReleasesModal}
+          label="app releases and downloads"
+          componentProps={{ isOpen: true, onClose: () => setIsReleasesModalOpen(false) }}
         />
       ) : null}
     </div>

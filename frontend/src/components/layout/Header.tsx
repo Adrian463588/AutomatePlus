@@ -1,10 +1,13 @@
 import React, { useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
-import { Play, PlaySquare, Repeat, Zap, Globe, Server, Layers, Square, Activity, Smartphone, HardDriveDownload, Bot } from 'lucide-react';
+import { Play, PlaySquare, Repeat, Zap, Globe, Server, Layers, Square, Activity, Smartphone, HardDriveDownload, Bot, Download } from 'lucide-react';
 
-interface HeaderProps { onOpenStressModal: () => void; }
+interface HeaderProps {
+  onOpenStressModal: () => void;
+  onOpenReleasesModal?: () => void;
+}
 
-export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
+export const Header: React.FC<HeaderProps> = ({ onOpenStressModal, onOpenReleasesModal }) => {
   const { activeProject, activeSession, sessions, selectSession, isRunning, runTest, runLooping, cancelExecution, activeDevice, activeTab, setActiveTab, feedback } = useAppStore();
   const [loopCount, setLoopCount] = useState('');
   const [showLoopInput, setShowLoopInput] = useState(false);
@@ -197,6 +200,17 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal }) => {
         >
           <Zap className="w-3.5 h-3.5 text-amber-400" />
           <span>Stress</span>
+        </button>
+
+        <button
+          type="button"
+          id="app-releases-button"
+          onClick={onOpenReleasesModal}
+          title="Download Desktop App (v1.7.0) & Historical Versions"
+          className="button-execute bg-cyan-950/70 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 tactile-active"
+        >
+          <Download className="w-3.5 h-3.5 text-cyan-400" />
+          <span>v1.7.0 App</span>
         </button>
 
         {isRunning && (
