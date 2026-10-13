@@ -11,9 +11,9 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal, onOpenRelease
   const { activeProject, activeSession, sessions, selectSession, isRunning, runTest, runLooping, cancelExecution, activeDevice, activeTab, setActiveTab, feedback } = useAppStore();
   const [loopCount, setLoopCount] = useState('');
   const [showLoopInput, setShowLoopInput] = useState(false);
-  const hasSession = Boolean(activeSession);
+  const hasSession = Boolean(activeSession && activeSession.ir.steps.length > 0);
   const canLoop = Number.isInteger(Number(loopCount)) && Number(loopCount) > 0;
-  const runReason = hasSession ? 'Run the current user-created session' : 'Create and select a session first';
+  const runReason = hasSession ? 'Run the current user-created session' : activeSession ? 'Add an action before running.' : 'Create and select a session first';
 
   const handleStressClick = () => {
     if (activeSession?.platform === 'api') {
@@ -122,7 +122,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal, onOpenRelease
           disabled={isRunning || !hasSession}
           onClick={() => void runTest('interactive')}
           title={runReason}
-          className="button-execute bg-emerald-800 hover:bg-emerald-700 disabled:opacity-50"
+          className="button-primary disabled:opacity-50"
         >
           <Play className="w-3.5 h-3.5 fill-current" />
           <span>In-app run</span>
@@ -134,7 +134,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal, onOpenRelease
           disabled={isRunning || !hasSession}
           onClick={() => void runTest('native')}
           title={hasSession ? 'Requires a registered capability and native runtime' : runReason}
-          className="button-execute bg-cyan-800 hover:bg-cyan-700 disabled:opacity-50"
+          className="button-muted disabled:opacity-50"
         >
           <PlaySquare className="w-3.5 h-3.5" />
           <span>Native run</span>
@@ -196,7 +196,7 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal, onOpenRelease
                 ? 'Provide stress values'
                 : 'Open API stress testing'
           }
-          className="button-execute bg-amber-600/20 hover:bg-amber-600/30 text-amber-300 border border-amber-500/40 disabled:opacity-50 tactile-active"
+          className="button-muted disabled:opacity-50 tactile-active"
         >
           <Zap className="w-3.5 h-3.5 text-amber-400" />
           <span>Stress</span>
@@ -206,11 +206,12 @@ export const Header: React.FC<HeaderProps> = ({ onOpenStressModal, onOpenRelease
           type="button"
           id="app-releases-button"
           onClick={onOpenReleasesModal}
-          title="Download Desktop App (v1.7.0) & Historical Versions"
-          className="button-execute bg-cyan-950/70 hover:bg-cyan-900 text-cyan-200 border border-cyan-700/60 tactile-active"
+          disabled={!onOpenReleasesModal}
+          title={onOpenReleasesModal ? 'Open Windows app downloads and release history.' : 'Downloads are unavailable in this view.'}
+          className="button-muted tactile-active"
         >
           <Download className="w-3.5 h-3.5 text-cyan-400" />
-          <span>v1.7.0 App</span>
+          <span>Downloads</span>
         </button>
 
         {isRunning && (

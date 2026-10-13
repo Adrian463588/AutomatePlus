@@ -158,5 +158,7 @@ describe('[ComponentTest] RuntimeManagerPanel', () => {
     expect(html).toContain('Not pinned');
     expect(html).toContain('Pinned release metadata is not available.');
     expect(html).not.toContain('0 B');
+    expect(html).toContain('runtime entry needs metadata or health review');
+    expect(html).not.toContain('local pack differs');
   });
 });

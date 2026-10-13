@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SessionIR } from '@automate-plus/ir-schema';
 import { DesktopBridgeService, NativeIpcError } from '../desktopBridge.js';
-import { ORANGEHRM_TEMPLATE_STEPS, SAUCEDEMO_TEMPLATE_STEPS } from '../../components/recorder/VisualCanvas.js';
+import { ORANGEHRM_TEMPLATE_STEPS, SAUCEDEMO_TEMPLATE_STEPS } from './fixtures/webFlows.js';
 
 interface NativeRequestFixture {
   method: string;
@@ -43,6 +43,28 @@ afterEach(() => {
 });
 
 describe('[ComponentTest] desktop native bridge', () => {
+  it('opens release links through the native boundary and rejects unsuccessful receipts', async () => {
+    const invoke = vi.fn(async (_command: string, body?: unknown) => {
+      expect(requestFrom(body)).toEqual({ method: 'native.release.open', payload: { url: 'https://github.com/Adrian463588/AutomatePlus/releases' } });
+      return success({ opened: true });
+    });
+    vi.stubGlobal('__AUTOMATE_PLUS_NATIVE_BRIDGE__', { invoke });
+    const service = new DesktopBridgeService();
+    await expect(service.openReleaseLink('https://github.com/Adrian463588/AutomatePlus/releases')).resolves.toBeUndefined();
+    invoke.mockResolvedValueOnce(success({ opened: false }));
+    await expect(service.openReleaseLink('https://github.com/Adrian463588/AutomatePlus/releases')).rejects.toThrow('Windows did not open');
+  });
+
+  it('includes an empty payload for parameterless native runtime methods', async () => {
+    const invoke = vi.fn(async (_command: string, body?: unknown) => {
+      const request = requestFrom(body);
+      expect(request).toEqual({ method: 'runtime.catalog.list', payload: {} });
+      return success({ protocolVersion: '1.0', entries: [] });
+    });
+    vi.stubGlobal('__AUTOMATE_PLUS_NATIVE_BRIDGE__', { invoke });
+    await expect(new DesktopBridgeService().getRuntimeManager().catalogList()).resolves.toEqual({ protocolVersion: '1.0', entries: [] });
+  });
+
   it('blocks browser folder picking without invoking a browser fallback', async () => {
     const invoke = vi.fn();
     vi.stubGlobal('__AUTOMATE_PLUS_NATIVE_BRIDGE__', undefined);

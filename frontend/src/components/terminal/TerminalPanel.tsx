@@ -14,11 +14,11 @@ export const TerminalPanel: React.FC = () => {
   const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    logEndRef.current?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'nearest' });
   }, [logs]);
 
   return (
-    <section className="terminal-panel bg-slate-950 border-t border-slate-800 flex flex-col font-mono text-[11px] select-text" aria-labelledby="terminal-title">
+    <section tabIndex={-1} className="terminal-panel bg-slate-950 border-t border-slate-800 flex flex-col font-mono text-xs select-text" aria-labelledby="terminal-title">
       {/* Header Bar */}
       <div className="h-7 bg-slate-900 px-3 flex items-center justify-between border-b border-slate-800 select-none">
         <div className="flex items-center gap-3">

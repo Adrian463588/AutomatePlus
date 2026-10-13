@@ -1,0 +1,2 @@
+# Preserve upstream notice bytes so pinned SHA-256 values survive Windows checkout.
+assets/licenses/** -text whitespace=-blank-at-eol

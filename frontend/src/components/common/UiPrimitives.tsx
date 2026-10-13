@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useId, useRef } from 'react';
 
 type ButtonVariant = 'primary' | 'muted' | 'execute';
 type StatusTone = 'info' | 'success' | 'warning' | 'error' | 'blocked';
@@ -47,14 +47,15 @@ export interface FieldProps extends React.InputHTMLAttributes<HTMLInputElement> 
 }
 
 export const Field: React.FC<FieldProps> = ({ id, label, hint, className = '', ...props }) => {
-  const fieldId = id ?? `field-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const generatedId = useId();
+  const fieldId = id ?? generatedId;
   const hintId = hint ? `${fieldId}-hint` : undefined;
   return (
-    <label className="flex min-w-0 flex-col gap-1.5 text-xs font-semibold text-[var(--ap-text-secondary)]" htmlFor={fieldId}>
-      <span>{label}</span>
+    <div className="flex min-w-0 flex-col gap-2 text-xs font-semibold text-[var(--ap-text-secondary)]">
+      <label htmlFor={fieldId}>{label}</label>
       <input {...props} id={fieldId} aria-describedby={hintId} className={`field w-full ${className}`.trim()} />
       {hint && <span id={hintId} className="text-[11px] font-normal leading-4 text-[var(--ap-text-muted)]">{hint}</span>}
-    </label>
+    </div>
   );
 };
 
@@ -70,16 +71,17 @@ export interface SelectProps extends Omit<React.SelectHTMLAttributes<HTMLSelectE
 }
 
 export const Select: React.FC<SelectProps> = ({ id, label, options, hint, className = '', ...props }) => {
-  const selectId = id ?? `select-${label.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+  const generatedId = useId();
+  const selectId = id ?? generatedId;
   const hintId = hint ? `${selectId}-hint` : undefined;
   return (
-    <label className="flex min-w-0 flex-col gap-1.5 text-xs font-semibold text-[var(--ap-text-secondary)]" htmlFor={selectId}>
-      <span>{label}</span>
+    <div className="flex min-w-0 flex-col gap-2 text-xs font-semibold text-[var(--ap-text-secondary)]">
+      <label htmlFor={selectId}>{label}</label>
       <select {...props} id={selectId} aria-describedby={hintId} className={`ap-select w-full ${className}`.trim()}>
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
       {hint && <span id={hintId} className="text-[11px] font-normal leading-4 text-[var(--ap-text-muted)]">{hint}</span>}
-    </label>
+    </div>
   );
 };
 
@@ -110,18 +112,24 @@ export interface DialogProps {
 export const Dialog: React.FC<DialogProps> = ({ open, title, description, onClose, children }) => {
   const dialogRef = useRef<HTMLDivElement>(null);
   const previousFocus = useRef<HTMLElement | null>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  const titleId = useId();
+  const descriptionId = useId();
 
   useEffect(() => {
     if (!open) return undefined;
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     const focusableSelector = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [href], [tabindex]:not([tabindex="-1"])';
-    const getFocusable = () => [...(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])];
-    getFocusable()[0]?.focus();
+    const getFocusable = () => [...(dialogRef.current?.querySelectorAll<HTMLElement>(focusableSelector) ?? [])].filter((element) => element.getClientRects().length > 0);
+    (getFocusable()[0] ?? dialogRef.current)?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { event.preventDefault(); onClose(); return; }
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs[dialogs.length - 1] !== dialogRef.current) return;
+      if (event.key === 'Escape') { event.preventDefault(); closeRef.current(); return; }
       if (event.key !== 'Tab') return;
       const elements = getFocusable();
-      if (elements.length === 0) return;
+      if (elements.length === 0) { event.preventDefault(); dialogRef.current?.focus(); return; }
       const first = elements[0];
       const last = elements[elements.length - 1];
       if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
@@ -129,22 +137,22 @@ export const Dialog: React.FC<DialogProps> = ({ open, title, description, onClos
     };
     document.addEventListener('keydown', onKeyDown);
     return () => { document.removeEventListener('keydown', onKeyDown); previousFocus.current?.focus(); };
-  }, [onClose, open]);
+  }, [open]);
 
   if (!open) return null;
   return (
     <div className="dialog-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <div ref={dialogRef} className="dialog-card" role="dialog" aria-modal="true" aria-labelledby="shared-dialog-title" aria-describedby={description ? 'shared-dialog-description' : undefined}>
+      <div ref={dialogRef} tabIndex={-1} className="dialog-card flex flex-col gap-4" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={description ? descriptionId : undefined}>
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <h2 id="shared-dialog-title" className="text-sm font-semibold text-[var(--ap-text)]">{title}</h2>
-            {description && <p id="shared-dialog-description" className="mt-1 text-xs leading-5 text-[var(--ap-text-secondary)]">{description}</p>}
+            <h2 id={titleId} className="text-sm font-semibold text-[var(--ap-text)]">{title}</h2>
+            {description && <p id={descriptionId} className="text-xs leading-5 text-[var(--ap-text-secondary)]">{description}</p>}
           </div>
           <Button variant="muted" onClick={onClose} aria-label={`Close ${title}`} title={`Close ${title}`} className="shrink-0 px-2">
             ×
           </Button>
         </div>
-        <div className="mt-4">{children}</div>
+        <div>{children}</div>
       </div>
     </div>
   );

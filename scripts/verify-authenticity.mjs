@@ -12,6 +12,7 @@ const rules = [
   { name: 'invented identities or secrets', expression: /qa@example\.test|user@example\.test|API_PASSWORD/u },
   { name: 'fabricated code/status output', expression: /Select or record a test session|No code generated|Code generation error/u },
   { name: 'generator fallback output', expression: /50%,50%|assertVisible\s*:\s*["']true["']|(^|\n)\s*(#|\/\/)+\s*Action:/u },
+  { name: 'simulated target or folder selection', expression: /WebDriverCanvas|FolderPickerModal|showDirectoryPicker|buildSauceDemoWebFlow|buildNotiPlusAndroidFlow/u },
 ];
 
 function collectFiles(directory) {
@@ -34,7 +35,7 @@ const findings = [];
 for (const relativeRoot of productionRoots) {
   for (const filePath of collectFiles(join(root, relativeRoot))) {
     const relativePath = relative(root, filePath).replaceAll('\\', '/');
-    if (relativePath.includes('/tests/') || relativePath.includes('.test.')) continue;
+    if (relativePath.includes('/tests/') || relativePath.includes('/__tests__/') || relativePath.includes('.test.')) continue;
     const source = readFileSync(filePath, 'utf8');
     for (const rule of rules) {
       if (rule.name === 'generator fallback output' && relativePath === 'frontend/packages/generators/src/base.generator.ts') continue;

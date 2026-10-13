@@ -363,7 +363,7 @@ export const RuntimeManagerPanel: React.FC<RuntimeManagerPanelInput> = ({
         <section className="space-y-2 border-b border-slate-800 bg-slate-950/80 px-4 py-3" aria-label="Runtime status messages">
           {(statusMessage || actionMessage) && <p className="flex items-start gap-2 text-[11px] leading-5 text-slate-300" role="status" aria-live="polite"><Info className="mt-0.5 h-4 w-4 shrink-0 text-cyan-300" aria-hidden="true" />{statusMessage || actionMessage}</p>}
           {actionError && <p className="flex items-start gap-2 text-[11px] leading-5 text-rose-200" role="alert"><AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-rose-300" aria-hidden="true" />{actionError}</p>}
-          {reviewPacks.length > 0 && <p className="flex items-start gap-2 text-[11px] leading-5 text-amber-200" role="alert"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />{reviewPacks.length} local pack{reviewPacks.length === 1 ? '' : 's'} differ from pinned metadata and will not be overwritten automatically.</p>}
+          {reviewPacks.length > 0 && <p className="flex items-start gap-2 text-[11px] leading-5 text-amber-200" role="alert"><ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-300" aria-hidden="true" />{reviewPacks.length} runtime entr{reviewPacks.length === 1 ? 'y needs' : 'ies need'} metadata or health review. No pack is installed or overwritten automatically.</p>}
         </section>
       )}
 

@@ -459,6 +459,7 @@ impl NativeRequest {
                 | "runtime.health"
                 | "runtime.open-folder"
                 | "native.dialog.pick"
+                | "native.release.open"
         ) {
             return Err(format!("Unsupported native method '{}'.", self.method));
         }

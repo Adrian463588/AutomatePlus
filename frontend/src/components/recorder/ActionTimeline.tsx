@@ -12,7 +12,6 @@ import {
   Smartphone,
   Server,
   Layers,
-  Sparkles,
   Lock,
   Eye,
   EyeOff,
@@ -68,12 +67,12 @@ export const ActionTimeline: React.FC = () => {
   return (
     <div className="flex-1 flex flex-col h-full overflow-hidden text-xs select-none">
       {/* Header */}
-      <div className="h-9 bg-slate-900 border-b border-slate-800 px-4 flex items-center justify-between">
+      <div className="timeline-header bg-slate-900 border-b border-slate-800 px-4 flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 font-semibold text-slate-300">
           <ListOrdered className="w-4 h-4 text-cyan-400" />
           <span>Recorded Action Sequence ({steps.length} steps)</span>
         </div>
-<span className="text-[10px] text-slate-400 font-mono">
+        <span className="text-[10px] text-slate-400 font-mono">
           Use the arrow controls to reorder
         </span>
       </div>
@@ -82,7 +81,7 @@ export const ActionTimeline: React.FC = () => {
       <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2">
         {steps.length === 0 ? (
           <div className="h-full flex flex-col items-center justify-center text-slate-500 gap-2">
-            <Sparkles className="w-8 h-8 text-slate-600 animate-bounce motion-reduce:animate-none" />
+            <ListOrdered className="w-8 h-8 text-slate-600" aria-hidden="true" />
             <p className="text-xs">No actions recorded yet.</p>
             <p className="text-[11px] text-slate-600 text-center max-w-sm">
               Start the native recorder after target preflight is ready, or add an explicit request and assertion in the API builder.
@@ -99,17 +98,17 @@ export const ActionTimeline: React.FC = () => {
             return (
               <div
                 key={step.id}
-                className="bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-lg p-2.5 flex items-center justify-between gap-3 group transition-colors"
+                className="timeline-step bg-slate-900/90 border border-slate-800 hover:border-slate-700 rounded-lg p-3 gap-3 group transition-colors"
               >
                 {/* Step Number & Type Icon */}
-                <div className="flex items-center gap-2.5 shrink-0">
+                <div className="flex min-w-0 items-center gap-2.5">
                   <span className="w-5 h-5 rounded bg-slate-950 text-[10px] font-mono font-bold flex items-center justify-center text-slate-400 border border-slate-800">
                     {step.stepNumber}
                   </span>
                   <div className="p-1.5 rounded bg-slate-950 border border-slate-800">
                     {getActionIcon(step.action)}
                   </div>
-                  <div>
+                  <div className="min-w-0">
                     <div className="font-bold text-white capitalize text-xs flex items-center gap-1.5">
                       {step.action}
                       {step.optional && (
@@ -125,11 +124,8 @@ export const ActionTimeline: React.FC = () => {
                     </div>
                     {primaryLoc && (
                       <div className="flex items-center gap-1.5 mt-0.5">
-                        <span className="text-[10px] font-mono bg-cyan-950/80 text-cyan-300 border border-cyan-800/60 px-1.5 rounded">
+                        <span title={primaryLoc.value} className="break-all text-[10px] font-mono text-cyan-300">
                           {primaryLoc.strategy}: {primaryLoc.value}
-                        </span>
-                        <span className="text-[9px] font-mono text-emerald-400 font-semibold">
-                          ★ {primaryLoc.score}%
                         </span>
                       </div>
                     )}
@@ -137,11 +133,12 @@ export const ActionTimeline: React.FC = () => {
                 </div>
 
                 {/* Step Value / Input Field */}
-                <div className="flex-1 flex items-center gap-2 max-w-xs">
+                <div className="timeline-value flex min-w-0 flex-wrap items-center gap-2">
                   {step.value !== undefined && (
                     <input
                       type="text"
                       disabled={isSecret}
+                      title={isSecret ? 'Secret reference is managed through the local secret store.' : valString}
                       value={valString}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -170,11 +167,11 @@ export const ActionTimeline: React.FC = () => {
                 </div>
 
                 {/* Actions & Reordering */}
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="timeline-actions flex items-center justify-end gap-1">
                   <button
                     type="button"
                     onClick={() => void updateStep(index, { ...step, optional: !step.optional })}
-                    className={`min-h-8 min-w-8 flex items-center justify-center p-1.5 rounded tactile-active ${step.optional ? 'text-amber-400 hover:bg-amber-950/40' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
+                    className={`min-h-12 min-w-12 flex items-center justify-center p-1.5 rounded tactile-active ${step.optional ? 'text-amber-400 hover:bg-amber-950/40' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}
                     title={step.optional ? 'Step is optional (click to require)' : 'Step is required (click to make optional)'}
                     aria-label={`Toggle step ${step.stepNumber} optional`}
                   >
@@ -184,7 +181,7 @@ export const ActionTimeline: React.FC = () => {
                     type="button"
                     disabled={index === 0}
                     onClick={() => void reorderSteps(index, index - 1)}
-                    className="min-h-8 min-w-8 flex items-center justify-center p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30 tactile-active"
+                    className="min-h-12 min-w-12 flex items-center justify-center p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30 tactile-active"
                     title={index === 0 ? 'Cannot move top step up' : 'Move Step Up'}
                     aria-label={`Move step ${step.stepNumber} up`}
                   >
@@ -194,7 +191,7 @@ export const ActionTimeline: React.FC = () => {
                     type="button"
                     disabled={index === steps.length - 1}
                     onClick={() => void reorderSteps(index, index + 1)}
-                    className="min-h-8 min-w-8 flex items-center justify-center p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30 tactile-active"
+                    className="min-h-12 min-w-12 flex items-center justify-center p-1.5 hover:bg-slate-800 text-slate-400 hover:text-white rounded disabled:opacity-30 tactile-active"
                     title={index === steps.length - 1 ? 'Cannot move bottom step down' : 'Move Step Down'}
                     aria-label={`Move step ${step.stepNumber} down`}
                   >
@@ -203,7 +200,7 @@ export const ActionTimeline: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void deleteStep(index)}
-                    className="min-h-8 min-w-8 flex items-center justify-center p-1.5 hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 rounded transition-colors tactile-active"
+                    className="min-h-12 min-w-12 flex items-center justify-center p-1.5 hover:bg-rose-950/60 text-slate-500 hover:text-rose-400 rounded transition-colors tactile-active"
                     title="Delete Step"
                     aria-label={`Delete step ${step.stepNumber}`}
                   >

@@ -94,7 +94,9 @@ Requests and responses are JSON objects:
       "payload": { "ok": true, "data": { "devices": [] } }
     }
 
-Supported methods are native.health, native.capabilities, native.dialog.pick, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.status, farm.run.cancel, artifacts.list, native.run, runtime.catalog.list, runtime.roots.scan, runtime.root.select, runtime.install.start, runtime.install.status, runtime.install.cancel, runtime.import, runtime.verify, runtime.health, and runtime.open-folder. `native.dialog.pick` is Rust-owned and uses a native Windows folder/file dialog; the renderer receives only a canonical selected path or an explicit cancellation. Failure payloads use shared automation error codes; native failures never become a pass.
+Supported methods are native.health, native.capabilities, native.dialog.pick, native.release.open, devices.discover, device-groups.list, recording.start, recording.stop, farm.run.start, farm.run.status, farm.run.cancel, artifacts.list, native.run, runtime.catalog.list, runtime.roots.scan, runtime.root.select, runtime.install.start, runtime.install.status, runtime.install.cancel, runtime.import, runtime.verify, runtime.health, and runtime.open-folder. `native.dialog.pick` is Rust-owned and uses a native Windows folder/file dialog; the renderer receives only a canonical selected path or an explicit cancellation. Failure payloads use shared automation error codes; native failures never become a pass.
+
+`native.release.open` opens only the four declared HTTPS release/history links in the Windows default browser using ShellExecuteW. WebView2 rejects unhandled target-blank popups, so renderer download links use this explicit native boundary. It does not accept arbitrary URLs, launch a shell command, install artifacts or bypass runtime license/download gates.
 
 ## 6. Device model and discovery
 
@@ -183,7 +185,7 @@ The launcher and native preflight verify the local manifest, SHA-256 packs, fron
 
 Runtime Manager uses the bundled metadata-only `runtime-packs/catalog.json`; startup never contacts a remote catalog. Known roots are the user-selected root, workspace `runtime-packs`, `%LOCALAPPDATA%\AutomatePlus\runtime-packs`, `%ProgramData%\AutomatePlus\runtime-packs`, and bundled resources. The native manager stores root selection, job state, installed-pack records, license acceptance, and evidence in the versioned SQLite migration. Downloads are HTTPS-only, host-allowlisted, cancellation-aware, size-limited, streamed to staging, SHA-256 checked, safely extracted, health-checked, and atomically published. ZIP traversal, symlink, junction, executable-path, and overwrite risks fail closed. An online transfer can start only from the explicit Runtime Manager action with accepted licenses and `AUTOMATEPLUS_RUNTIME_DOWNLOAD=1`; execution after installation resolves local verified evidence only.
 
-Tauri capabilities are least privilege. CSP permits only the local renderer and loopback development connection. Secrets are references, redacted in logs and errors, and never placed in generated source as plaintext.
+Tauri capabilities are least privilege. CSP permits the local renderer, Tauri's `ipc:`/`http://ipc.localhost` transport, and loopback development connections only. The local IPC protocol must be allowed so WebView2 sends bounded binary bodies; a JSON postMessage fallback is not accepted by the raw Rust command. Secrets are references, redacted in logs and errors, and never placed in generated source as plaintext.
 
 ## 13. UI and accessibility
 
@@ -208,9 +210,9 @@ The renderer uses a deliberate Windows desktop workbench direction. This is a pr
 - Every interactive control is at least 48px in its hit area, has an accessible name, and either has a real handler or a disabled explanation.
 - Browser mode remains a truthful migration shell. It never substitutes browser prompts, fabricated runtime counts, fake devices, or fake progress for native evidence.
 
-## 13B. Modern Web UI/UX & Tactile Interaction Invariants (2026 Standard)
+## 13B. Workbench usability and interaction contract
 
-To eliminate AI slop, maintain mathematical precision, and guarantee zero-dead-button ergonomics across desktop and web automation workflows, the renderer adheres to the following implementation contracts:
+The supplied design guides inform typography, hierarchy and interaction. They do not replace the active native/security contract or introduce marketing decoration.
 
 1. **Zero-Slop Invariants**:
    - Zero linear/radial/mesh gradients on surfaces or cards.
@@ -219,8 +221,8 @@ To eliminate AI slop, maintain mathematical precision, and guarantee zero-dead-b
    - Zero arbitrary inline CSS (`style={{ ... }}`) or uncalibrated Tailwind hex scales.
 2. **Encapsulated Layout & Zero-Margin Invariant**:
    - Child components never leak external margins (`mt-*`, `mb-*`).
-   - Spacing is strictly governed by parent containers via Flexbox/Grid `gap-*` using the 4pt/8pt base grid (`gap-1.5` [6px], `gap-2` [8px], `gap-2.5` [10px], `gap-3` [12px], `gap-4` [16px], `gap-6` [24px]).
-   - Card padding is optical: horizontal padding is 1.5x–2x vertical padding.
+   - New form/layout spacing is governed by parent Flexbox/Grid containers using semantic 4/8/12/16/24px spacing. Existing utility classes map to shared surface/text tokens to keep the diff small.
+   - Field labels are top-aligned and associated with their inputs; hints are descriptions, not part of the accessible name.
 3. **Concentric Radius Formula**:
    - Nested elements follow the mathematical concentric formula: $R_{\text{inner}} = \max(0, R_{\text{outer}} - \text{Padding})$. Outer card containers use 8px/10px radii; inner nested badges and controls use 4px/6px.
 4. **Minor Third (1.200) Modular Typography**:
@@ -232,21 +234,22 @@ To eliminate AI slop, maintain mathematical precision, and guarantee zero-dead-b
    - Label/Action: 13px / 0.8125rem, LH 1.35, tracking +0.005em.
    - Caption/Mono: 12px / 0.75rem, LH 1.40, tracking +0.020em.
 5. **Tactile Micro-Interactions Budget**:
-   - Motion budget: 80ms–150ms (`var(--ap-motion-fast)` is 120ms).
+   - State-driven motion uses 120–180ms (`var(--ap-motion-fast)` is 120ms).
    - Micro-depression feedback: `.tactile-active` applies `active:scale-[0.98] active:translate-y-[0.5px]`.
    - Strict `prefers-reduced-motion` compliance resets transforms to `none`.
 6. **Zero Dead Buttons & Accessible Affordance**:
    - Every `<button>` must have an explicit `onClick` or `type="submit"`. No silent no-ops.
-   - Flow preset buttons (e.g. SauceDemo / OrangeHRM / ApiDemos) automatically ensure an active workspace project and session before dispatching steps.
+   - Users explicitly create their project/session and provide their target/actions. No preset invents a workspace, selector, device, target page or successful run.
    - Every disabled button must convey state rationale via accessible tooltip/attribute (`title`, `aria-label`, or `aria-describedby`).
    - Forms enforce top-aligned labels (`Field` / `Select`) and structured error descriptions.
 7. **Zero-Pain-Point Form Ergonomics & Undo Affordance**:
    - Top-aligned static labels prevent vertical scan disorientation.
-   - Forms maintain local draft states and debounced on-blur validation.
+   - Forms maintain local drafts, validate before persistence, expose inline errors and preserve drafts after a failed save. Pending operations cannot be dismissed into a lost state.
    - Quick preset shortcuts (e.g. k6 RPS stress presets: Light, Standard, Heavy) eliminate parameter ambiguity.
 8. **App Releases & Version Distribution**:
-   - ReleasesModal surfaces active version (v1.7.0) and historical releases (v1.6.0, v1.5.0, v1.4.0, v1.0.0).
-   - Download packages provide Windows Setup executable, portable zip, and checksum verification hashes for air-gapped workstations.
+   - ReleasesModal links to published v1.7.1 portable-preview artifacts and v1.7.0 source-only history. A version number in source is not evidence of a historical binary release.
+   - The portable ZIP contains the native executable, one BAT, license, local catalog and a hashed file manifest. Opening requires installed WebView2, but not Node/Cargo. Automation still requires verified local runtime packs.
+   - No fabricated installer, file size, checksum or release date is displayed. Downloads occur only when a user follows a link; there is no startup release fetch.
 
 ## 14. Verification and evidence status
 

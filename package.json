@@ -1,6 +1,6 @@
 {
   "name": "automate-plus",
-  "version": "1.7.0",
+  "version": "1.7.1",
   "private": true,
   "description": "Offline-First Multiplatform Test Automation & Code Generation Platform",
   "author": "AutomatePlus Core Team",
@@ -22,6 +22,8 @@
     "verify:offline-install": "node scripts/verify-offline-install.mjs",
     "verify:release-manifest": "node scripts/verify-release-manifest.mjs",
     "verify:ui-contract": "node scripts/verify-ui-contract.mjs",
+    "verify:ui-browser": "node scripts/verify-ui-browser.mjs",
+    "release:portable": "node scripts/package-portable-release.mjs",
     "verify:anti-slop": "node scripts/verify-anti-slop.mjs",
     "e2e:online": "node scripts/verify-online-e2e.mjs",
     "e2e:android": "node scripts/verify-android-e2e.mjs",

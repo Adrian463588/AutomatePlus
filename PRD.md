@@ -65,9 +65,11 @@ Each capability manifest declares action support, strategy support, parallel-ses
 
 Create and reopen local projects and Web, Android, or API sessions without network access. In the native host, workspace paths are selected with the versioned `native.dialog.pick` Windows folder dialog; the parent-aware picker runs asynchronously, and cancelling preserves the previous value. Persist user-created metadata in the active local storage boundary and show readiness before recording or running. Browser migration mode may accept a manually entered path and show the native setup guide, but cannot provide native picker or filesystem evidence.
 
+Published app downloads and source history remain user-initiated. Native links use the narrow `native.release.open` IPC command to open the declared release URL in the default browser. No automatic update check or artifact installation occurs.
+
 ### FR-02 — Visual editor
 
-Show a responsive explorer, recorder/editor, timeline, and code/configuration panel. Users can add, edit, delete, reorder, disable, parameterize, and assert actions. Every change updates IR, persistence, and generation state.
+Show a responsive explorer, recorder/editor, timeline, and code/configuration panel. Users can add, edit, delete, reorder, disable, parameterize, and assert actions. Every change updates IR, persistence, and generation state. Manual composition accepts explicit user-provided targets and locators; it does not render a simulated target website, inject sample journeys, or create a default workspace. Runtime, Farm and MCP views use the full workspace without an unused generated-code column.
 
 ### FR-03 — Web recording
 

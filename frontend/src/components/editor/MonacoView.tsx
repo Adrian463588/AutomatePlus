@@ -51,8 +51,8 @@ export const MonacoView: React.FC = () => {
 
   return (
     <section className="editor-panel flex flex-col min-w-0 min-h-0 bg-slate-950 border-l border-slate-800 text-xs" aria-labelledby="editor-title">
-      <div className="editor-toolbar bg-slate-900 border-b border-slate-800 px-3 py-2 flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
+      <div className="editor-toolbar bg-slate-900 border-b border-slate-800">
+        <div className="editor-selectors">
           <label className="field-inline">
             <span className="text-[10px] text-slate-500 font-bold uppercase">Framework</span>
             <select
@@ -60,6 +60,7 @@ export const MonacoView: React.FC = () => {
               name="framework"
               aria-label="Framework"
               disabled={!activeSession}
+              title={activeSession ? 'Select an automation framework.' : 'Create and select a session first.'}
               value={selectedFramework}
               onChange={(event) => {
                 const framework = event.target.value;
@@ -78,6 +79,7 @@ export const MonacoView: React.FC = () => {
               name="language"
               aria-label="Language"
               disabled={!activeSession || !selectedFramework}
+              title={selectedFramework ? 'Select a supported language.' : 'Select a framework first.'}
               value={selectedLanguage}
               onChange={(event) => void setFrameworkAndLanguage(selectedFramework, event.target.value)}
             >

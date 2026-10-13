@@ -1,0 +1,29 @@
+import type { ActionIR } from '@automate-plus/ir-schema';
+
+// Component fixtures only; never imported by the production renderer.
+export const SAUCEDEMO_TEMPLATE_STEPS: ActionIR[] = [
+  { id: 'a1000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'web', action: 'navigate', value: 'https://www.saucedemo.com/', timeoutMs: 5000, timestamp: 1000, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'web', action: 'fill', value: 'standard_user', locators: [{ strategy: 'testId', value: 'username', score: 100 }, { strategy: 'css', value: '#user-name', score: 80 }], timeoutMs: 5000, timestamp: 1050, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'web', action: 'fill', value: 'secret_sauce', locators: [{ strategy: 'testId', value: 'password', score: 100 }, { strategy: 'css', value: '#password', score: 80 }], timeoutMs: 5000, timestamp: 1100, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000004', schemaVersion: 2, stepNumber: 4, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'login-button', score: 100 }, { strategy: 'css', value: '#login-button', score: 80 }], timeoutMs: 5000, timestamp: 1150, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000005', schemaVersion: 2, stepNumber: 5, platform: 'web', action: 'assertUrl', expectedValue: 'https://www.saucedemo.com/inventory.html', timeoutMs: 5000, timestamp: 1200, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'web', action: 'assertVisible', locators: [{ strategy: 'testId', value: 'inventory-container', score: 100 }, { strategy: 'css', value: '.inventory_list', score: 80 }], timeoutMs: 5000, timestamp: 1250, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000007', schemaVersion: 2, stepNumber: 7, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'add-to-cart-sauce-labs-backpack', score: 100 }], timeoutMs: 5000, timestamp: 1300, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000008', schemaVersion: 2, stepNumber: 8, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'shopping-cart-link', score: 100 }], timeoutMs: 5000, timestamp: 1350, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000009', schemaVersion: 2, stepNumber: 9, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'checkout', score: 100 }], timeoutMs: 5000, timestamp: 1400, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000010', schemaVersion: 2, stepNumber: 10, platform: 'web', action: 'fill', value: 'John', locators: [{ strategy: 'testId', value: 'firstName', score: 100 }], timeoutMs: 5000, timestamp: 1450, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000011', schemaVersion: 2, stepNumber: 11, platform: 'web', action: 'fill', value: 'Doe', locators: [{ strategy: 'testId', value: 'lastName', score: 100 }], timeoutMs: 5000, timestamp: 1500, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000012', schemaVersion: 2, stepNumber: 12, platform: 'web', action: 'fill', value: '94043', locators: [{ strategy: 'testId', value: 'postalCode', score: 100 }], timeoutMs: 5000, timestamp: 1550, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000013', schemaVersion: 2, stepNumber: 13, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'continue', score: 100 }], timeoutMs: 5000, timestamp: 1600, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000014', schemaVersion: 2, stepNumber: 14, platform: 'web', action: 'click', locators: [{ strategy: 'testId', value: 'finish', score: 100 }], timeoutMs: 5000, timestamp: 1650, optional: false },
+  { id: 'a1000000-0000-4000-8000-000000000015', schemaVersion: 2, stepNumber: 15, platform: 'web', action: 'assertText', expectedValue: 'Thank you for your order!', locators: [{ strategy: 'testId', value: 'complete-header', score: 100 }], timeoutMs: 5000, timestamp: 1700, optional: false },
+];
+
+export const ORANGEHRM_TEMPLATE_STEPS: ActionIR[] = [
+  { id: 'b1000000-0000-4000-8000-000000000001', schemaVersion: 2, stepNumber: 1, platform: 'web', action: 'navigate', value: 'https://opensource-demo.orangehrmlive.com/web/index.php/auth/login', timeoutMs: 5000, timestamp: 1000, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000002', schemaVersion: 2, stepNumber: 2, platform: 'web', action: 'fill', value: 'Admin', locators: [{ strategy: 'css', value: 'input[name="username"]', score: 95 }, { strategy: 'testId', value: 'username', score: 90 }], timeoutMs: 5000, timestamp: 1050, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000003', schemaVersion: 2, stepNumber: 3, platform: 'web', action: 'fill', value: 'admin123', locators: [{ strategy: 'css', value: 'input[name="password"]', score: 95 }, { strategy: 'testId', value: 'password', score: 90 }], timeoutMs: 5000, timestamp: 1100, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000004', schemaVersion: 2, stepNumber: 4, platform: 'web', action: 'click', locators: [{ strategy: 'css', value: 'button[type="submit"]', score: 95 }, { strategy: 'role', value: 'button[name="Login"]', score: 90 }], timeoutMs: 5000, timestamp: 1150, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000005', schemaVersion: 2, stepNumber: 5, platform: 'web', action: 'assertUrl', expectedValue: 'https://opensource-demo.orangehrmlive.com/web/index.php/dashboard/index', timeoutMs: 5000, timestamp: 1200, optional: false },
+  { id: 'b1000000-0000-4000-8000-000000000006', schemaVersion: 2, stepNumber: 6, platform: 'web', action: 'assertVisible', locators: [{ strategy: 'css', value: '.oxd-topbar-header-breadcrumb', score: 95 }], timeoutMs: 5000, timestamp: 1250, optional: false },
+];

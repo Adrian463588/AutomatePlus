@@ -126,10 +126,10 @@ const emptyFeedback: UiFeedback = { kind: 'idle', message: 'Waiting for a user a
 const initialRuntimeHostState = bridge.getRuntimeHostState();
 const initialWorkspaceBrowse: WorkspaceBrowseState = {
   status: 'idle',
-  canBrowse: true,
+  canBrowse: initialRuntimeHostState.mode === 'native',
   message: initialRuntimeHostState.mode === 'native'
     ? undefined
-    : 'Choose workspace folder via folder picker modal or presets.',
+    : 'Native Windows app required for Browse. Enter the full workspace path manually in browser mode.',
 };
 const initialRuntimePreflight: RuntimePreflightState = {
   status: initialRuntimeHostState.mode === 'native' ? 'idle' : 'blocked',
@@ -319,23 +319,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   browseWorkspaceFolder: async () => {
     if (get().workspaceBrowse.status === 'busy') return undefined;
     if (!bridge.hasNativeBridge()) {
-      if (typeof window !== 'undefined' && 'showDirectoryPicker' in window) {
-        try {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          const dirHandle = await (window as any).showDirectoryPicker();
-          if (dirHandle?.name) {
-            const selectedPath = `D:\\SEMESTER12\\ProjectKode\\AutomatePlus\\workspaces\\${dirHandle.name}`;
-            set({ workspaceBrowse: { status: 'selected', canBrowse: true, message: `Selected folder: ${dirHandle.name}` } });
-            return selectedPath;
-          }
-        } catch (err: unknown) {
-          if (err instanceof Error && err.name === 'AbortError') {
-            set({ workspaceBrowse: { status: 'cancelled', canBrowse: true, message: 'Folder selection cancelled.' } });
-            return undefined;
-          }
-        }
-      }
-      return 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus';
+      set({ workspaceBrowse: { status: 'blocked', canBrowse: false, message: 'Native Windows app required for Browse. Enter the full workspace path manually.' } });
+      return undefined;
     }
 
     set({ workspaceBrowse: { status: 'busy', canBrowse: true, message: 'Opening the native folder picker…' } });
@@ -424,10 +409,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     const session: SessionRecord = { id: sessionId, projectId: project.id, name: trimmedName, platform,
       ir: { id: sessionId, schemaVersion: 2, projectId: project.id, name: trimmedName, platform,
         targetConfig: {}, environmentVariables: {}, steps: [], createdAt: now, updatedAt: now }, createdAt: now, updatedAt: now };
-    await bridge.sessionRepo.save(session);
-    set({ sessions: [...get().sessions, session], activeSession: session, selectedFramework: '', selectedLanguage: '',
-      generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', activeTab: platform === 'api' ? 'api_builder' : 'visual',
-      feedback: { kind: 'success', message: `Session “${session.name}” created. Add a real target before running.` } });
+    try {
+      await bridge.sessionRepo.save(session);
+      set({ sessions: [...get().sessions, session], activeSession: session, selectedFramework: '', selectedLanguage: '',
+        generatedProject: undefined, selectedGeneratedFile: '', generatedCode: '', activeTab: platform === 'api' ? 'api_builder' : 'visual',
+        feedback: { kind: 'success', message: `Session “${session.name}” created. Add a real target before running.` } });
+    } catch (error) {
+      set({ feedback: { kind: 'error', message: `Session could not be saved: ${error instanceof Error ? error.message : String(error)}` } });
+    }
   },
 
   selectProject: async (projectId) => {

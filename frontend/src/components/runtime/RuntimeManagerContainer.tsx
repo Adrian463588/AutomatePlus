@@ -53,8 +53,9 @@ export const RuntimeManagerContainer: React.FC<RuntimeManagerContainerProps> = (
   const managerRef = useRef(bridge.getRuntimeManager());
   const mountedRef = useRef(true);
 
-  useEffect(() => () => {
-    mountedRef.current = false;
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => { mountedRef.current = false; };
   }, []);
 
   const installedPacks = useMemo<RuntimeInstalledPack[]>(

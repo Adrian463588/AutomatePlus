@@ -1,0 +1,68 @@
+{
+  "schemaVersion": 1,
+  "note": "Supplemental upstream notices missing from the locked crate archives. rust-unic 8a6ce83063d90b91ae2ce59eddb803edd393fca9 has identical LICENSE-MIT/COPYRIGHT text; crate source versions remain independently pinned in Cargo.lock.",
+  "files": [
+    {
+      "path": "alloc-stdlib-LICENSE",
+      "sha256": "c0c56f26d9c051cac4d200c34c84e7ae9aaa853e01a982a1df08b09931e518ae",
+      "source": "https://github.com/dropbox/rust-alloc-no-stdlib/blob/ae42d22078b98549e987d2f03d12df7b984fde47/LICENSE"
+    },
+    {
+      "path": "webview2-rs-LICENSE",
+      "sha256": "0dcf41516e608bbcb6cdc5229feb7b86fe4a643b85e7df251133c93408fdac73",
+      "source": "https://github.com/wravery/webview2-rs/blob/b74dc5e2b394044bea5191052868ce7a106c202c/LICENSE"
+    },
+    {
+      "path": "rust-unic-LICENSE-MIT",
+      "sha256": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+      "source": "https://github.com/open-i18n/rust-unic/blob/5878605364af97a3358368a6eaef02104af2e016/LICENSE-MIT"
+    },
+    {
+      "path": "rust-unic-COPYRIGHT.md",
+      "sha256": "f5c342c49f3ac804f3e8e7bb62a8040a44c50d47bb36902b1abd13f66a1adf8b",
+      "source": "https://github.com/open-i18n/rust-unic/blob/5878605364af97a3358368a6eaef02104af2e016/COPYRIGHT.md"
+    },
+    {
+      "path": "MPL-2.0.txt",
+      "sha256": "66a3107d5ad6a058aab753eaac2047ccb2ed0e39465dd0fe5844da3e300d5172",
+      "source": "https://github.com/spdx/license-list-data/blob/31ba1a50e5397e00a304dbadc76531740e89ee48/text/MPL-2.0.txt"
+    }
+  ],
+  "dependencies": {
+    "alloc-stdlib@0.2.4": [
+      "alloc-stdlib-LICENSE"
+    ],
+    "selectors@0.36.1": [
+      "MPL-2.0.txt"
+    ],
+    "unic-char-property@0.9.0": [
+      "rust-unic-LICENSE-MIT",
+      "rust-unic-COPYRIGHT.md"
+    ],
+    "unic-char-range@0.9.0": [
+      "rust-unic-LICENSE-MIT",
+      "rust-unic-COPYRIGHT.md"
+    ],
+    "unic-common@0.9.0": [
+      "rust-unic-LICENSE-MIT",
+      "rust-unic-COPYRIGHT.md"
+    ],
+    "unic-ucd-ident@0.9.0": [
+      "rust-unic-LICENSE-MIT",
+      "rust-unic-COPYRIGHT.md"
+    ],
+    "unic-ucd-version@0.9.0": [
+      "rust-unic-LICENSE-MIT",
+      "rust-unic-COPYRIGHT.md"
+    ],
+    "webview2-com@0.38.2": [
+      "webview2-rs-LICENSE"
+    ],
+    "webview2-com-sys@0.38.2": [
+      "webview2-rs-LICENSE"
+    ],
+    "webview2-com-macros@0.8.1": [
+      "webview2-rs-LICENSE"
+    ]
+  }
+}

@@ -389,16 +389,34 @@ function main() {
   }
   let stagedDestination;
   let stagedSupportingResources = [];
+  let status;
   try {
     stagedSupportingResources = stageSupportingResources(report.packs.verified);
     stagedDestination = stagePacks(report.packs.verified);
     // Tauri's Windows bundler may fetch WiX when it is not already staged.
     // The offline gate produces the native executable only; packaging is a
     // separate release step that must receive a locally verified bundler.
-    return run('cargo', ['tauri', 'build', '--no-bundle', '--', '--offline', '--locked']).status ?? 1;
+    status = run('cargo', ['tauri', 'build', '--no-bundle', '--', '--offline', '--locked']).status ?? 1;
   } finally {
     removeStagedPacks(stagedDestination);
     stagedSupportingResources.forEach((path) => rmSync(path, { recursive: true, force: true }));
   }
+  if (status === 0) {
+    const executable = join(native, 'target', 'release', 'AutomatePlus.exe');
+    const revision = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8', windowsHide: true });
+    const changes = spawnSync('git', ['status', '--porcelain'], { cwd: root, encoding: 'utf8', windowsHide: true });
+    if (!existsSync(executable) || revision.status !== 0 || changes.status !== 0) throw new Error('Native build provenance could not be recorded.');
+    const output = join(root, '.automateplus', 'native-build.json');
+    mkdirSync(dirname(output), { recursive: true });
+    writeFileSync(output, `${JSON.stringify({
+      schemaVersion: 1,
+      version: JSON.parse(readFileSync(join(root, 'package.json'), 'utf8')).version,
+      sourceRevision: revision.stdout.trim(), sourceDirty: changes.stdout.trim() !== '',
+      executableSha256: sha256(executable),
+      frontendIndexSha256: sha256(join(root, 'frontend', 'dist', 'index.html')),
+      createdAt: new Date().toISOString(),
+    }, null, 2)}\n`);
+  }
+  return status;
 }
 process.exitCode = main();

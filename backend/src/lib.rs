@@ -6,6 +6,7 @@ mod persistence;
 mod ports;
 mod preflight;
 mod process;
+mod release_links;
 mod runtime;
 mod runtime_catalog;
 
@@ -155,6 +156,19 @@ impl AppState {
         }
 
         match request.method.as_str() {
+            "native.release.open" => {
+                let url = request
+                    .payload
+                    .get("url")
+                    .and_then(Value::as_str)
+                    .unwrap_or("");
+                match release_links::open(url) {
+                    Ok(()) => NativeResponse::success(request, json!({ "opened": true })),
+                    Err(message) => {
+                        NativeResponse::failure(request, "CAPABILITY_ERROR", message, json!({}))
+                    }
+                }
+            }
             "native.health" => NativeResponse::success(
                 request,
                 serde_json::to_value(self.health()).unwrap_or_else(|_| json!({})),

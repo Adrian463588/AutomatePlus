@@ -17,7 +17,7 @@ set "INVALID_ARGS=0"
 rem HELP AutomatePlus local launcher
 rem HELP.
 rem HELP   Run-AutomatePlus.bat                  Start native release or bootstrap host.
-rem HELP   Run-AutomatePlus.bat --doctor         Print native and runtime preflight JSON.
+rem HELP   Run-AutomatePlus.bat --doctor         Source checkout diagnostics; requires local Node.js.
 rem HELP   Run-AutomatePlus.bat --browser        Start explicit browser migration shell.
 rem HELP   Run-AutomatePlus.bat --browser --dev --port=5173 --no-open
 rem HELP                                           Start Vite migration shell without auto-opening a browser.
@@ -180,12 +180,13 @@ set "EXIT_CODE=!ERRORLEVEL!"
 goto finish
 
 :doctor
-call :require_node
-if errorlevel 1 goto finish_blocked
 if not exist "!AUTOMATEPLUS_ROOT!\scripts\build-native-offline.mjs" (
-  echo [AutomatePlus] BLOCKED: diagnostics script is missing.
+  echo [AutomatePlus] BLOCKED: --doctor requires the developer source checkout.
+  echo [AutomatePlus] In the portable app, use Runtime Manager for runtime diagnostics.
   goto finish_blocked
 )
+call :require_node
+if errorlevel 1 goto finish_blocked
 echo [AutomatePlus] Running native offline diagnostics...
 node "!AUTOMATEPLUS_ROOT!\scripts\build-native-offline.mjs" --preflight
 if errorlevel 1 (

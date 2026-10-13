@@ -1,8 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useAppStore } from '../../store/appStore.js';
-import { Globe, Smartphone, Server, SmartphoneNfc, CheckCircle2, XCircle, Clock, Plus, RefreshCw, X, FolderOpen, Loader2, Download, PackageCheck } from 'lucide-react';
+import { Globe, Smartphone, Server, CheckCircle2, XCircle, Clock, Plus, RefreshCw, X, FolderOpen, Loader2, Download, PackageCheck } from 'lucide-react';
 import { NativeSetupGuide } from '../common/NativeSetupGuide.js';
-import { FolderPickerModal } from '../workspace/FolderPickerModal.js';
 
 type DialogKind = 'project' | 'session' | undefined;
 
@@ -15,15 +14,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
     devices, activeDevice, setActiveDevice, discoverDevices, deviceDiscoveryMessage, lastRunSummary,
     browseWorkspaceFolder, workspaceBrowse, runtimePreflight, checkRuntimePreflight, setActiveTab } = useAppStore();
   const [dialog, setDialog] = useState<DialogKind>();
-  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [workspacePath, setWorkspacePath] = useState('');
   const [sessionName, setSessionName] = useState('');
   const [sessionPlatform, setSessionPlatform] = useState<'web' | 'android' | 'api'>('web');
   const [projectSubmitBusy, setProjectSubmitBusy] = useState(false);
   const [projectSubmitError, setProjectSubmitError] = useState<string>();
+  const [sessionSubmitBusy, setSessionSubmitBusy] = useState(false);
   const dialogRef = useRef<HTMLDivElement>(null);
   const browseButtonRef = useRef<HTMLButtonElement>(null);
+  const dialogBusyRef = useRef(false);
+  dialogBusyRef.current = projectSubmitBusy || sessionSubmitBusy || workspaceBrowse.status === 'busy';
 
   useEffect(() => {
     if (!dialog) return;
@@ -31,7 +32,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
     const getFocusable = () => Array.from(dialogRef.current?.querySelectorAll<HTMLElement>('input, select, textarea, button, [href], [tabindex]:not([tabindex="-1"])') ?? []).filter((element) => !element.hasAttribute('disabled'));
     getFocusable()[0]?.focus();
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') setDialog(undefined);
+      const dialogs = document.querySelectorAll('[role="dialog"][aria-modal="true"]');
+      if (dialogs[dialogs.length - 1] !== dialogRef.current) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        if (!dialogBusyRef.current) setDialog(undefined);
+      }
       if (event.key !== 'Tab') return;
       const elements = getFocusable();
       if (elements.length === 0) return;
@@ -48,21 +54,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
   }, [dialog]);
 
   const closeDialog = () => {
-    if (projectSubmitBusy) return;
+    if (projectSubmitBusy || sessionSubmitBusy || workspaceBrowse.status === 'busy') return;
     setDialog(undefined);
     setProjectSubmitError(undefined);
   };
 
   const openProjectDialog = () => {
     setProjectSubmitError(undefined);
-    if (!workspacePath) {
-      setWorkspacePath('D:\\SEMESTER12\\ProjectKode\\AutomatePlus');
-    }
     setDialog('project');
   };
 
-  const browseProjectWorkspace = () => {
-    setIsFolderPickerOpen(true);
+  const browseProjectWorkspace = async () => {
+    const selectedPath = await browseWorkspaceFolder();
+    if (selectedPath) setWorkspacePath(selectedPath);
+    browseButtonRef.current?.focus();
   };
 
   const submitProject = async () => {
@@ -93,8 +98,13 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
           ? 'Choose or enter a local workspace path to continue.'
           : undefined;
   const submitSession = async () => {
+    if (sessionSubmitBusy || !sessionName.trim() || !activeProject) return;
+    setSessionSubmitBusy(true);
+    setProjectSubmitError(undefined);
     await createSession(sessionName, sessionPlatform);
-    if (sessionName.trim() && activeProject) { setSessionName(''); closeDialog(); }
+    setSessionSubmitBusy(false);
+    if (useAppStore.getState().feedback.kind === 'success') { setSessionName(''); setDialog(undefined); }
+    else setProjectSubmitError(useAppStore.getState().feedback.message);
   };
 
   return (
@@ -113,10 +123,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
           </div>
         </section>
 
-        <section aria-labelledby="runtime-preflight-heading" className="flex flex-col gap-2">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
-            <span id="runtime-preflight-heading">Runtime preflight</span><Server className="w-3.5 h-3.5 text-slate-500" />
-          </div>
+        <details aria-labelledby="runtime-preflight-heading">
+          <summary id="runtime-preflight-heading">Runtime preflight</summary>
           <div className="ap-bento-card p-3 flex flex-col gap-2.5">
             <div className="flex items-start gap-2 text-slate-400 leading-5" role="status" aria-live="polite" aria-busy={runtimePreflight.status === 'busy'}>
               <span className={`mt-1 h-2 w-2 rounded shrink-0 ${runtimePreflight.status === 'ready' ? 'bg-emerald-400' : runtimePreflight.status === 'busy' ? 'bg-sky-400' : runtimePreflight.status === 'error' ? 'bg-rose-400' : 'bg-amber-400'}`} />
@@ -156,12 +164,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
             </div>
             {!runtimePreflight.canCheck && <NativeSetupGuide compact />}
           </div>
-        </section>
+        </details>
 
         <section aria-labelledby="sessions-heading" className="flex flex-col gap-2">
           <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
             <span id="sessions-heading">Test Sessions ({sessions.length})</span>
-            <button type="button" disabled={!activeProject} onClick={() => setDialog('session')} className="p-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-40 min-h-8 min-w-8 flex items-center justify-center tactile-active" aria-label="Create session" title={activeProject ? 'Create session in active project' : 'Create a project first'}><Plus className="w-3.5 h-3.5" /></button>
+            <button type="button" disabled={!activeProject} onClick={() => { setProjectSubmitError(undefined); setDialog('session'); }} className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded disabled:opacity-40 min-h-12 min-w-12 flex items-center justify-center tactile-active" aria-label="Create session" title={activeProject ? 'Create session in active project' : 'Create a project first'}><Plus className="w-4 h-4" /></button>
           </div>
           {sessions.length === 0 ? (
             <div className="rounded-md border border-dashed border-slate-800 p-3 text-slate-500 leading-5 flex flex-col gap-2">
@@ -185,15 +193,15 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
           )}
         </section>
 
-        <section aria-labelledby="devices-heading" className="flex flex-col gap-2">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between"><span id="devices-heading">Android preflight</span><SmartphoneNfc className="w-3.5 h-3.5 text-slate-500" /></div>
+        <details aria-labelledby="devices-heading">
+          <summary id="devices-heading">Android devices</summary>
           <div className="ap-bento-card p-3 flex flex-col gap-2.5">
             <div className="flex items-start gap-2 text-slate-500 leading-5"><span className="mt-1 h-2 w-2 rounded bg-slate-600 shrink-0" /> <span>{deviceDiscoveryMessage}</span></div>
             <button type="button" onClick={() => void discoverDevices()} title="Scan for connected Android devices via ADB" className="flex min-h-12 items-center gap-1.5 px-2.5 py-1.5 text-slate-300 hover:text-white hover:bg-slate-800 rounded border border-slate-700 tactile-active"><RefreshCw className="w-3.5 h-3.5" /> Check devices</button>
             {devices.length > 0 && <select aria-label="Select Android device" value={activeDevice ?? ''} onChange={(event) => setActiveDevice(event.target.value)} className="ap-select w-full">{devices.map((device) => <option key={device.id} value={device.id}>{device.model || device.id} · {device.status}</option>)}</select>}
             {devices.map((device) => <div key={device.id} className="flex items-center justify-between text-[10px] font-mono"><span className={device.status === 'device' ? 'text-emerald-300' : 'text-amber-300'}>{device.status}</span><span className="text-slate-500">{device.id}</span></div>)}
           </div>
-        </section>
+        </details>
       </div>
 
       <div className="p-3 border-t border-slate-800 bg-slate-950/40 flex flex-col gap-2">
@@ -202,8 +210,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
           <button
             type="button"
             onClick={() => {
-              const terminal = document.querySelector('.terminal-panel');
-              terminal?.scrollIntoView({ behavior: 'smooth' });
+              const terminal = document.querySelector<HTMLElement>('.terminal-panel');
+              terminal?.focus();
+              terminal?.scrollIntoView({ behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
             }}
             title="Focus execution logs in the terminal"
             className="w-full flex items-center justify-between p-2 rounded bg-slate-900 border border-slate-800 hover:border-slate-700 tactile-active text-left"
@@ -220,11 +229,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
         <button
           type="button"
           onClick={onOpenReleasesModal}
-          title="Download AutomatePlus App (v1.7.0) & Historical Releases"
+          disabled={!onOpenReleasesModal}
+          title={onOpenReleasesModal ? 'Open published Windows downloads and release history' : 'Downloads are unavailable in this view'}
           className="flex min-h-9 items-center justify-center gap-1.5 py-1.5 px-2 rounded bg-slate-900 hover:bg-slate-800 border border-slate-800 text-cyan-200 hover:text-white text-[11px] font-medium tactile-active"
         >
           <Download className="w-3.5 h-3.5 text-cyan-400" />
-          <span>Download App (v1.7.0)</span>
+          <span>App downloads</span>
         </button>
       </div>
 
@@ -248,12 +258,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
                     ref={browseButtonRef}
                     type="button"
                     id="browse-workspace-folder-btn"
-                    onClick={() => browseProjectWorkspace()}
-                    disabled={projectSubmitBusy || workspaceBrowse.status === 'busy'}
+                    onClick={() => void browseProjectWorkspace()}
+                    disabled={!workspaceBrowse.canBrowse || projectSubmitBusy || workspaceBrowse.status === 'busy'}
                     aria-busy={workspaceBrowse.status === 'busy'}
                     aria-describedby="workspace-picker-status"
                     aria-label={workspaceBrowse.status === 'busy' ? 'Opening folder picker' : 'Browse workspace folder'}
-                    title="Choose workspace folder via UI modal or directory presets."
+                    title={workspaceBrowse.canBrowse ? 'Choose an existing folder with the native Windows dialog.' : 'Native Windows app required; enter the full workspace path manually.'}
                     className="button-muted min-h-12 shrink-0 px-3 disabled:cursor-not-allowed disabled:opacity-50 tactile-active"
                   >
                     {workspaceBrowse.status === 'busy' ? (
@@ -274,10 +284,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
               </div>
             </form>
           ) : (
-            <form onSubmit={(event) => { event.preventDefault(); void submitSession(); }} className="pt-3 flex flex-col gap-3.5">
+            <form onSubmit={(event) => { event.preventDefault(); void submitSession(); }} aria-busy={sessionSubmitBusy} className="pt-3 flex flex-col gap-4">
               <label htmlFor="session-name" className="flex flex-col gap-1 text-xs font-semibold text-slate-300">
                 <span>Session name</span>
-                <input id="session-name" required value={sessionName} onChange={(event) => setSessionName(event.target.value)} className="field w-full" />
+                <input id="session-name" required disabled={sessionSubmitBusy} value={sessionName} onChange={(event) => setSessionName(event.target.value)} className="field w-full" />
               </label>
               <label htmlFor="session-platform" className="flex flex-col gap-1 text-xs font-semibold text-slate-300">
                 <span>Platform</span>
@@ -288,31 +298,16 @@ export const Sidebar: React.FC<SidebarProps> = ({ onOpenReleasesModal }) => {
                 </select>
               </label>
               <p className="text-xs text-slate-500">Targets, packages, URLs, secrets, and actions are entered explicitly after creation.</p>
+              {projectSubmitError && <p role="alert" className="text-rose-300">{projectSubmitError}</p>}
               <div className="flex justify-end gap-2 pt-2 border-t border-slate-800">
                 <button type="button" onClick={closeDialog} title="Cancel session creation" className="button-muted tactile-active">Cancel</button>
-                <button type="submit" disabled={!sessionName.trim() || !activeProject} title={!activeProject ? 'Select a project first' : sessionName.trim() ? 'Create session' : 'Enter a session name first'} className="button-primary disabled:opacity-50 disabled:cursor-not-allowed tactile-active">Create session</button>
+                <button type="submit" disabled={sessionSubmitBusy || !sessionName.trim() || !activeProject} title={!activeProject ? 'Select a project first' : sessionSubmitBusy ? 'Saving session locally' : sessionName.trim() ? 'Create session' : 'Enter a session name first'} className="button-primary disabled:opacity-50 disabled:cursor-not-allowed tactile-active">{sessionSubmitBusy ? 'Saving…' : 'Create session'}</button>
               </div>
             </form>
           )}
         </div>
       </div>}
 
-      {isFolderPickerOpen && (
-        <FolderPickerModal
-          isOpen={isFolderPickerOpen}
-          onClose={() => {
-            setIsFolderPickerOpen(false);
-            browseButtonRef.current?.focus();
-          }}
-          onSelect={(selectedPath) => {
-            setWorkspacePath(selectedPath);
-            setIsFolderPickerOpen(false);
-            browseButtonRef.current?.focus();
-          }}
-          initialPath={workspacePath || 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus'}
-          onOpenReleasesModal={onOpenReleasesModal}
-        />
-      )}
     </aside>
   );
 };

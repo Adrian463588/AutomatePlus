@@ -7,7 +7,7 @@ import {
   RunRepository,
   SessionRepository,
 } from '@automate-plus/persistence/browser';
-import { AdaptiveBrowserTransport, WebRecorder } from '@automate-plus/recorder-web';
+import { PlaywrightCdpBrowserTransport, WebRecorder } from '@automate-plus/recorder-web';
 import type {
   AndroidDeviceInfo,
   CapabilityManifest,
@@ -298,6 +298,11 @@ class NativeCapabilityAdapter {
     return parseNativeDialogPickResponse(response);
   }
 
+  public async openReleaseLink(url: string): Promise<void> {
+    const response = await this.request<unknown>('native.release.open', { url });
+    if (!isRecord(response) || response.opened !== true) throw new Error('Windows did not open the release link.');
+  }
+
   public async listDeviceProfiles(): Promise<DeviceProfile[]> {
     if (!this.status.deviceDiscovery) return [];
     const response = await this.request<unknown>('devices.discover', {});
@@ -405,7 +410,7 @@ class NativeCapabilityAdapter {
     if (!bridge?.invoke) {
       throw new NativeIpcError('CAPABILITY_ERROR', BROWSER_RUNTIME_BLOCKED_REASON, { method, mode: 'browser' });
     }
-    const request = createRequest(method, payload);
+    const request = createRequest(method, payload ?? {});
     const raw = await bridge.invoke('automate_plus_dispatch', encodeNativeIpcMessage(request));
     if (!isRecord(raw) || raw.protocolVersion !== '1.0' || raw.kind !== 'response' || !isRecord(raw.payload)) {
       throw new Error('Native host returned an invalid versioned IPC response.');
@@ -470,7 +475,7 @@ export class DesktopBridgeService {
     this.deviceRepo = new DeviceRepository(storage);
     this.deviceGroupRepo = new DeviceGroupRepository(storage);
     this.farmRunRepo = new FarmRunRepository(storage);
-    this.webRecorder = new WebRecorder(new AdaptiveBrowserTransport());
+    this.webRecorder = new WebRecorder(new PlaywrightCdpBrowserTransport());
     this.apiRunner = new ApiFunctionalRunner();
   }
 
@@ -494,6 +499,10 @@ export class DesktopBridgeService {
 
   public pickDirectory(): Promise<NativeDialogPickResponse> {
     return this.pickDialog({ mode: 'folder', title: 'Choose AutomatePlus workspace folder' });
+  }
+
+  public openReleaseLink(url: string): Promise<void> {
+    return this.native.openReleaseLink(url);
   }
 
   public getRuntimeHostState(): RuntimeManagerHostState {
