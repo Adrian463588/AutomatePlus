@@ -45,6 +45,13 @@
 - **Then** `GeneratorFactory` generates an executable project structure containing correct page visits, locators, and assertions.
 - **And** the generated code contains no TODO stubs or fixed local ports.
 
+### Scenario 5: In-Browser & Headless Adaptive Web Recording
+- **Given** an active Web session targeting a real web target URL (`https://www.saucedemo.com/`).
+- **When** the user clicks "Start recorder" in browser migration shell mode.
+- **Then** `WebRecorder` uses `AdaptiveBrowserTransport` delegating to `InBrowserDomTransport`.
+- **And** the recorder activates cleanly with `isRecording: true`, the button transitions to "Recording · Stop", and status reflects "Recorder is active. Actions in the canvas will be recorded." without throwing `Playwright runtime is not installed or cannot be loaded`.
+- **When** the user clicks "Recording · Stop", the recording session terminates cleanly, setting `isRecording: false` and status "Recording stopped."
+
 ---
 
 ## 3. Verification Gates

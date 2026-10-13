@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { AutomationError } from '@automate-plus/contracts';
 import {
+  AdaptiveBrowserTransport,
+  InBrowserDomTransport,
   PlaywrightBrowserContextLike,
   PlaywrightBrowserLike,
   PlaywrightCdpBrowserTransport,
@@ -106,6 +108,46 @@ describe('Playwright/CDP browser transport boundary', () => {
 
     await expect(transport.start({}, () => undefined)).rejects.toBeInstanceOf(AutomationError);
     await expect(transport.start({}, () => undefined)).rejects.toMatchObject({ code: 'RUNTIME_MISSING' });
+  });
+
+  it('InBrowserDomTransport emits initial navigation and manages session lifecycle', async () => {
+    const transport = new InBrowserDomTransport();
+    const events: Array<Record<string, unknown>> = [];
+
+    const session = await transport.start({ targetUrl: 'https://example.com' }, (event) => {
+      events.push(event as Record<string, unknown>);
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'navigation',
+      url: 'https://example.com',
+      value: 'https://example.com',
+    });
+
+    await session.stop();
+  });
+
+  it('AdaptiveBrowserTransport gracefully falls back to InBrowserDomTransport when Playwright is unavailable', async () => {
+    const failingPrimary = new PlaywrightCdpBrowserTransport(async () => {
+      throw new AutomationError('RUNTIME_MISSING', 'Playwright runtime is not installed');
+    });
+    const fallback = new InBrowserDomTransport();
+    const adaptive = new AdaptiveBrowserTransport(failingPrimary, fallback);
+
+    const events: Array<Record<string, unknown>> = [];
+    const session = await adaptive.start({ targetUrl: 'https://saucedemo.com' }, (event) => {
+      events.push(event as Record<string, unknown>);
+    });
+
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      type: 'navigation',
+      url: 'https://saucedemo.com',
+      value: 'https://saucedemo.com',
+    });
+
+    await session.stop();
   });
 });
 

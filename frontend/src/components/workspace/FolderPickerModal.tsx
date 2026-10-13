@@ -131,7 +131,7 @@ export const FolderPickerModal: React.FC<FolderPickerModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-150"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 animate-in fade-in duration-150"
       role="presentation"
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
@@ -142,7 +142,7 @@ export const FolderPickerModal: React.FC<FolderPickerModalProps> = ({
         role="dialog"
         aria-modal="true"
         aria-labelledby="folder-picker-title"
-        className="w-full max-w-xl rounded-xl border border-slate-800 bg-slate-900 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-xl rounded-xl border border-slate-800 bg-slate-900 overflow-hidden flex flex-col max-h-[90vh]"
       >
         {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-800 px-5 py-4 bg-slate-950/40">
@@ -314,6 +314,7 @@ export const FolderPickerModal: React.FC<FolderPickerModalProps> = ({
             id="confirm-workspace-folder-btn"
             disabled={!customInput.trim()}
             onClick={handleConfirm}
+            title={!customInput.trim() ? 'Select a folder preset or type a workspace path' : 'Confirm workspace folder'}
             className="flex items-center gap-1.5 px-4 py-1.5 rounded-md text-xs font-semibold bg-cyan-600 hover:bg-cyan-500 text-white shadow-sm disabled:opacity-40 disabled:cursor-not-allowed tactile-active"
           >
             <Check className="w-3.5 h-3.5" />

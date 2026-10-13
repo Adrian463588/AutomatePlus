@@ -1,6 +1,7 @@
 import { AutomationError, IRecorder, RecorderOptions, RecorderState, ActionCallback } from '@automate-plus/contracts';
 import { ActionIR, PlatformType } from '@automate-plus/ir-schema';
 import {
+  AdaptiveBrowserTransport,
   BrowserRecorderTransport,
   BrowserTransportOptions,
   BrowserTransportSession,
@@ -24,7 +25,7 @@ export class WebRecorder implements IRecorder {
   private stepCounter = 1;
   private _lastError?: AutomationError;
 
-  public constructor(private readonly transport: BrowserRecorderTransport = new PlaywrightCdpBrowserTransport()) {}
+  public constructor(private readonly transport: BrowserRecorderTransport = new AdaptiveBrowserTransport()) {}
 
   public get state(): RecorderState {
     return this._state;

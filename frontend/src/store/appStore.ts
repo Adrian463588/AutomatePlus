@@ -586,12 +586,15 @@ export const useAppStore = create<AppState>((set, get) => ({
     if (platform === 'web' && !targetUrl?.trim()) { set({ feedback: { kind: 'blocked', message: 'A user-provided web target URL is required before recording.' } }); return; }
     set({ activeRecorderPlatform: platform, isRecording: false, feedback: { kind: 'pending', message: 'Starting recorder…' } });
     try {
-      if (platform === 'web') await bridge.webRecorder.start({ targetUrl: targetUrl!.trim() }, (action) => void get().addStep(action));
-      else {
+      if (platform === 'web') {
+        const trimmedUrl = targetUrl!.trim();
+        const hasNav = activeSession.ir.steps.some((s) => s.action === 'navigate' && s.value === trimmedUrl);
+        await bridge.webRecorder.start({ targetUrl: hasNav ? undefined : trimmedUrl }, (action) => void get().addStep(action));
+      } else {
         if (!activeDevice) throw new Error('Select an authorized Android device discovered by the native host before recording.');
         await bridge.startAndroidRecording(activeSession.ir, [activeDevice], activeDevice);
       }
-      set({ isRecording: true, feedback: { kind: 'success', message: 'Recorder is active.' } });
+      set({ isRecording: true, feedback: { kind: 'success', message: 'Recorder is active. Actions in the canvas will be recorded.' } });
     } catch (error) { set({ isRecording: false, feedback: { kind: 'blocked', message: `Recording blocked: ${error instanceof Error ? error.message : String(error)}` } }); }
   },
 

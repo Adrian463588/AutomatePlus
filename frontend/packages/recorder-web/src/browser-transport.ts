@@ -211,6 +211,76 @@ export class PlaywrightCdpBrowserTransport implements BrowserRecorderTransport {
   }
 }
 
+export class InBrowserDomTransport implements BrowserRecorderTransport {
+  public async start(
+    options: BrowserTransportOptions,
+    onEvent: BrowserEventCallback,
+  ): Promise<BrowserTransportSession> {
+    if (options.targetUrl) {
+      onEvent({
+        type: 'navigation',
+        url: options.targetUrl,
+        value: options.targetUrl,
+        timestamp: Date.now(),
+      });
+    }
+
+    const handler = (event: Event): void => {
+      const customEvent = event as CustomEvent<RawBrowserEvent>;
+      if (customEvent.detail) {
+        onEvent(customEvent.detail);
+      }
+    };
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('automateplus:record-event', handler);
+    }
+
+    let stopped = false;
+    return {
+      stop: async (): Promise<void> => {
+        if (stopped) return;
+        stopped = true;
+        if (typeof window !== 'undefined') {
+          window.removeEventListener('automateplus:record-event', handler);
+        }
+      },
+      pause: async (): Promise<void> => {},
+      resume: async (): Promise<void> => {},
+    };
+  }
+}
+
+export class AdaptiveBrowserTransport implements BrowserRecorderTransport {
+  public constructor(
+    private readonly primary: BrowserRecorderTransport = new PlaywrightCdpBrowserTransport(),
+    private readonly fallback: BrowserRecorderTransport = new InBrowserDomTransport(),
+  ) {}
+
+  public async start(
+    options: BrowserTransportOptions,
+    onEvent: BrowserEventCallback,
+  ): Promise<BrowserTransportSession> {
+    const isBrowserWithoutNode =
+      typeof window !== 'undefined' &&
+      !options.cdpEndpoint &&
+      typeof (globalThis as { process?: { versions?: { node?: string } } }).process?.versions?.node === 'undefined';
+
+    if (isBrowserWithoutNode) {
+      return this.fallback.start(options, onEvent);
+    }
+
+    try {
+      return await this.primary.start(options, onEvent);
+    } catch (error) {
+      if (error instanceof AutomationError && error.code === 'RUNTIME_MISSING') {
+        return this.fallback.start(options, onEvent);
+      }
+      throw error;
+    }
+  }
+}
+
 interface SubscriptionTarget {
   target: {
     on?: (event: string, listener: (...args: unknown[]) => void) => void;

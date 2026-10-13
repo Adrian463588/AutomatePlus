@@ -7,7 +7,7 @@ import {
   RunRepository,
   SessionRepository,
 } from '@automate-plus/persistence/browser';
-import { WebRecorder } from '@automate-plus/recorder-web';
+import { AdaptiveBrowserTransport, WebRecorder } from '@automate-plus/recorder-web';
 import type {
   AndroidDeviceInfo,
   CapabilityManifest,
@@ -470,7 +470,7 @@ export class DesktopBridgeService {
     this.deviceRepo = new DeviceRepository(storage);
     this.deviceGroupRepo = new DeviceGroupRepository(storage);
     this.farmRunRepo = new FarmRunRepository(storage);
-    this.webRecorder = new WebRecorder();
+    this.webRecorder = new WebRecorder(new AdaptiveBrowserTransport());
     this.apiRunner = new ApiFunctionalRunner();
   }
 

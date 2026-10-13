@@ -265,7 +265,7 @@ export const ReleasesModal: React.FC<ReleasesModalProps> = ({ isOpen, onClose })
             >
               <span>{rel.version}</span>
               {rel.isLatest && (
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+                <span className="w-1.5 h-1.5 rounded-sm bg-emerald-400 animate-pulse" />
               )}
             </button>
           ))}
