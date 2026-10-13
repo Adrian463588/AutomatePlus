@@ -83,10 +83,22 @@ export const VisualCanvas: React.FC = () => {
   const isApi = activeSession?.platform === 'api';
 
   const isWebNoLoc = webAction === 'navigate' || webAction === 'assertUrl';
-  const canAddWebStep = Boolean(activeSession && !isRecording && (isWebNoLoc || webLocator.trim().length > 0));
+  const canAddWebStep = !isRecording && (isWebNoLoc || webLocator.trim().length > 0);
 
   const isAndroidNoLoc = androidAction === 'back' || androidAction === 'home' || androidAction === 'enter' || androidAction === 'sleep';
   const canAddAndroidStep = Boolean(activeSession && !isRecording && (isAndroidNoLoc || androidLocator.trim().length > 0));
+
+  const ensureWebSession = async (defaultName = 'SauceDemo Web Flow') => {
+    const store = useAppStore.getState();
+    if (store.activeSession && store.activeSession.platform === 'web') {
+      return store.activeSession;
+    }
+    if (!store.activeProject && store.projects.length === 0) {
+      await store.createProject('Default Workspace', 'D:\\SEMESTER12\\ProjectKode\\AutomatePlus');
+    }
+    await store.createSession(defaultName, 'web');
+    return useAppStore.getState().activeSession;
+  };
 
   const ensureAndroidSession = async (defaultName = 'Android Test Flow') => {
     const store = useAppStore.getState();
@@ -117,7 +129,7 @@ export const VisualCanvas: React.FC = () => {
     ];
 
   useEffect(() => {
-    setInputUrl(activeSession?.ir.targetConfig.startUrl ?? '');
+    setInputUrl(activeSession?.ir.targetConfig.startUrl ?? 'https://www.saucedemo.com/');
     setAppPackage(activeSession?.ir.targetConfig.appPackage ?? '');
     setAssertionLocator('');
   }, [activeSession?.id, activeSession?.ir.targetConfig.startUrl, activeSession?.ir.targetConfig.appPackage]);
@@ -127,35 +139,38 @@ export const VisualCanvas: React.FC = () => {
   }, [activeSession?.id, activeSession?.platform]);
 
   const selectedDevice = devices.find((device) => device.id === activeDevice);
-  const recordingBlockedReason = !activeSession
-    ? 'Create and select a session first.'
-    : isApi
-      ? 'API sessions use the API builder; recording is not available.'
-      : isAndroid
-        ? (!appPackage.trim()
-          ? 'Enter the real Android application package.'
-          : !selectedDevice || selectedDevice.status !== 'device'
-            ? 'Select an authorized device discovered by the native host.'
-            : '')
-        : !inputUrl.trim()
-          ? 'Enter the real web target URL.'
-          : '';
+  const recordingBlockedReason = isApi
+    ? 'API sessions use the API builder; recording is not available.'
+    : isAndroid
+      ? (!appPackage.trim()
+        ? 'Enter the real Android application package.'
+        : !selectedDevice || selectedDevice.status !== 'device'
+          ? 'Select an authorized device discovered by the native host.'
+          : '')
+      : !inputUrl.trim()
+        ? 'Enter the real web target URL.'
+        : '';
 
   const handleTargetBlur = async () => {
-    if (!activeSession) return;
     if (isAndroid) {
+      if (!activeSession) return;
       await updateTargetConfig({ ...activeSession.ir.targetConfig, appPackage: appPackage.trim() || undefined });
     } else {
-      await updateTargetConfig({ ...activeSession.ir.targetConfig, startUrl: inputUrl.trim() || undefined });
+      const session = activeSession ?? (await ensureWebSession());
+      if (session) {
+        await updateTargetConfig({ ...session.ir.targetConfig, startUrl: inputUrl.trim() || undefined });
+      }
     }
   };
 
   const handleAddAssertion = async () => {
-    if (!activeSession || !assertionLocator.trim()) return;
+    if (!assertionLocator.trim()) return;
+    const session = activeSession ?? (await (isAndroid ? ensureAndroidSession() : ensureWebSession()));
+    if (!session) return;
     await addStep({
       id: crypto.randomUUID(),
       schemaVersion: 2,
-      stepNumber: activeSession.ir.steps.length + 1,
+      stepNumber: session.ir.steps.length + 1,
       platform: isAndroid ? 'android' : 'web',
       action: 'assertVisible',
       locators: [{ strategy: assertionStrategy, value: assertionLocator.trim(), score: 0 }],
@@ -167,16 +182,18 @@ export const VisualCanvas: React.FC = () => {
   };
 
   const handleAddWebAction = async () => {
-    if (!activeSession) return;
     const isNav = webAction === 'navigate';
     const isAssertUrl = webAction === 'assertUrl';
     const isNoLoc = isNav || isAssertUrl;
     if (!isNoLoc && !webLocator.trim()) return;
 
+    const session = activeSession ?? (await ensureWebSession());
+    if (!session) return;
+
     await addStep({
       id: crypto.randomUUID(),
       schemaVersion: 2,
-      stepNumber: activeSession.ir.steps.length + 1,
+      stepNumber: session.ir.steps.length + 1,
       platform: 'web',
       action: webAction,
       locators: isNoLoc ? undefined : [{ strategy: assertionStrategy, value: webLocator.trim(), score: 90 }],
@@ -227,7 +244,18 @@ export const VisualCanvas: React.FC = () => {
               <Square className="h-3.5 w-3.5 fill-current" aria-hidden="true" />Recording · Stop
             </button>
           ) : (
-            <button type="button" disabled={Boolean(recordingBlockedReason)} onClick={() => void startRecording(isAndroid ? 'android' : 'web', isAndroid ? undefined : inputUrl)} title={recordingBlockedReason || 'Start native recorder'} className="button-execute border border-rose-500/40 bg-rose-600/20 text-rose-300 hover:bg-rose-600 hover:text-white disabled:opacity-40 tactile-active">
+            <button
+              type="button"
+              disabled={Boolean(recordingBlockedReason)}
+              onClick={async () => {
+                const session = activeSession ?? (await (isAndroid ? ensureAndroidSession() : ensureWebSession()));
+                if (session) {
+                  await startRecording(isAndroid ? 'android' : 'web', isAndroid ? undefined : inputUrl);
+                }
+              }}
+              title={recordingBlockedReason || 'Start native recorder'}
+              className="button-execute border border-rose-500/40 bg-rose-600/20 text-rose-300 hover:bg-rose-600 hover:text-white disabled:opacity-40 tactile-active"
+            >
               <Circle className="h-3.5 w-3.5 fill-rose-500" aria-hidden="true" />Start recorder
             </button>
           )}
@@ -367,7 +395,7 @@ export const VisualCanvas: React.FC = () => {
       </p>
       {isAndroid && <DeviceFarmPanel />}
       <div className="flex min-h-0 flex-1 flex-col">
-        {activeSession?.platform === 'web' ? (
+        {activeSession?.platform === 'web' || !activeSession ? (
           <WebDriverCanvas />
         ) : (
           <div className="recorder-status-card flex min-h-[35%] items-center justify-center border-b border-slate-800/80 bg-slate-950/80 p-6">

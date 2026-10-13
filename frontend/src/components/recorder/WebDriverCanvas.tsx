@@ -99,9 +99,10 @@ export const WebDriverCanvas: React.FC = () => {
   };
 
   const handleSauceLogin = async () => {
-    if (!activeSession) return;
+    const session = activeSession ?? (await ensureWebSession('SauceDemo Web Flow'));
+    if (!session) return;
     const now = Date.now();
-    const currentSteps = activeSession.ir.steps;
+    const currentSteps = session.ir.steps;
     const hasNav = currentSteps.some((s) => s.action === 'navigate' && typeof s.value === 'string' && s.value.includes('saucedemo.com'));
 
     const stepsToAdd: ActionIR[] = [];
@@ -203,9 +204,10 @@ export const WebDriverCanvas: React.FC = () => {
   };
 
   const handleAddToCart = async (itemKey: string, testId: string) => {
-    if (!activeSession) return;
+    const session = activeSession ?? (await ensureWebSession('SauceDemo Web Flow'));
+    if (!session) return;
     const now = Date.now();
-    const nextStepNum = activeSession.ir.steps.length + 1;
+    const nextStepNum = session.ir.steps.length + 1;
 
     await addStep({
       id: crypto.randomUUID(),
@@ -228,9 +230,10 @@ export const WebDriverCanvas: React.FC = () => {
   };
 
   const handleGoToCart = async () => {
-    if (!activeSession) return;
+    const session = activeSession ?? (await ensureWebSession('SauceDemo Web Flow'));
+    if (!session) return;
     const now = Date.now();
-    const nextStepNum = activeSession.ir.steps.length + 1;
+    const nextStepNum = session.ir.steps.length + 1;
 
     await addStep({
       id: crypto.randomUUID(),
@@ -253,9 +256,10 @@ export const WebDriverCanvas: React.FC = () => {
   };
 
   const handleGoToCheckout = async () => {
-    if (!activeSession) return;
+    const session = activeSession ?? (await ensureWebSession('SauceDemo Web Flow'));
+    if (!session) return;
     const now = Date.now();
-    const nextStepNum = activeSession.ir.steps.length + 1;
+    const nextStepNum = session.ir.steps.length + 1;
 
     await addStep({
       id: crypto.randomUUID(),
@@ -278,9 +282,10 @@ export const WebDriverCanvas: React.FC = () => {
   };
 
   const handleContinueCheckout = async () => {
-    if (!activeSession) return;
+    const session = activeSession ?? (await ensureWebSession('SauceDemo Web Flow'));
+    if (!session) return;
     const now = Date.now();
-    let stepNum = activeSession.ir.steps.length + 1;
+    let stepNum = session.ir.steps.length + 1;
 
     await addStep({
       id: crypto.randomUUID(),
@@ -339,9 +344,10 @@ export const WebDriverCanvas: React.FC = () => {
   };
 
   const handleFinishCheckout = async () => {
-    if (!activeSession) return;
+    const session = activeSession ?? (await ensureWebSession('SauceDemo Web Flow'));
+    if (!session) return;
     const now = Date.now();
-    let stepNum = activeSession.ir.steps.length + 1;
+    let stepNum = session.ir.steps.length + 1;
 
     await addStep({
       id: crypto.randomUUID(),
@@ -374,9 +380,10 @@ export const WebDriverCanvas: React.FC = () => {
   };
 
   const handleOrangeLogin = async () => {
-    if (!activeSession) return;
+    const session = activeSession ?? (await ensureWebSession('OrangeHRM Web Flow'));
+    if (!session) return;
     const now = Date.now();
-    let stepNum = activeSession.ir.steps.length + 1;
+    let stepNum = session.ir.steps.length + 1;
 
     await addStep({
       id: crypto.randomUUID(),
@@ -467,9 +474,10 @@ export const WebDriverCanvas: React.FC = () => {
   };
 
   const handleGenericAction = async () => {
-    if (!activeSession) return;
+    const session = activeSession ?? (await ensureWebSession('Web Search Flow'));
+    if (!session) return;
     const now = Date.now();
-    let stepNum = activeSession.ir.steps.length + 1;
+    let stepNum = session.ir.steps.length + 1;
 
     await addStep({
       id: crypto.randomUUID(),
